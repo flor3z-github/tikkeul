@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { SerwistProvider } from "./serwist";
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className="min-h-dvh antialiased">
         <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
         <Toaster richColors closeButton position="top-center" />
+        <Analytics />
       </body>
     </html>
   );
