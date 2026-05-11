@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { submitTransactionAction } from "@/app/dashboard/actions";
@@ -140,7 +140,17 @@ function TransactionFormBody({ initial, categories, onSaved }: FormBodyProps) {
         <label className="block text-sm font-medium text-muted-foreground">
           금액
         </label>
-        <div className="rounded-2xl bg-muted px-4 py-6">
+        <div className="relative rounded-2xl bg-muted px-4 py-6">
+          {amountValue > 0 ? (
+            <button
+              type="button"
+              aria-label="금액 지우기"
+              onClick={() => setAmountText("")}
+              className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
           <div className="flex items-baseline justify-center gap-2">
             <input
               inputMode="numeric"

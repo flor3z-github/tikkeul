@@ -78,12 +78,22 @@ export function SpendingSummary({
                   {rateRounded}% 사용
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {STATUS_COPY[status].label} · 남은 예산{" "}
-                <span className="font-medium text-foreground">
-                  {formatKRW(Math.max(0, summary.remainingBudget))}
-                </span>
-              </p>
+              {summary.remainingBudget >= 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {STATUS_COPY[status].label} · 남은 예산{" "}
+                  <span className="font-medium text-foreground">
+                    {formatKRW(summary.remainingBudget)}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-xs text-destructive">
+                  {STATUS_COPY[status].label} · 예산을{" "}
+                  <span className="font-semibold">
+                    {formatKRW(Math.abs(summary.remainingBudget))}
+                  </span>{" "}
+                  초과했어요
+                </p>
+              )}
             </div>
           </>
         )}

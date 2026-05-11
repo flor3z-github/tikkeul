@@ -33,7 +33,9 @@ export function SettingsForm({
 
   const incomeNum = parseAmountInput(income);
   const fixedNum = parseAmountInput(fixed);
+  const overFixed = fixedNum > incomeNum;
   const available = Math.max(0, incomeNum - fixedNum);
+  const canSubmit = !overFixed && !pending;
 
   return (
     <form action={formAction} className="space-y-6">
@@ -88,16 +90,28 @@ export function SettingsForm({
         </p>
       </div>
 
-      <div className="rounded-2xl bg-muted px-4 py-3 text-sm">
-        <span className="text-muted-foreground">가용 예산</span>
-        <span className="ml-2 font-semibold tabular-nums">
-          {formatNumber(available)}원
-        </span>
+      <div
+        className={
+          overFixed
+            ? "rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            : "rounded-2xl bg-muted px-4 py-3 text-sm"
+        }
+      >
+        {overFixed ? (
+          <span>고정지출이 월 수입보다 많아요. 다시 확인해주세요.</span>
+        ) : (
+          <>
+            <span className="text-muted-foreground">가용 예산</span>
+            <span className="ml-2 font-semibold tabular-nums">
+              {formatNumber(available)}원
+            </span>
+          </>
+        )}
       </div>
 
       <Button
         type="submit"
-        disabled={pending}
+        disabled={!canSubmit}
         className="h-12 w-full rounded-full text-[15px] font-semibold"
       >
         {pending ? "저장 중…" : "저장하기"}
