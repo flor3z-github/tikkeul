@@ -28,6 +28,29 @@ export function formatKoreanShortDate(input: string | Date): string {
   return koreanShortDateFormatter.format(date);
 }
 
+/**
+ * Returns "오늘" / "어제" / "5월 11일" depending on how far `input` is from
+ * today (local time). Used as date-group headers so the most relevant rows
+ * read naturally.
+ */
+export function formatRelativeKoreanDate(input: string | Date): string {
+  const date = typeof input === "string" ? new Date(input) : input;
+  if (Number.isNaN(date.getTime())) return "";
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const today = new Date();
+  const todayMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const diffDays = Math.round(
+    (todayMidnight.getTime() - target.getTime()) / 86_400_000,
+  );
+  if (diffDays === 0) return "오늘";
+  if (diffDays === 1) return "어제";
+  return koreanShortDateFormatter.format(date);
+}
+
 const koreanMonthFormatter = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "long",

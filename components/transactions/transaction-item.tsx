@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { CategoryIcon } from "@/lib/utils/category-icon";
-import { formatKoreanShortDate } from "@/lib/utils/date";
 import { formatKRW } from "@/lib/utils/money";
 import {
   TransactionFormDialog,
@@ -45,20 +44,15 @@ export function TransactionItem({
         onClick={() => setOpen(true)}
         className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors hover:bg-muted active:bg-muted"
       >
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
           <CategoryIcon
             slug={transaction.category_icon}
             className="size-5 text-muted-foreground"
           />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-medium">
-            {transaction.category_name ?? "기타"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {formatKoreanShortDate(transaction.spent_at)}
-          </p>
-        </div>
+        <p className="min-w-0 flex-1 truncate text-[15px] font-medium">
+          {transaction.category_name ?? "기타"}
+        </p>
         <span className="text-[15px] font-semibold tabular-nums">
           {formatKRW(Number(transaction.amount))}
         </span>
