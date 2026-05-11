@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CalendarIcon, X } from "lucide-react";
+import { CalendarIcon, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { submitTransactionAction } from "@/app/dashboard/actions";
@@ -110,9 +110,40 @@ function TransactionFormBody({ initial, categories, onSaved }: FormBodyProps) {
   );
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  // Stack of quick-amount additions for the undo (←) button. Cleared whenever
+  // the amount is reset or edited manually so the history can't lie.
+  const [quickHistory, setQuickHistory] = useState<number[]>([]);
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const canSubmit = amountValue > 0 && categoryId !== null && !pending;
+
+  function handleQuickAdd(value: number) {
+    setAmountText((prev) => formatNumber(parseAmountInput(prev) + value));
+    setQuickHistory((prev) => [...prev, value]);
+  }
+
+  function handleUndoQuickAdd() {
+    // Read history from closure rather than inside the setQuickHistory
+    // updater — StrictMode invokes updater functions twice in dev, which
+    // would subtract the same value twice if we nested setAmountText.
+    if (quickHistory.length === 0) return;
+    const last = quickHistory[quickHistory.length - 1];
+    setAmountText((current) =>
+      formatNumber(Math.max(0, parseAmountInput(current) - last)),
+    );
+    setQuickHistory((prev) => prev.slice(0, -1));
+  }
+
+  function handleClearAmount() {
+    setAmountText("");
+    setQuickHistory([]);
+  }
+
+  function handleAmountChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setAmountText(formatNumber(parseAmountInput(event.target.value)));
+    // Manual edits make the quick-add history unreliable — drop it.
+    setQuickHistory([]);
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -141,26 +172,36 @@ function TransactionFormBody({ initial, categories, onSaved }: FormBodyProps) {
           금액
         </label>
         <div className="relative rounded-2xl bg-muted px-4 py-6">
-          {amountValue > 0 ? (
-            <button
-              type="button"
-              aria-label="금액 지우기"
-              onClick={() => setAmountText("")}
-              className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
-            >
-              <X className="size-3.5" />
-            </button>
+          {amountValue > 0 || quickHistory.length > 0 ? (
+            <div className="absolute right-3 top-3 flex gap-1.5">
+              {quickHistory.length > 0 ? (
+                <button
+                  type="button"
+                  aria-label="빠른 금액 되돌리기"
+                  onClick={handleUndoQuickAdd}
+                  className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
+                >
+                  <Undo2 className="size-3.5" />
+                </button>
+              ) : null}
+              {amountValue > 0 ? (
+                <button
+                  type="button"
+                  aria-label="금액 지우기"
+                  onClick={handleClearAmount}
+                  className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
+                >
+                  <X className="size-3.5" />
+                </button>
+              ) : null}
+            </div>
           ) : null}
           <div className="flex items-baseline justify-center gap-2">
             <input
               inputMode="numeric"
               autoFocus
               value={amountText}
-              onChange={(event) =>
-                setAmountText(
-                  formatNumber(parseAmountInput(event.target.value)),
-                )
-              }
+              onChange={handleAmountChange}
               placeholder="0"
               className="min-w-[1ch] bg-transparent text-right text-[40px] font-bold tracking-[-0.045em] tabular-nums outline-none [field-sizing:content]"
             />
@@ -174,11 +215,7 @@ function TransactionFormBody({ initial, categories, onSaved }: FormBodyProps) {
             <button
               key={value}
               type="button"
-              onClick={() =>
-                setAmountText((prev) =>
-                  formatNumber(parseAmountInput(prev) + value),
-                )
-              }
+              onClick={() => handleQuickAdd(value)}
               className="h-9 rounded-full border border-border bg-card text-xs font-medium tabular-nums transition-colors hover:bg-muted active:scale-[0.98]"
             >
               +{label}
