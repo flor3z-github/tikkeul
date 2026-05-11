@@ -4,25 +4,45 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { SerwistProvider } from "./serwist";
 
+const APP_NAME = "티끌";
+const APP_DESCRIPTION = "월 가용 예산 대비 소비를 한눈에 확인하는 개인 PWA";
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000");
+
 export const metadata: Metadata = {
-  title: "티끌",
-  description: "월 가용 예산 대비 소비를 한눈에 확인하는 개인 PWA",
-  applicationName: "티끌",
+  metadataBase: new URL(SITE_URL),
+  title: APP_NAME,
+  description: APP_DESCRIPTION,
+  applicationName: APP_NAME,
   formatDetection: {
     telephone: false,
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "티끌",
+    title: APP_NAME,
   },
-  icons: {
-    icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    siteName: APP_NAME,
+    title: APP_NAME,
+    description: APP_DESCRIPTION,
   },
+  twitter: {
+    card: "summary_large_image",
+    title: APP_NAME,
+    description: APP_DESCRIPTION,
+  },
+  // Favicon and apple-touch-icon are auto-wired by app/icon.png and
+  // app/apple-icon.png. og:image / twitter:image come from app/opengraph-image.tsx.
+  // Manifest icons (192/512) are declared in app/manifest.ts.
 };
 
 export const viewport: Viewport = {
