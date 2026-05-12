@@ -27,9 +27,10 @@ export function BottomTabNav() {
       style={{ bottom: 0 }}
     >
       <div
-        className="pointer-events-auto mx-auto w-full max-w-md border-t border-border bg-background/95 backdrop-blur"
+        className="pointer-events-auto mx-auto w-full max-w-md border-t border-border bg-background"
         style={{
-          paddingBottom: "env(safe-area-inset-bottom)",
+          paddingTop: "12px",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
         }}
       >
         <ul className="grid grid-cols-2">
@@ -42,7 +43,7 @@ export function BottomTabNav() {
                   prefetch
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+                    "flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
                     active
                       ? "text-foreground"
                       : "text-muted-foreground hover:text-foreground",
