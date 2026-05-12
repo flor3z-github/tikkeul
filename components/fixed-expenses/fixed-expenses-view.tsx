@@ -365,6 +365,12 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
         ))
       )}
 
+      <p className="mt-8 px-1 text-center text-[11px] leading-relaxed text-muted-foreground">
+        USD 결제 서비스(Claude · Cursor · GitHub Copilot · Slack · Dropbox)는
+        <br />
+        1&nbsp;USD&nbsp;=&nbsp;1,470&nbsp;KRW 환산가 · 2026-05-12 기준
+      </p>
+
       <CatalogToggleSheet
         plan={catalogPlan}
         onOpenChange={(open) => {
