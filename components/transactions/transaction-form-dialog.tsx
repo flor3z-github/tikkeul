@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { CalendarIcon, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -142,6 +142,15 @@ function TransactionFormBody({
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const canSubmit = amountValue > 0 && categoryId !== null && !pending;
+  const amountInputRef = useRef<HTMLInputElement>(null);
+
+  function focusAmountInput() {
+    const el = amountInputRef.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+  }
 
   function handleQuickAdd(value: number) {
     setAmountText((prev) => formatNumber(parseAmountInput(prev) + value));
@@ -197,14 +206,22 @@ function TransactionFormBody({
         <label className="block text-sm font-medium text-muted-foreground">
           금액
         </label>
-        <div className="relative rounded-2xl bg-muted px-4 py-6">
+        <div
+          role="presentation"
+          onClick={focusAmountInput}
+          className="relative cursor-text rounded-2xl bg-muted px-4 py-6"
+        >
           {amountValue > 0 || quickHistory.length > 0 ? (
             <div className="absolute right-3 top-3 flex gap-1.5">
               {quickHistory.length > 0 ? (
                 <button
                   type="button"
                   aria-label="빠른 금액 되돌리기"
-                  onClick={handleUndoQuickAdd}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleUndoQuickAdd();
+                    focusAmountInput();
+                  }}
                   className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
                 >
                   <Undo2 className="size-3.5" />
@@ -214,7 +231,11 @@ function TransactionFormBody({
                 <button
                   type="button"
                   aria-label="금액 지우기"
-                  onClick={handleClearAmount}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleClearAmount();
+                    focusAmountInput();
+                  }}
                   className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
                 >
                   <X className="size-3.5" />
@@ -224,6 +245,7 @@ function TransactionFormBody({
           ) : null}
           <div className="flex items-baseline justify-center gap-2">
             <input
+              ref={amountInputRef}
               inputMode="numeric"
               autoFocus
               value={amountText}

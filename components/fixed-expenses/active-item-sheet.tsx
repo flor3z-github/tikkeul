@@ -39,6 +39,7 @@ export function ActiveItemSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
+        initialFocus={false}
         className="rounded-t-[28px] border-white/10 bg-background px-5 pb-8 pt-4"
       >
         <SheetHeader className="px-0 pb-3 text-left">
