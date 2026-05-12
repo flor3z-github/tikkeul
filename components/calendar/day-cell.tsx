@@ -32,13 +32,20 @@ export function DayCell({
   onClick,
   ariaLabel,
 }: DayCellProps) {
+  const hasAmount = amount > 0;
+
   if (!inMonth) {
-    return <div aria-hidden className="h-12" />;
+    return (
+      <div
+        aria-hidden
+        className="h-[clamp(3.75rem,14vw,4rem)] min-h-11"
+      />
+    );
   }
 
   const dayTone = isSelected
     ? "text-primary-foreground"
-    : amount > 0
+    : hasAmount
       ? "text-foreground"
       : "text-muted-foreground";
 
@@ -50,26 +57,30 @@ export function DayCell({
       onClick={onClick}
       aria-label={ariaLabel}
       aria-pressed={isSelected}
-      className="flex h-12 items-stretch justify-center p-0.5 transition-transform active:scale-[0.96]"
+      className="flex h-[clamp(3.75rem,14vw,4rem)] min-h-11 min-w-0 items-stretch justify-center p-px transition-transform active:scale-[0.96]"
     >
       <span
         className={cn(
-          "flex w-full flex-col items-center justify-start gap-1 rounded-2xl py-0.5 transition-colors",
-          isSelected ? "bg-primary" : "hover:bg-muted",
+          "flex h-full min-w-0 flex-col items-center justify-start gap-0.5 rounded-[16px] pb-2 pt-2 transition-colors",
+          isSelected
+            ? "-mx-0.5 w-[calc(100%+0.25rem)] bg-primary px-0.5"
+            : hasAmount
+              ? "w-full px-1 hover:bg-muted"
+              : "w-full px-1 hover:bg-muted",
         )}
       >
         <span
           className={cn(
-            "flex h-6 min-w-6 items-center justify-center rounded-full text-[13px] font-semibold leading-none tabular-nums",
+            "flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[13px] font-semibold leading-none tabular-nums",
             isToday && !isSelected ? "bg-primary text-primary-foreground" : dayTone,
           )}
         >
           {day}
         </span>
-        {amount > 0 ? (
+        {hasAmount ? (
           <span
             className={cn(
-              "text-[9px] font-medium leading-tight tabular-nums",
+              "block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[clamp(0.46875rem,2vw,0.5625rem)] font-medium leading-none tabular-nums",
               amountTone,
             )}
           >

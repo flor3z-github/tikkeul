@@ -83,7 +83,7 @@ export async function DayTransactionsSection({
           ) : null}
         </div>
 
-        <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
+        <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
           <CardContent className="p-2">
             {dayRows.length === 0 ? (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">

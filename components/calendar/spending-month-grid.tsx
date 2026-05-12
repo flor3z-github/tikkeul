@@ -41,9 +41,9 @@ export function SpendingMonthGrid({
   return (
     <div
       data-pending={pending ? "true" : undefined}
-      className="space-y-1.5"
+      className="space-y-2"
     >
-      <div className="grid grid-cols-7 gap-0.5 px-0.5 pb-1 text-[11px] font-medium text-muted-foreground">
+      <div className="grid grid-cols-7 gap-x-1 px-0.5 pb-1.5 text-[11px] font-medium text-muted-foreground">
         {WEEKDAY_LABELS.map((label, index) => (
           <span
             key={label}
@@ -60,7 +60,7 @@ export function SpendingMonthGrid({
           </span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-0.5">
+      <div className="grid min-w-0 grid-cols-7 gap-x-1 gap-y-0.5">
         {cells.map((cell, i) => {
           const amount = dailyTotals[cell.iso] ?? 0;
           const state = classifyDailyAmount(amount, availableBudget);
