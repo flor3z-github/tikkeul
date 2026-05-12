@@ -50,31 +50,33 @@ export function DayCell({
       onClick={onClick}
       aria-label={ariaLabel}
       aria-pressed={isSelected}
-      className={cn(
-        "flex h-12 flex-col items-center justify-center gap-1 rounded-xl px-0.5 transition-colors",
-        "active:scale-[0.96]",
-        isSelected
-          ? "bg-primary"
-          : isToday
-            ? "ring-1 ring-primary/70 ring-inset"
-            : "hover:bg-muted",
-      )}
+      className="flex h-12 items-stretch justify-center p-0.5 transition-transform active:scale-[0.96]"
     >
       <span
-        className={cn("text-[13px] font-semibold leading-tight tabular-nums", dayTone)}
+        className={cn(
+          "flex w-full flex-col items-center justify-start gap-1 rounded-2xl py-0.5 transition-colors",
+          isSelected ? "bg-primary" : "hover:bg-muted",
+        )}
       >
-        {day}
-      </span>
-      {amount > 0 ? (
         <span
           className={cn(
-            "text-[10px] font-medium leading-tight tabular-nums",
-            amountTone,
+            "flex h-6 min-w-6 items-center justify-center rounded-full text-[13px] font-semibold leading-none tabular-nums",
+            isToday && !isSelected ? "bg-primary text-primary-foreground" : dayTone,
           )}
         >
-          {formatNumber(amount)}
+          {day}
         </span>
-      ) : null}
+        {amount > 0 ? (
+          <span
+            className={cn(
+              "text-[9px] font-medium leading-tight tabular-nums",
+              amountTone,
+            )}
+          >
+            {formatNumber(amount)}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 }
