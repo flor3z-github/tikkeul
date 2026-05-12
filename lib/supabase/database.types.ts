@@ -26,25 +26,96 @@ export type Database = {
         Row: {
           user_id: string;
           monthly_income: number;
-          fixed_expense: number;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           user_id: string;
           monthly_income?: number;
-          fixed_expense?: number;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           user_id?: string;
           monthly_income?: number;
-          fixed_expense?: number;
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [];
+      };
+      subscription_plans: {
+        Row: {
+          id: string;
+          service_name: string;
+          plan_name: string | null;
+          default_amount: number;
+          category: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_name: string;
+          plan_name?: string | null;
+          default_amount: number;
+          category?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_name?: string;
+          plan_name?: string | null;
+          default_amount?: number;
+          category?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      fixed_expenses: {
+        Row: {
+          id: string;
+          user_id: string;
+          subscription_plan_id: string | null;
+          name: string;
+          amount: number;
+          category: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          user_id: string;
+          subscription_plan_id?: string | null;
+          name: string;
+          amount: number;
+          category?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          subscription_plan_id?: string | null;
+          name?: string;
+          amount?: number;
+          category?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fixed_expenses_subscription_plan_id_fkey";
+            columns: ["subscription_plan_id"];
+            isOneToOne: false;
+            referencedRelation: "subscription_plans";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       categories: {
         Row: {

@@ -23,7 +23,10 @@ export function AddTransactionButton({ categories }: AddTransactionButtonProps) 
         size="icon"
         onClick={() => setOpen(true)}
         className="fixed right-6 z-50 size-14 rounded-full bg-primary text-primary-foreground shadow-[0_12px_40px_rgba(0,0,0,0.18)] active:scale-[0.96]"
-        style={{ bottom: "max(24px, env(safe-area-inset-bottom))" }}
+        style={{
+          // Sit above the 56px BottomTabNav + safe-area inset, with a small gap.
+          bottom: "calc(56px + env(safe-area-inset-bottom) + 16px)",
+        }}
       >
         <Plus className="size-6" />
       </Button>

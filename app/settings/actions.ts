@@ -21,15 +21,9 @@ export async function saveSettingsAction(
   const monthlyIncome = parseAmountInput(
     String(formData.get("monthly_income") ?? "0"),
   );
-  const fixedExpense = parseAmountInput(
-    String(formData.get("fixed_expense") ?? "0"),
-  );
 
-  if (monthlyIncome < 0 || fixedExpense < 0) {
+  if (monthlyIncome < 0) {
     return { ok: false, error: "0원 이상으로 입력해주세요." };
-  }
-  if (fixedExpense > monthlyIncome) {
-    return { ok: false, error: "고정지출이 월 수입보다 클 수 없어요." };
   }
 
   const { error } = await supabase
@@ -38,7 +32,6 @@ export async function saveSettingsAction(
       {
         user_id: user.id,
         monthly_income: monthlyIncome,
-        fixed_expense: fixedExpense,
       },
       { onConflict: "user_id" },
     );

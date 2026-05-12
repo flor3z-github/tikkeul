@@ -38,9 +38,11 @@ export async function updateSession(request: NextRequest) {
   );
 
   // IMPORTANT: do not run anything between createServerClient and
-  // supabase.auth.getClaims(). Otherwise users may be randomly logged out.
-  const { data } = await supabase.auth.getClaims();
-  const user = data?.claims;
+  // supabase.auth.getUser(). getUser() verifies the cookie against Auth,
+  // so stale tokens left after a database reset do not look signed in.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
 

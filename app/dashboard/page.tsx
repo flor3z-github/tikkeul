@@ -34,39 +34,90 @@ export default async function DashboardPage() {
   const startISO = monthStart(now).toISOString();
   const endISO = monthEnd(now).toISOString();
 
-  const [settingsResult, monthSumResult, recentResult, categoriesResult] =
-    await Promise.all([
-      supabase
-        .from("user_settings")
-        .select("monthly_income, fixed_expense")
-        .eq("user_id", user.id)
-        .maybeSingle(),
-      supabase
-        .from("transactions")
-        .select("amount")
-        .eq("user_id", user.id)
-        .gte("spent_at", startISO)
-        .lt("spent_at", endISO),
-      supabase
-        .from("transactions")
-        .select(
-          "id, amount, category_id, spent_at, categories ( name, icon )",
-        )
-        .eq("user_id", user.id)
-        .order("spent_at", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(5),
-      supabase
-        .from("categories")
-        .select("id, name, icon, user_id")
-        .or(`user_id.is.null,user_id.eq.${user.id}`)
-        .order("created_at", { ascending: true }),
-    ]);
+  const [
+    settingsResult,
+    fixedResult,
+    monthSumResult,
+    recentResult,
+    categoriesResult,
+  ] = await Promise.all([
+    supabase
+      .from("user_settings")
+      .select("monthly_income")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("fixed_expenses")
+      .select("amount")
+      .eq("user_id", user.id)
+      .eq("is_active", true),
+    supabase
+      .from("transactions")
+      .select("amount")
+      .eq("user_id", user.id)
+      .gte("spent_at", startISO)
+      .lt("spent_at", endISO),
+    supabase
+      .from("transactions")
+      .select("id, amount, category_id, spent_at, categories ( name, icon )")
+      .eq("user_id", user.id)
+      .order("spent_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("categories")
+      .select("id, name, icon, user_id")
+      .or(`user_id.is.null,user_id.eq.${user.id}`)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  // Fail loudly on data errors — silently defaulting to 0 would skew the
+  // available-budget calculation and hide misconfigured RLS / migrations.
+  const dataError =
+    settingsResult.error ??
+    fixedResult.error ??
+    monthSumResult.error ??
+    recentResult.error ??
+    categoriesResult.error ??
+    null;
+
+  if (dataError) {
+    return (
+      <AppShell withBottomNav>
+        <PageHeader
+          eyebrow="이번 달 소비를 가볍게 확인해요"
+          title="티끌"
+          trailing={
+            <Link
+              href="/settings"
+              aria-label="설정"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon" }),
+                "rounded-full text-muted-foreground",
+              )}
+            >
+              <Settings className="size-5" />
+            </Link>
+          }
+        />
+        <div className="mt-4 space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
+          <p className="font-semibold">데이터를 불러오지 못했어요</p>
+          <p className="break-all text-xs opacity-80">{dataError.message}</p>
+          <p className="text-xs opacity-80">
+            마이그레이션이 적용되지 않았거나 권한 설정에 문제가 있을 수 있어요.
+          </p>
+        </div>
+      </AppShell>
+    );
+  }
 
   const settings = settingsResult.data;
   const hasSettings = settings !== null && settings !== undefined;
   const monthlyIncome = Number(settings?.monthly_income ?? 0);
-  const fixedExpense = Number(settings?.fixed_expense ?? 0);
+  const activeFixedExpenseTotal = (fixedResult.data ?? []).reduce(
+    (sum, row) => sum + Number(row.amount ?? 0),
+    0,
+  );
 
   const monthlyExpense = (monthSumResult.data ?? []).reduce(
     (sum, row) => sum + Number(row.amount ?? 0),
@@ -102,7 +153,7 @@ export default async function DashboardPage() {
     }));
 
   return (
-    <AppShell>
+    <AppShell withBottomNav>
       <PageHeader
         eyebrow="이번 달 소비를 가볍게 확인해요"
         title="티끌"
@@ -122,7 +173,7 @@ export default async function DashboardPage() {
 
       <SpendingSummary
         monthlyIncome={monthlyIncome}
-        fixedExpense={fixedExpense}
+        fixedExpense={activeFixedExpenseTotal}
         monthlyExpense={monthlyExpense}
         hasSettings={hasSettings}
       />

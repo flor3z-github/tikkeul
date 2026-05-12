@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
   const supabase = await createClient();
   const {
@@ -16,11 +18,36 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: settings } = await supabase
+  const settingsResult = await supabase
     .from("user_settings")
-    .select("monthly_income, fixed_expense")
+    .select("monthly_income")
     .eq("user_id", user.id)
     .maybeSingle();
+
+  if (settingsResult.error) {
+    return (
+      <AppShell>
+        <PageHeader
+          eyebrow={
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1 text-muted-foreground"
+            >
+              <ChevronLeft className="size-4" />
+              대시보드
+            </Link>
+          }
+          title="설정"
+        />
+        <div className="mt-4 space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
+          <p className="font-semibold">설정을 불러오지 못했어요</p>
+          <p className="break-all text-xs opacity-80">
+            {settingsResult.error.message}
+          </p>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -38,8 +65,7 @@ export default async function SettingsPage() {
       />
 
       <SettingsForm
-        initialIncome={Number(settings?.monthly_income ?? 0)}
-        initialFixed={Number(settings?.fixed_expense ?? 0)}
+        initialIncome={Number(settingsResult.data?.monthly_income ?? 0)}
       />
 
       <div className="mt-10 border-t border-border pt-6">

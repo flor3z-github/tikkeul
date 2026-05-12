@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { formatKRW } from "@/lib/utils/money";
 import {
   calculateBudgetSummary,
@@ -21,6 +22,13 @@ const STATUS_COPY: Record<SpendingStatus, { tone: string; label: string }> = {
   caution: { tone: "text-[color:var(--warning)]", label: "주의 구간" },
   warning: { tone: "text-[color:var(--warning)]", label: "위험 구간" },
   over: { tone: "text-destructive", label: "예산 초과" },
+};
+
+const STATUS_DOT: Record<SpendingStatus, string> = {
+  normal: "bg-primary",
+  caution: "bg-[color:var(--warning)]",
+  warning: "bg-[color:var(--warning)]",
+  over: "bg-destructive",
 };
 
 export function SpendingSummary({
@@ -58,12 +66,33 @@ export function SpendingSummary({
           </Link>
         ) : summary.availableBudget === 0 ? (
           <p className="text-sm text-muted-foreground">
-            가용 예산이 0원이에요. 설정에서 월 수입을 다시 확인해주세요.
+            가용 예산이 0원이에요. 월 수입을 다시 확인해주세요.
           </p>
         ) : (
           <>
             <div className="space-y-2">
-              <SpendingProgress rate={summary.spendingRate} status={status} />
+              <SpendingProgress
+                monthlyIncome={monthlyIncome}
+                fixedExpense={fixedExpense}
+                monthlyExpense={monthlyExpense}
+                status={status}
+              />
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className="size-2 rounded-full bg-foreground/25"
+                  />
+                  고정지출
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className={cn("size-2 rounded-full", STATUS_DOT[status])}
+                  />
+                  이번 달 소비
+                </span>
+              </div>
               <div className="flex items-baseline justify-between text-sm">
                 <span className="text-muted-foreground">
                   가용 예산{" "}
@@ -97,7 +126,23 @@ export function SpendingSummary({
             </div>
           </>
         )}
+
+        {hasSettings ? (
+          <dl className="space-y-1.5 border-t border-border pt-4 text-[12px]">
+            <SummaryRow label="월 수입" value={formatKRW(monthlyIncome)} />
+            <SummaryRow label="고정지출" value={formatKRW(fixedExpense)} />
+          </dl>
+        ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="truncate font-semibold tabular-nums">{value}</dd>
+    </div>
   );
 }
