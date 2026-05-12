@@ -18,7 +18,7 @@ export default function DashboardError({
   return (
     <AppShell withBottomNav>
       <PageHeader
-        eyebrow="이번 달 소비를 가볍게 확인해요"
+        eyebrow="이번 달 소비를 확인해요"
         title="티끌"
         trailing={
           <Link

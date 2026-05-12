@@ -43,7 +43,7 @@ export default function OpengraphImage() {
             textAlign: "center",
           }}
         >
-          이번 달 소비를 가볍게 확인해요
+          이번 달 소비를 확인해요
         </div>
         <div
           style={{

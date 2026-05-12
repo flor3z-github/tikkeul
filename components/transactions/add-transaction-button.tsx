@@ -11,9 +11,14 @@ import {
 
 type AddTransactionButtonProps = {
   categories: TransactionFormCategory[];
+  /** YYYY-MM-DD. Pre-fills the date field when opening in create mode. */
+  defaultDate?: string;
 };
 
-export function AddTransactionButton({ categories }: AddTransactionButtonProps) {
+export function AddTransactionButton({
+  categories,
+  defaultDate,
+}: AddTransactionButtonProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -34,6 +39,7 @@ export function AddTransactionButton({ categories }: AddTransactionButtonProps) 
         open={open}
         onOpenChange={setOpen}
         categories={categories}
+        defaultDate={defaultDate}
       />
     </>
   );

@@ -598,7 +598,7 @@ body {
 
 - 오른쪽 아래 소비 추가 FAB (탭 위로 떠 있음)
 - 우상단 설정 아이콘
-- MVP 1.5에서 calendar 진입 버튼
+- 캘린더는 별도 라우트가 아니라 대시보드에 임베드된다 (§12.1, §14 참조).
 
 ---
 
@@ -608,27 +608,32 @@ body {
 
 Dashboard는 다음 질문에 답해야 한다.
 
-- 이번 달에 총 얼마를 썼는가?
-- 월 가용 예산 중 몇 퍼센트를 썼는가?
-- 최근에 무엇을 기록했는가?
+- 선택한 달에 총 얼마를 썼는가?
+- 가용 예산 중 몇 퍼센트를 썼는가?
+- 그 달에 어떤 날 얼마를 썼는가? (일별 흐름)
+- 특정 날짜에 무엇을 기록했는가?
 
 권장 구조:
 
 ```txt
 Header
+MonthSwitcher  ← ◀ "5월" ▶
 MonthlySummaryCard
-SpendingProgress
-RecentTransactions, max 5
+SpendingCalendar  ← 7×6 month grid
+DayTransactions   ← 선택 날짜 거래 목록
 FloatingAddTransactionButton
 ```
+
+대시보드는 `?ym=YYYY-MM&day=YYYY-MM-DD` 쿼리로 선택 월·일을 보관한다. 월 이동 시 합계 카드 / 캘린더 / 일별 거래 목록 세 영역이 모두 갱신된다.
 
 Dashboard에서 보여주지 않을 것:
 
 - 카테고리 Top 5
-- 복잡한 차트
+- 복잡한 차트 / 미니 그래프
 - 오늘 지출 카드
 - 수입 내역
 - 분석 그래프
+- 지난달 대비 비교 문구
 
 ### 12.2 Spending Summary Card
 
@@ -761,32 +766,19 @@ MVP에서는 노출하지 않는다.
 - 하단 탭의 "고정지출" (§11.2)
 - 설정 화면의 "월 고정지출" 카드 (합계 + 화살표)
 
-### 12.6 Calendar, MVP 1.5
+### 12.6 Calendar (Dashboard 임베드)
 
-소비 캘린더는 좋은 기능이지만 홈 화면의 핵심 정보보다 우선하지 않는다.
-
-MVP 1.5에서 `/calendar`로 분리한다.
+소비 캘린더는 대시보드의 핵심 정보와 함께 한 화면에서 노출된다. 별도 라우트로 분리하지 않는다.
 
 캘린더는 다음만 표시한다.
 
-- 월 이동 버튼
-- 현재 월
+- 월 이동 버튼 (대시보드 헤더 아래의 MonthSwitcher와 공유)
 - 날짜별 총 소비 금액
+- 오늘 / 선택 셀 강조
 
-수입은 표시하지 않는다.
+수입은 표시하지 않는다. 셀 표시 규칙은 §14를 따른다.
 
-날짜 클릭 시 해당 날짜 소비 목록을 Sheet로 보여준다.
-
-```txt
-5월 18일
-총 소비 391,800원
-
-쇼핑 300,000원
-식비 61,800원
-카페 30,000원
-```
-
-항목을 누르면 기존 소비 수정 dialog를 연다.
+날짜 클릭 시 대시보드 하단 "DayTransactions" 섹션이 그 날짜의 거래로 갱신된다 (Sheet가 아님). 거래 항목을 누르면 기존 소비 수정 dialog를 연다.
 
 ---
 
@@ -816,16 +808,16 @@ MVP 1.5에서 `/calendar`로 분리한다.
 
 ## 14. Calendar Guidelines
 
-캘린더는 MVP 1.5 기능이다.
+캘린더는 대시보드 내부 컴포넌트로 임베드된다. 별도 라우트나 진입 버튼은 없다.
 
 원칙:
 
-- 달력은 소비 흐름을 확인하는 보조 화면이다.
-- 홈 화면보다 시각적으로 복잡하면 안 된다.
+- 달력은 합계 카드 아래에서 일별 흐름을 보여주는 보조 영역이다.
+- 합계 카드보다 시각적으로 가벼워야 한다.
 - 날짜별 총 소비 금액만 표시한다.
 - 수입 금액은 표시하지 않는다.
 - 소비 없는 날짜는 비워둔다.
-- 큰 소비가 있는 날짜만 약하게 강조한다.
+- 큰 소비가 있는 날짜만 약하게 강조한다. 임계값은 가용 예산을 30으로 나눈 일평균 기준 — 2배 이상 warning, 3배 이상 danger.
 
 날짜 셀 예시:
 
@@ -980,15 +972,18 @@ UI 코드를 생성할 때 다음을 지켜라.
 ### Dashboard
 
 ```tsx
-<AppShell>
+<AppShell withBottomNav>
   <PageHeader
-    eyebrow="이번 달 소비"
+    eyebrow="{월라벨} 소비를 가볍게 확인해요"
     title="티끌"
+    trailing={<SettingsLink />}
   />
+  <MonthSwitcher ym={ym} />
   <MonthlySummaryCard />
   <SpendingProgress />
-  <RecentTransactionList limit={5} />
-  <AddTransactionButton />
+  <SpendingMonthGrid ym={ym} selectedDay={day} dailyTotals={…} />
+  <DayTransactionList day={day} />
+  <AddTransactionButton defaultDate={day} />
 </AppShell>
 ```
 
@@ -1024,16 +1019,6 @@ UI 코드를 생성할 때 다음을 지켜라.
 </AppShell>
 ```
 
-### Calendar, MVP 1.5
-
-```tsx
-<AppShell>
-  <CalendarHeader />
-  <MonthlySpendingCalendar />
-  <DailyTransactionSheet />
-</AppShell>
-```
-
 ---
 
 ## 22. Final Visual Target
@@ -1042,7 +1027,8 @@ UI 코드를 생성할 때 다음을 지켜라.
 
 ```txt
 아이폰 홈 화면에서 바로 열 수 있는 조용한 개인 소비 확인 앱.
-앱을 열면 이번 달 소비와 소비율이 즉시 보인다.
+앱을 열면 선택한 월의 소비, 소비율, 일별 흐름이 즉시 보인다.
+다른 날짜를 누르면 그 날의 거래가 바로 아래에 펼쳐진다.
 소비 추가는 몇 초 안에 끝난다.
 화면은 복잡하지 않고, 숫자는 선명하며, 행동은 명확하다.
 ```

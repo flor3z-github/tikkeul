@@ -6,13 +6,14 @@ import { PageHeader } from "@/components/layout/header";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
-import { RecentTransactionsSkeleton } from "./_sections/recent-transactions-skeleton";
+import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
+import { DayTransactionsSkeleton } from "./_sections/day-transactions-skeleton";
 
 export default function DashboardLoading() {
   return (
     <AppShell withBottomNav>
       <PageHeader
-        eyebrow="이번 달 소비를 가볍게 확인해요"
+        eyebrow="이번 달 소비를 확인해요"
         title="티끌"
         trailing={
           <Link
@@ -28,8 +29,12 @@ export default function DashboardLoading() {
           </Link>
         }
       />
-      <SpendingSummarySkeleton />
-      <RecentTransactionsSkeleton />
+      <div className="mt-12 h-9" aria-hidden />
+      <div className="mt-4">
+        <SpendingSummarySkeleton />
+      </div>
+      <SpendingCalendarSkeleton />
+      <DayTransactionsSkeleton />
     </AppShell>
   );
 }

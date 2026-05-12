@@ -49,6 +49,8 @@ type TransactionFormDialogProps = {
   onOpenChange: (open: boolean) => void;
   categories: TransactionFormCategory[];
   initial?: TransactionFormInitial | null;
+  /** YYYY-MM-DD. Initial date for create mode; ignored in edit mode. */
+  defaultDate?: string;
   onSaved?: () => void;
 };
 
@@ -57,6 +59,7 @@ export function TransactionFormDialog({
   onOpenChange,
   categories,
   initial,
+  defaultDate,
   onSaved,
 }: TransactionFormDialogProps) {
   return (
@@ -76,9 +79,10 @@ export function TransactionFormDialog({
 
         {open ? (
           <TransactionFormBody
-            key={initial?.id ?? "create"}
+            key={initial?.id ?? `create-${defaultDate ?? "today"}`}
             initial={initial ?? null}
             categories={categories}
+            defaultDate={defaultDate}
             onSaved={() => {
               onOpenChange(false);
               onSaved?.();
@@ -93,10 +97,31 @@ export function TransactionFormDialog({
 type FormBodyProps = {
   initial: TransactionFormInitial | null;
   categories: TransactionFormCategory[];
+  defaultDate?: string;
   onSaved: () => void;
 };
 
-function TransactionFormBody({ initial, categories, onSaved }: FormBodyProps) {
+function parseDefaultDate(value: string | undefined): Date | null {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) {
+    return null;
+  }
+  if (dt.getTime() > Date.now()) return null;
+  return dt;
+}
+
+function TransactionFormBody({
+  initial,
+  categories,
+  defaultDate,
+  onSaved,
+}: FormBodyProps) {
   const mode = initial ? "edit" : "create";
 
   const [amountText, setAmountText] = useState(() =>
@@ -105,9 +130,10 @@ function TransactionFormBody({ initial, categories, onSaved }: FormBodyProps) {
   const [categoryId, setCategoryId] = useState<string | null>(() =>
     initial ? initial.category_id : (categories[0]?.id ?? null),
   );
-  const [spentDate, setSpentDate] = useState<Date>(() =>
-    initial ? new Date(initial.spent_at) : new Date(),
-  );
+  const [spentDate, setSpentDate] = useState<Date>(() => {
+    if (initial) return new Date(initial.spent_at);
+    return parseDefaultDate(defaultDate) ?? new Date();
+  });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   // Stack of quick-amount additions for the undo (←) button. Cleared whenever

@@ -6,10 +6,16 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  formatYearMonthKorean,
+  resolveDashboardParams,
+} from "@/lib/utils/calendar";
 import { SpendingSummarySection } from "./_sections/spending-summary-section";
 import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
-import { RecentTransactionsSection } from "./_sections/recent-transactions-section";
-import { RecentTransactionsSkeleton } from "./_sections/recent-transactions-skeleton";
+import { SpendingCalendarSection } from "./_sections/spending-calendar-section";
+import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
+import { DayTransactionsSection } from "./_sections/day-transactions-section";
+import { DayTransactionsSkeleton } from "./_sections/day-transactions-skeleton";
 
 // Kept until Next 16 PPR is stable enough to enable. To migrate:
 //   1) remove this line
@@ -17,11 +23,24 @@ import { RecentTransactionsSkeleton } from "./_sections/recent-transactions-skel
 //   3) set experimental.ppr = "incremental" in next.config.ts
 export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+type DashboardSearchParams = Promise<{
+  ym?: string;
+  day?: string;
+}>;
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: DashboardSearchParams;
+}) {
+  const sp = await searchParams;
+  const { ym, day } = resolveDashboardParams(sp);
+  const monthLabel = formatYearMonthKorean(ym);
+
   return (
     <AppShell withBottomNav>
       <PageHeader
-        eyebrow="이번 달 소비를 가볍게 확인해요"
+        eyebrow={`${monthLabel} 소비를 확인해요`}
         title="티끌"
         trailing={
           <Link
@@ -39,11 +58,15 @@ export default function DashboardPage() {
       />
 
       <Suspense fallback={<SpendingSummarySkeleton />}>
-        <SpendingSummarySection />
+        <SpendingSummarySection ym={ym} />
       </Suspense>
 
-      <Suspense fallback={<RecentTransactionsSkeleton />}>
-        <RecentTransactionsSection />
+      <Suspense fallback={<SpendingCalendarSkeleton />}>
+        <SpendingCalendarSection ym={ym} day={day} />
+      </Suspense>
+
+      <Suspense fallback={<DayTransactionsSkeleton />}>
+        <DayTransactionsSection ym={ym} day={day} />
       </Suspense>
     </AppShell>
   );

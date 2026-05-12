@@ -15,6 +15,7 @@ type SpendingSummaryProps = {
   fixedExpense: number;
   monthlyExpense: number;
   hasSettings: boolean;
+  monthLabel?: string;
 };
 
 const STATUS_COPY: Record<SpendingStatus, { tone: string; label: string }> = {
@@ -36,6 +37,7 @@ export function SpendingSummary({
   fixedExpense,
   monthlyExpense,
   hasSettings,
+  monthLabel,
 }: SpendingSummaryProps) {
   const summary = calculateBudgetSummary({
     monthlyIncome,
@@ -50,7 +52,7 @@ export function SpendingSummary({
       <CardContent className="space-y-4 p-6">
         <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">
-            이번 달 소비
+            {monthLabel ? `${monthLabel} 소비` : "이번 달 소비"}
           </p>
           <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
             {formatKRW(monthlyExpense)}
