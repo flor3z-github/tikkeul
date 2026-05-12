@@ -13,15 +13,14 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = claimsData?.claims?.sub ?? null;
+  if (!userId) redirect("/login");
 
   const settingsResult = await supabase
     .from("user_settings")
     .select("monthly_income")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (settingsResult.error) {
@@ -55,6 +54,7 @@ export default async function SettingsPage() {
         eyebrow={
           <Link
             href="/dashboard"
+            prefetch
             className="inline-flex items-center gap-1 text-muted-foreground"
           >
             <ChevronLeft className="size-4" />

@@ -1,18 +1,20 @@
+"use client";
+
 import Link from "next/link";
-import { Suspense } from "react";
 import { Settings } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { FixedExpensesSection } from "./_sections/fixed-expenses-section";
-import { FixedExpensesSkeleton } from "./_sections/fixed-expenses-skeleton";
 
-// Kept until Next 16 PPR is stable enough to enable (see app/dashboard/page.tsx).
-export const dynamic = "force-dynamic";
-
-export default function FixedExpensesPage() {
+export default function FixedExpensesError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
   return (
     <AppShell withBottomNav>
       <PageHeader
@@ -32,10 +34,18 @@ export default function FixedExpensesPage() {
           </Link>
         }
       />
-
-      <Suspense fallback={<FixedExpensesSkeleton />}>
-        <FixedExpensesSection />
-      </Suspense>
+      <div className="mt-4 space-y-3 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
+        <p className="font-semibold">고정지출을 표시하지 못했어요</p>
+        <p className="break-all text-xs opacity-80">{error.message}</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => reset()}
+        >
+          다시 시도
+        </Button>
+      </div>
     </AppShell>
   );
 }

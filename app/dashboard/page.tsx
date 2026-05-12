@@ -1,157 +1,23 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { Settings } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
-import { RecentTransactions } from "@/components/dashboard/recent-transactions";
-import { SpendingSummary } from "@/components/dashboard/spending-summary";
-import { AddTransactionButton } from "@/components/transactions/add-transaction-button";
-import type { TransactionFormCategory } from "@/components/transactions/transaction-form-dialog";
-import type { TransactionListRow } from "@/components/transactions/transaction-item";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/server";
-import { monthEnd, monthStart } from "@/lib/utils/date";
+import { SpendingSummarySection } from "./_sections/spending-summary-section";
+import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
+import { RecentTransactionsSection } from "./_sections/recent-transactions-section";
+import { RecentTransactionsSkeleton } from "./_sections/recent-transactions-skeleton";
 
+// Kept until Next 16 PPR is stable enough to enable. To migrate:
+//   1) remove this line
+//   2) add: export const experimental_ppr = true
+//   3) set experimental.ppr = "incremental" in next.config.ts
 export const dynamic = "force-dynamic";
 
-const CATEGORY_ORDER = ["식비", "카페", "교통", "쇼핑", "생활", "의료", "기타"];
-const HIDDEN_CATEGORIES = new Set(["구독"]);
-function categoryRank(name: string): number {
-  const index = CATEGORY_ORDER.indexOf(name);
-  return index === -1 ? CATEGORY_ORDER.length : index;
-}
-
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const now = new Date();
-  const startISO = monthStart(now).toISOString();
-  const endISO = monthEnd(now).toISOString();
-
-  const [
-    settingsResult,
-    fixedResult,
-    monthSumResult,
-    recentResult,
-    categoriesResult,
-  ] = await Promise.all([
-    supabase
-      .from("user_settings")
-      .select("monthly_income")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("fixed_expenses")
-      .select("amount")
-      .eq("user_id", user.id)
-      .eq("is_active", true),
-    supabase
-      .from("transactions")
-      .select("amount")
-      .eq("user_id", user.id)
-      .gte("spent_at", startISO)
-      .lt("spent_at", endISO),
-    supabase
-      .from("transactions")
-      .select("id, amount, category_id, spent_at, categories ( name, icon )")
-      .eq("user_id", user.id)
-      .order("spent_at", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(5),
-    supabase
-      .from("categories")
-      .select("id, name, icon, user_id")
-      .or(`user_id.is.null,user_id.eq.${user.id}`)
-      .order("created_at", { ascending: true }),
-  ]);
-
-  // Fail loudly on data errors — silently defaulting to 0 would skew the
-  // available-budget calculation and hide misconfigured RLS / migrations.
-  const dataError =
-    settingsResult.error ??
-    fixedResult.error ??
-    monthSumResult.error ??
-    recentResult.error ??
-    categoriesResult.error ??
-    null;
-
-  if (dataError) {
-    return (
-      <AppShell withBottomNav>
-        <PageHeader
-          eyebrow="이번 달 소비를 가볍게 확인해요"
-          title="티끌"
-          trailing={
-            <Link
-              href="/settings"
-              aria-label="설정"
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon" }),
-                "rounded-full text-muted-foreground",
-              )}
-            >
-              <Settings className="size-5" />
-            </Link>
-          }
-        />
-        <div className="mt-4 space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
-          <p className="font-semibold">데이터를 불러오지 못했어요</p>
-          <p className="break-all text-xs opacity-80">{dataError.message}</p>
-          <p className="text-xs opacity-80">
-            마이그레이션이 적용되지 않았거나 권한 설정에 문제가 있을 수 있어요.
-          </p>
-        </div>
-      </AppShell>
-    );
-  }
-
-  const settings = settingsResult.data;
-  const hasSettings = settings !== null && settings !== undefined;
-  const monthlyIncome = Number(settings?.monthly_income ?? 0);
-  const activeFixedExpenseTotal = (fixedResult.data ?? []).reduce(
-    (sum, row) => sum + Number(row.amount ?? 0),
-    0,
-  );
-
-  const monthlyExpense = (monthSumResult.data ?? []).reduce(
-    (sum, row) => sum + Number(row.amount ?? 0),
-    0,
-  );
-
-  type RecentRow = {
-    id: string;
-    amount: number;
-    category_id: string | null;
-    spent_at: string;
-    categories: { name: string | null; icon: string | null } | null;
-  };
-
-  const recent: TransactionListRow[] = (
-    (recentResult.data ?? []) as RecentRow[]
-  ).map((row) => ({
-    id: row.id,
-    amount: Number(row.amount),
-    category_id: row.category_id,
-    category_name: row.categories?.name ?? null,
-    category_icon: row.categories?.icon ?? null,
-    spent_at: row.spent_at,
-  }));
-
-  const categories: TransactionFormCategory[] = (categoriesResult.data ?? [])
-    .filter((row) => !HIDDEN_CATEGORIES.has(row.name))
-    .sort((a, b) => categoryRank(a.name) - categoryRank(b.name))
-    .map((row) => ({
-      id: row.id,
-      name: row.name,
-      icon: row.icon,
-    }));
-
+export default function DashboardPage() {
   return (
     <AppShell withBottomNav>
       <PageHeader
@@ -160,6 +26,7 @@ export default async function DashboardPage() {
         trailing={
           <Link
             href="/settings"
+            prefetch
             aria-label="설정"
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon" }),
@@ -171,16 +38,13 @@ export default async function DashboardPage() {
         }
       />
 
-      <SpendingSummary
-        monthlyIncome={monthlyIncome}
-        fixedExpense={activeFixedExpenseTotal}
-        monthlyExpense={monthlyExpense}
-        hasSettings={hasSettings}
-      />
+      <Suspense fallback={<SpendingSummarySkeleton />}>
+        <SpendingSummarySection />
+      </Suspense>
 
-      <RecentTransactions transactions={recent} categories={categories} />
-
-      <AddTransactionButton categories={categories} />
+      <Suspense fallback={<RecentTransactionsSkeleton />}>
+        <RecentTransactionsSection />
+      </Suspense>
     </AppShell>
   );
 }

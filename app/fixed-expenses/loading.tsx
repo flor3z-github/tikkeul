@@ -1,18 +1,13 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { Settings } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { FixedExpensesSection } from "./_sections/fixed-expenses-section";
 import { FixedExpensesSkeleton } from "./_sections/fixed-expenses-skeleton";
 
-// Kept until Next 16 PPR is stable enough to enable (see app/dashboard/page.tsx).
-export const dynamic = "force-dynamic";
-
-export default function FixedExpensesPage() {
+export default function FixedExpensesLoading() {
   return (
     <AppShell withBottomNav>
       <PageHeader
@@ -32,10 +27,7 @@ export default function FixedExpensesPage() {
           </Link>
         }
       />
-
-      <Suspense fallback={<FixedExpensesSkeleton />}>
-        <FixedExpensesSection />
-      </Suspense>
+      <FixedExpensesSkeleton />
     </AppShell>
   );
 }

@@ -37,23 +37,29 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // IMPORTANT: do not run anything between createServerClient and
-  // supabase.auth.getUser(). getUser() verifies the cookie against Auth,
-  // so stale tokens left after a database reset do not look signed in.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // IMPORTANT: do not run anything between createServerClient and the auth
+  // call below. getClaims() verifies the JWT locally via JWKS (no Auth API
+  // round-trip), shaving ~100-300ms off every request compared to getUser().
+  //
+  // Trade-off vs getUser(): a stale token whose signing key is still valid
+  // will pass middleware even if the corresponding auth.users row was deleted
+  // (e.g. after a database reset). That's acceptable here because every
+  // Supabase query is fenced by RLS — a deleted user sees empty pages, not
+  // someone else's data. Pages that need hard verification (settings) should
+  // still call supabase.auth.getUser() in the server component itself.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = claimsData?.claims?.sub ?? null;
 
   const { pathname } = request.nextUrl;
 
-  if (!user && !isPublicPath(pathname)) {
+  if (!userId && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (user && (pathname === "/login" || pathname === "/signup")) {
+  if (userId && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";

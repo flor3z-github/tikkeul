@@ -1,23 +1,19 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { Settings } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { FixedExpensesSection } from "./_sections/fixed-expenses-section";
-import { FixedExpensesSkeleton } from "./_sections/fixed-expenses-skeleton";
+import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
+import { RecentTransactionsSkeleton } from "./_sections/recent-transactions-skeleton";
 
-// Kept until Next 16 PPR is stable enough to enable (see app/dashboard/page.tsx).
-export const dynamic = "force-dynamic";
-
-export default function FixedExpensesPage() {
+export default function DashboardLoading() {
   return (
     <AppShell withBottomNav>
       <PageHeader
-        eyebrow="매달 빠지는 돈"
-        title="고정지출"
+        eyebrow="이번 달 소비를 가볍게 확인해요"
+        title="티끌"
         trailing={
           <Link
             href="/settings"
@@ -32,10 +28,8 @@ export default function FixedExpensesPage() {
           </Link>
         }
       />
-
-      <Suspense fallback={<FixedExpensesSkeleton />}>
-        <FixedExpensesSection />
-      </Suspense>
+      <SpendingSummarySkeleton />
+      <RecentTransactionsSkeleton />
     </AppShell>
   );
 }
