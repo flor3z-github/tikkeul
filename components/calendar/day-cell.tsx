@@ -51,7 +51,7 @@ export function DayCell({
       aria-label={ariaLabel}
       aria-pressed={isSelected}
       className={cn(
-        "flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 transition-colors",
+        "flex h-12 flex-col items-center justify-center gap-1 rounded-xl px-0.5 transition-colors",
         "active:scale-[0.96]",
         isSelected
           ? "bg-primary"
@@ -61,14 +61,14 @@ export function DayCell({
       )}
     >
       <span
-        className={cn("text-[13px] font-semibold leading-none tabular-nums", dayTone)}
+        className={cn("text-[13px] font-semibold leading-tight tabular-nums", dayTone)}
       >
         {day}
       </span>
       {amount > 0 ? (
         <span
           className={cn(
-            "text-[10px] font-medium leading-none tabular-nums",
+            "text-[10px] font-medium leading-tight tabular-nums",
             amountTone,
           )}
         >
