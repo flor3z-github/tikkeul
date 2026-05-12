@@ -13,7 +13,7 @@ type Tab = {
 };
 
 const TABS: Tab[] = [
-  { href: "/dashboard", label: "이번 달", Icon: Wallet },
+  { href: "/dashboard", label: "소비", Icon: Wallet },
   { href: "/fixed-expenses", label: "고정지출", Icon: CalendarDays },
 ];
 
@@ -30,7 +30,7 @@ export function BottomTabNav() {
         className="pointer-events-auto mx-auto w-full max-w-md border-t border-border bg-background"
         style={{
           paddingTop: "12px",
-          paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
         }}
       >
         <ul className="grid grid-cols-2">

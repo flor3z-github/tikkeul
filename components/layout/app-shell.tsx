@@ -23,7 +23,7 @@ export function AppShell({
         className={cn(
           "min-h-dvh bg-background pt-4 text-foreground",
           "px-5",
-          withBottomNav ? "pb-[calc(56px+env(safe-area-inset-bottom)+24px)]" : "pb-28",
+          withBottomNav ? "pb-[calc(76px+env(safe-area-inset-bottom)+24px)]" : "pb-28",
         )}
       >
         <div className={cn("mx-auto w-full max-w-md", className)}>
