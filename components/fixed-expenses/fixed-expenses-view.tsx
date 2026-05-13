@@ -112,7 +112,7 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
       if (categoryFilter && plan.category !== categoryFilter) return false;
       if (normalizedQuery) {
         const hay = normalize(
-          `${plan.service_name}${plan.plan_name ?? ""}${plan.category ?? ""}`,
+          `${plan.service_name}${plan.plan_name ?? ""}${plan.category ?? ""}${plan.aliases.join("")}`,
         );
         if (!hay.includes(normalizedQuery)) return false;
       }

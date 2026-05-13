@@ -23,7 +23,7 @@ export async function FixedExpensesSection() {
     supabase
       .from("subscription_plans")
       .select(
-        "id, service_name, plan_name, default_amount, category, sort_order",
+        "id, service_name, plan_name, default_amount, category, sort_order, aliases",
       )
       .order("sort_order", { ascending: true })
       .order("service_name", { ascending: true }),
@@ -66,6 +66,7 @@ export async function FixedExpensesSection() {
     default_amount: Number(row.default_amount),
     category: row.category,
     sort_order: row.sort_order,
+    aliases: row.aliases ?? [],
   }));
 
   return <FixedExpensesView items={items} plans={plans} />;

@@ -51,6 +51,7 @@ export type Database = {
           default_amount: number;
           category: string | null;
           sort_order: number;
+          aliases: string[];
           created_at: string;
         };
         Insert: {
@@ -60,6 +61,7 @@ export type Database = {
           default_amount: number;
           category?: string | null;
           sort_order?: number;
+          aliases?: string[];
           created_at?: string;
         };
         Update: {
@@ -69,6 +71,7 @@ export type Database = {
           default_amount?: number;
           category?: string | null;
           sort_order?: number;
+          aliases?: string[];
           created_at?: string;
         };
         Relationships: [];

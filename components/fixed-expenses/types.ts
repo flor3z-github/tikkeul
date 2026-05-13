@@ -7,6 +7,7 @@ export type SubscriptionPlan = {
   default_amount: number;
   category: string | null;
   sort_order: number;
+  aliases: string[];
 };
 
 export type FixedExpenseRow = {
