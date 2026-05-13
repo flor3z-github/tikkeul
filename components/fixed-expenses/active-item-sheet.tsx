@@ -1,12 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CircleSlash, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   deactivateFixedExpenseAction,
-  deleteFixedExpenseAction,
   updateFixedExpenseAction,
 } from "@/app/fixed-expenses/actions";
 import { Button } from "@/components/ui/button";
@@ -20,10 +19,12 @@ import {
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
 import { SplitChips } from "./split-chips";
-import type { FixedExpenseRow } from "./types";
+import type { FixedExpenseRow, SubscriptionPlan } from "./types";
 
 type ActiveItemSheetProps = {
   item: FixedExpenseRow | null;
+  /** Catalog plan reference for this item; null for manual ("직접 추가") items. */
+  plan: SubscriptionPlan | null;
   /** Catalog default for split chips; null for manual ("직접 추가") items. */
   catalogDefaultAmount: number | null;
   onOpenChange: (open: boolean) => void;
@@ -31,6 +32,7 @@ type ActiveItemSheetProps = {
 
 export function ActiveItemSheet({
   item,
+  plan,
   catalogDefaultAmount,
   onOpenChange,
 }: ActiveItemSheetProps) {
@@ -42,12 +44,17 @@ export function ActiveItemSheet({
         initialFocus={false}
         className="rounded-t-[28px] border-white/10 bg-background px-5 pb-8 pt-4"
       >
-        <SheetHeader className="px-0 pb-3 text-left">
-          <SheetTitle className="text-[22px] font-bold tracking-[-0.025em]">
-            {item?.name ?? "고정지출"}
+        <SheetHeader className="border-b border-border px-0 pb-4 text-left">
+          <SheetTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
+            {plan ? plan.service_name : (item?.name ?? "고정지출")}
           </SheetTitle>
+          {plan?.plan_name ? (
+            <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
+              {plan.plan_name}
+            </p>
+          ) : null}
           <SheetDescription className="sr-only">
-            금액 수정, 해제, 또는 삭제를 선택합니다.
+            {item?.name ?? "고정지출"} 금액 수정, 해제, 또는 삭제를 선택합니다.
           </SheetDescription>
         </SheetHeader>
 
@@ -109,18 +116,6 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
     startActionTransition(async () => {
       const result = await deactivateFixedExpenseAction(item.id);
       if (result.ok) {
-        toast.success("해제됐어요.");
-        onDone();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
-
-  function handleDelete() {
-    startActionTransition(async () => {
-      const result = await deleteFixedExpenseAction(item.id);
-      if (result.ok) {
         toast.success("삭제됐어요.");
         onDone();
       } else {
@@ -157,48 +152,39 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
         </label>
         <AmountInput value={amountText} onChange={setAmountText} />
         {catalogDefaultAmount != null ? (
-          <SplitChips
-            baseAmount={catalogDefaultAmount}
-            currentValue={amountValue}
-            onPick={(next) => setAmountText(formatNumber(next))}
-          />
+          <>
+            <SplitChips
+              baseAmount={catalogDefaultAmount}
+              currentValue={amountValue}
+              onPick={(next) => setAmountText(formatNumber(next))}
+            />
+            <p className="text-xs text-muted-foreground">
+              기본 금액은 {formatNumber(catalogDefaultAmount)}원이에요. 함께 쓰는
+              사람이 있으면 위에서 나눠주세요.
+            </p>
+          </>
         ) : null}
       </div>
 
-      <Button
-        type="submit"
-        disabled={!canSave}
-        className="h-12 w-full rounded-full text-[15px] font-semibold"
-      >
-        {savePending ? "저장 중…" : "저장하기"}
-      </Button>
-
-      <div className="grid grid-cols-2 gap-2 pt-1">
+      <div className="grid grid-cols-4 gap-2">
+        <Button
+          type="submit"
+          disabled={!canSave}
+          className="col-span-3 h-12 rounded-full text-[15px] font-semibold"
+        >
+          {savePending ? "수정 중…" : "수정하기"}
+        </Button>
         <Button
           type="button"
-          variant="ghost"
+          variant="destructive"
           onClick={handleDeactivate}
           disabled={actionPending}
-          className="h-11 rounded-full text-[14px] text-muted-foreground hover:bg-muted"
+          aria-label="삭제하기"
+          className="col-span-1 h-12 rounded-full px-0 text-[15px] font-semibold"
         >
-          <CircleSlash className="mr-1 size-4" />
-          해제
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={handleDelete}
-          disabled={actionPending}
-          className="h-11 rounded-full text-[14px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="mr-1 size-4" />
-          삭제
+          <Trash2 className="size-4" />
         </Button>
       </div>
-      <p className="text-center text-xs text-muted-foreground">
-        해제하면 가용 예산에서 빠지고 카탈로그에서 다시 켤 수 있어요. 삭제는
-        기록까지 지워요.
-      </p>
     </form>
   );
 }

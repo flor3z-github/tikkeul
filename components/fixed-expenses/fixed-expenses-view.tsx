@@ -234,9 +234,16 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                         onClick={() => setActiveItem(item)}
                         className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted active:bg-muted"
                       >
-                        <p className="min-w-0 flex-1 truncate text-[15px] font-medium">
-                          {item.name}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[15px] font-medium leading-tight">
+                            {plan ? plan.service_name : item.name}
+                          </p>
+                          {plan?.plan_name ? (
+                            <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
+                              {plan.plan_name}
+                            </p>
+                          ) : null}
+                        </div>
                         <div className="flex shrink-0 flex-col items-end leading-tight">
                           <span className="text-[15px] font-semibold tabular-nums">
                             {formatKRW(item.amount)}
@@ -291,33 +298,37 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
             <span>직접 추가</span>
           </button>
         </div>
-        <div
-          ref={chipsScrollRef}
-          className="mt-2 flex gap-1.5 overflow-x-auto pb-1"
-          style={{
-            // hide native scrollbar visually but keep it scrollable
-            scrollbarWidth: "none",
-            // Edge fades signal "more chips this way". Hidden when at edge so
-            // a fully-scrolled side doesn't show a misleading gradient.
-            maskImage: chipsFadeMask,
-            WebkitMaskImage: chipsFadeMask,
-          }}
-        >
+        <div className="mt-2 flex items-center gap-2 pb-1">
+          {/* "전체" stays pinned outside the scroll so it's always reachable. */}
           <FilterChip
             active={categoryFilter === null}
             onClick={() => setCategoryFilter(null)}
           >
             전체
           </FilterChip>
-          {CATEGORY_ORDER.map((cat) => (
-            <FilterChip
-              key={cat}
-              active={categoryFilter === cat}
-              onClick={() => setCategoryFilter(cat)}
-            >
-              {cat}
-            </FilterChip>
-          ))}
+          <div aria-hidden className="h-6 w-px shrink-0 bg-border" />
+          <div
+            ref={chipsScrollRef}
+            className="flex flex-1 gap-1.5 overflow-x-auto"
+            style={{
+              // hide native scrollbar visually but keep it scrollable
+              scrollbarWidth: "none",
+              // Edge fades signal "more chips this way". Hidden when at edge so
+              // a fully-scrolled side doesn't show a misleading gradient.
+              maskImage: chipsFadeMask,
+              WebkitMaskImage: chipsFadeMask,
+            }}
+          >
+            {CATEGORY_ORDER.map((cat) => (
+              <FilterChip
+                key={cat}
+                active={categoryFilter === cat}
+                onClick={() => setCategoryFilter(cat)}
+              >
+                {cat}
+              </FilterChip>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -383,6 +394,11 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
       />
       <ActiveItemSheet
         item={activeItem}
+        plan={
+          activeItem?.subscription_plan_id
+            ? (planById.get(activeItem.subscription_plan_id) ?? null)
+            : null
+        }
         catalogDefaultAmount={
           activeItem?.subscription_plan_id
             ? (planById.get(activeItem.subscription_plan_id)?.default_amount ??

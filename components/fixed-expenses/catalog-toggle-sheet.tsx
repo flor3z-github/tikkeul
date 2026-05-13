@@ -34,12 +34,17 @@ export function CatalogToggleSheet({
         side="bottom"
         className="rounded-t-[28px] border-white/10 bg-background px-5 pb-8 pt-4"
       >
-        <SheetHeader className="px-0 pb-3 text-left">
-          <SheetTitle className="text-[22px] font-bold tracking-[-0.025em]">
-            {plan ? planLabel(plan) : "고정지출 추가"}
+        <SheetHeader className="border-b border-border px-0 pb-4 text-left">
+          <SheetTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
+            {plan ? plan.service_name : "고정지출 추가"}
           </SheetTitle>
+          {plan?.plan_name ? (
+            <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
+              {plan.plan_name}
+            </p>
+          ) : null}
           <SheetDescription className="sr-only">
-            금액을 확인하고 사용 중인 고정지출로 추가합니다.
+            {plan ? planLabel(plan) : "고정지출 추가"} 금액을 확인하고 사용 중인 고정지출로 추가합니다.
           </SheetDescription>
         </SheetHeader>
 
@@ -78,7 +83,7 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
         amount: amountValue,
       });
       if (result.ok) {
-        toast.success("사용 중으로 추가됐어요.");
+        toast.success("추가됐어요.");
         onSaved();
       } else {
         toast.error(result.error);
@@ -109,7 +114,7 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
         disabled={!canSubmit}
         className="h-12 w-full rounded-full text-[15px] font-semibold"
       >
-        {pending ? "추가하는 중…" : "사용 중으로 추가하기"}
+        {pending ? "추가 중…" : "추가하기"}
       </Button>
     </form>
   );

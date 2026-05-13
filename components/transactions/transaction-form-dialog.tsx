@@ -389,33 +389,40 @@ function TransactionFormBody({
         </Popover>
       </div>
 
-      <Button
-        type="submit"
-        disabled={!canSubmit}
-        className="h-12 w-full rounded-full text-[15px] font-semibold"
-      >
-        {pending
-          ? mode === "edit"
-            ? "수정 중…"
-            : "추가 중…"
-          : mode === "edit"
-            ? "수정하기"
-            : "추가하기"}
-      </Button>
+      {mode === "edit" && initial ? (
+        <>
+          <div className="grid grid-cols-4 gap-2">
+            <Button
+              type="submit"
+              disabled={!canSubmit}
+              className="col-span-3 h-12 rounded-full text-[15px] font-semibold"
+            >
+              {pending ? "수정 중…" : "수정하기"}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => setConfirmDeleteOpen(true)}
+              disabled={busy}
+              aria-label="삭제하기"
+              className="col-span-1 h-12 rounded-full px-0 text-[15px] font-semibold"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        </>
+      ) : (
+        <Button
+          type="submit"
+          disabled={!canSubmit}
+          className="h-12 w-full rounded-full text-[15px] font-semibold"
+        >
+          {pending ? "추가 중…" : "추가하기"}
+        </Button>
+      )}
 
       {mode === "edit" && initial ? (
         <>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => setConfirmDeleteOpen(true)}
-            disabled={busy}
-            className="h-12 w-full rounded-full text-[15px] font-semibold"
-          >
-            <Trash2 className="size-4" />
-            삭제하기
-          </Button>
-
           <AlertDialog
             open={confirmDeleteOpen}
             onOpenChange={(open) => {
