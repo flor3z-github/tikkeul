@@ -188,9 +188,80 @@ export type Database = {
           },
         ];
       };
+      friend_codes: {
+        Row: {
+          code: string;
+          owner_id: string;
+          expires_at: string;
+          used_at: string | null;
+          used_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          code: string;
+          owner_id: string;
+          expires_at: string;
+          used_at?: string | null;
+          used_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          code?: string;
+          owner_id?: string;
+          expires_at?: string;
+          used_at?: string | null;
+          used_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      friendships: {
+        Row: {
+          id: string;
+          owner_id: string;
+          viewer_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          viewer_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          viewer_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      redeem_attempts: {
+        Row: {
+          id: number;
+          user_id: string;
+          attempted_at: string;
+        };
+        Insert: {
+          id?: number;
+          user_id: string;
+          attempted_at?: string;
+        };
+        Update: {
+          id?: number;
+          user_id?: string;
+          attempted_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      redeem_friend_code: {
+        Args: { p_code: string };
+        Returns: string;
+      };
+    };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };

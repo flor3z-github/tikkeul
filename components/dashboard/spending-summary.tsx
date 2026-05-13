@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { formatKRW } from "@/lib/utils/money";
+import { formatKRW, formatNumber } from "@/lib/utils/money";
 import {
   calculateBudgetSummary,
   getSpendingStatus,
@@ -15,7 +15,12 @@ type SpendingSummaryProps = {
   fixedExpense: number;
   monthlyExpense: number;
   hasSettings: boolean;
-  monthLabel?: string;
+  /**
+   * When true, render only the monthly expense total. Income, fixed expense,
+   * available budget, and spending rate are hidden because they are private
+   * to the data owner. Used when viewing a friend's dashboard.
+   */
+  friendView?: boolean;
 };
 
 const STATUS_COPY: Record<SpendingStatus, { tone: string; label: string }> = {
@@ -37,8 +42,28 @@ export function SpendingSummary({
   fixedExpense,
   monthlyExpense,
   hasSettings,
-  monthLabel,
+  friendView = false,
 }: SpendingSummaryProps) {
+  if (friendView) {
+    return (
+      <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
+        <CardContent className="space-y-4 p-6">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              총 소비
+            </p>
+            <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
+              {formatNumber(monthlyExpense)} 원
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            친구의 수입·고정지출·예산은 비공개예요.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const summary = calculateBudgetSummary({
     monthlyIncome,
     fixedExpense,
@@ -52,10 +77,10 @@ export function SpendingSummary({
       <CardContent className="space-y-4 p-6">
         <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">
-            {monthLabel ? `${monthLabel} 소비` : "이번 달 소비"}
+            총 소비
           </p>
           <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
-            {formatKRW(monthlyExpense)}
+            {formatNumber(monthlyExpense)} 원
           </p>
         </div>
 

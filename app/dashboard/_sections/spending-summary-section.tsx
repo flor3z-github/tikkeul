@@ -3,31 +3,41 @@ import { redirect } from "next/navigation";
 import { SpendingSummary } from "@/components/dashboard/spending-summary";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
 import { createClient } from "@/lib/supabase/server";
-import { formatYearMonthKorean } from "@/lib/utils/calendar";
 
 type SpendingSummarySectionProps = {
   ym: string;
+  targetUserId?: string;
 };
 
 export async function SpendingSummarySection({
   ym,
+  targetUserId,
 }: SpendingSummarySectionProps) {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
-  const userId = claimsData?.claims?.sub ?? null;
-  if (!userId) redirect("/login");
+  const viewerId = claimsData?.claims?.sub ?? null;
+  if (!viewerId) redirect("/login");
+  const userId = targetUserId ?? viewerId;
+  const isOwn = userId === viewerId;
 
+  // Friend view: do not expose income/fixed-expense. Only show this-month
+  // expense total. user_settings/fixed_expenses RLS would block these queries
+  // anyway, but skipping the round-trip keeps the section deterministic.
   const [settingsResult, fixedResult, monthlyResult] = await Promise.all([
-    supabase
-      .from("user_settings")
-      .select("monthly_income")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("fixed_expenses")
-      .select("amount")
-      .eq("user_id", userId)
-      .eq("is_active", true),
+    isOwn
+      ? supabase
+          .from("user_settings")
+          .select("monthly_income")
+          .eq("user_id", userId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null as null | { message: string } }),
+    isOwn
+      ? supabase
+          .from("fixed_expenses")
+          .select("amount")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+      : Promise.resolve({ data: [], error: null as null | { message: string } }),
     getMonthlyTransactions(userId, ym),
   ]);
 
@@ -60,7 +70,7 @@ export async function SpendingSummarySection({
       fixedExpense={fixedExpense}
       monthlyExpense={monthlyExpense}
       hasSettings={hasSettings}
-      monthLabel={formatYearMonthKorean(ym)}
+      friendView={!isOwn}
     />
   );
 }

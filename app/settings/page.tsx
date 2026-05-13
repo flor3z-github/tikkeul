@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
@@ -17,11 +17,22 @@ export default async function SettingsPage() {
   const userId = claimsData?.claims?.sub ?? null;
   if (!userId) redirect("/login");
 
-  const settingsResult = await supabase
-    .from("user_settings")
-    .select("monthly_income")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [settingsResult, profileResult, friendsCount] = await Promise.all([
+    supabase
+      .from("user_settings")
+      .select("monthly_income")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase
+      .from("friendships")
+      .select("id", { count: "exact", head: true })
+      .eq("viewer_id", userId),
+  ]);
 
   if (settingsResult.error) {
     return (
@@ -66,7 +77,29 @@ export default async function SettingsPage() {
 
       <SettingsForm
         initialIncome={Number(settingsResult.data?.monthly_income ?? 0)}
+        initialNickname={profileResult.data?.display_name ?? ""}
       />
+
+      <Link
+        href="/friends"
+        prefetch
+        className="mt-8 flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-4"
+      >
+        <span className="flex items-center gap-3">
+          <span className="flex size-9 items-center justify-center rounded-full bg-muted">
+            <Users className="size-4" />
+          </span>
+          <span className="flex flex-col">
+            <span className="text-sm font-semibold">친구</span>
+            <span className="text-xs text-muted-foreground">
+              {(friendsCount.count ?? 0) > 0
+                ? `${friendsCount.count}명과 티끌을 함께 봐요`
+                : "친구 코드로 티끌을 함께 봐요"}
+            </span>
+          </span>
+        </span>
+        <ChevronRight className="size-4 text-muted-foreground" />
+      </Link>
 
       <div className="mt-10 border-t border-border pt-6">
         <form action={signOutAction}>

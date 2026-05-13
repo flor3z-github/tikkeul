@@ -8,14 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
+import { NICKNAME_MAX_LENGTH } from "@/lib/utils/nickname";
 
 type SettingsFormProps = {
   initialIncome: number;
+  initialNickname: string;
 };
 
-export function SettingsForm({ initialIncome }: SettingsFormProps) {
+export function SettingsForm({ initialIncome, initialNickname }: SettingsFormProps) {
   const [state, formAction, pending] = useActionState(saveSettingsAction, null);
   const [income, setIncome] = useState(formatNumber(initialIncome));
+  const [nickname, setNickname] = useState(initialNickname);
 
   useEffect(() => {
     if (!state) return;
@@ -28,6 +31,23 @@ export function SettingsForm({ initialIncome }: SettingsFormProps) {
 
   return (
     <form action={formAction} className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="nickname">닉네임</Label>
+        <Input
+          id="nickname"
+          name="nickname"
+          autoComplete="off"
+          maxLength={NICKNAME_MAX_LENGTH}
+          value={nickname}
+          onChange={(event) => setNickname(event.target.value)}
+          placeholder="닉네임을 입력해주세요"
+          className="h-12 rounded-2xl text-[16px]"
+        />
+        <p className="text-xs text-muted-foreground">
+          친구가 보는 이름이에요.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="monthly_income">월 수입</Label>
         <div className="relative">

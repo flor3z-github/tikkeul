@@ -21,6 +21,12 @@ type CalendarDayPanelProps = {
   transactions: MonthlyTransaction[];
   categories: TransactionFormCategory[];
   availableBudget: number;
+  /**
+   * When true, the panel is view-only: the floating add button is hidden and
+   * tapping a transaction does not open the edit dialog. Used in friend-view
+   * mode on the dashboard.
+   */
+  readOnly?: boolean;
 };
 
 export function CalendarDayPanel({
@@ -29,6 +35,7 @@ export function CalendarDayPanel({
   transactions,
   categories,
   availableBudget,
+  readOnly = false,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
 
@@ -98,6 +105,7 @@ export function CalendarDayPanel({
                     <TransactionItem
                       transaction={transaction}
                       categories={categories}
+                      readOnly={readOnly}
                     />
                   </li>
                 ))}
@@ -107,10 +115,12 @@ export function CalendarDayPanel({
         </Card>
       </section>
 
-      <AddTransactionButton
-        categories={categories}
-        defaultDate={selectedDay}
-      />
+      {readOnly ? null : (
+        <AddTransactionButton
+          categories={categories}
+          defaultDate={selectedDay}
+        />
+      )}
     </>
   );
 }

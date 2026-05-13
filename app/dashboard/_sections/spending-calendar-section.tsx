@@ -8,31 +8,49 @@ import { getMonthlyTransactions } from "@/lib/queries/transactions";
 type SpendingCalendarSectionProps = {
   ym: string;
   initialDay: string;
+  targetUserId?: string;
 };
 
 export async function SpendingCalendarSection({
   ym,
   initialDay,
+  targetUserId,
 }: SpendingCalendarSectionProps) {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
-  const userId = claimsData?.claims?.sub ?? null;
-  if (!userId) redirect("/login");
+  const viewerId = claimsData?.claims?.sub ?? null;
+  if (!viewerId) redirect("/login");
+  const userId = targetUserId ?? viewerId;
+  const isOwn = userId === viewerId;
 
+  // Categories are shared seeds + the viewer's own customs; pass viewerId so
+  // we still surface the viewer's category list (which is what they can pick
+  // when adding their own transactions). For friend-view mode this is unused
+  // because the calendar is read-only, but the prop is still required.
   const [monthlyResult, categoriesResult, settingsResult, fixedResult] =
     await Promise.all([
       getMonthlyTransactions(userId, ym),
-      getCategories(userId),
-      supabase
-        .from("user_settings")
-        .select("monthly_income")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("fixed_expenses")
-        .select("amount")
-        .eq("user_id", userId)
-        .eq("is_active", true),
+      getCategories(viewerId),
+      isOwn
+        ? supabase
+            .from("user_settings")
+            .select("monthly_income")
+            .eq("user_id", userId)
+            .maybeSingle()
+        : Promise.resolve({
+            data: null,
+            error: null as null | { message: string },
+          }),
+      isOwn
+        ? supabase
+            .from("fixed_expenses")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("is_active", true)
+        : Promise.resolve({
+            data: [],
+            error: null as null | { message: string },
+          }),
     ]);
 
   if (!monthlyResult.ok) {
@@ -68,6 +86,7 @@ export async function SpendingCalendarSection({
       transactions={monthlyResult.transactions}
       categories={categoriesResult.categories}
       availableBudget={availableBudget}
+      readOnly={!isOwn}
     />
   );
 }
