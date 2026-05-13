@@ -38,7 +38,7 @@ export default async function DashboardPage({
   const monthLabel = formatYearMonthKorean(ym);
 
   return (
-    <AppShell withBottomNav>
+    <AppShell withBottomNav withFab>
       <PageHeader
         eyebrow={`${monthLabel} 소비를 확인해요`}
         title="티끌"
