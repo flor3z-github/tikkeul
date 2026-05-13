@@ -15,7 +15,16 @@ type SubmitInput = {
   amount: number;
   categoryId: string | null;
   spentAt: string; // ISO date or ISO datetime
+  memo?: string | null;
 };
+
+const MEMO_MAX_LENGTH = 100;
+
+function normalizeMemo(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
 
 function normalizeSpentAt(value: string): string {
   // Accept "YYYY-MM-DD" → "YYYY-MM-DDT00:00:00Z" so it lands at start of day UTC.
@@ -52,6 +61,11 @@ export async function submitTransactionAction(
     };
   }
 
+  const memo = normalizeMemo(input.memo);
+  if (memo !== null && memo.length > MEMO_MAX_LENGTH) {
+    return { ok: false, error: `메모는 ${MEMO_MAX_LENGTH}자까지 입력할 수 있어요.` };
+  }
+
   if (input.id) {
     const { error } = await supabase
       .from("transactions")
@@ -59,6 +73,7 @@ export async function submitTransactionAction(
         amount: input.amount,
         category_id: input.categoryId,
         spent_at: spentAt,
+        memo,
       })
       .eq("id", input.id)
       .eq("user_id", user.id);
@@ -72,6 +87,7 @@ export async function submitTransactionAction(
       amount: input.amount,
       category_id: input.categoryId,
       spent_at: spentAt,
+      memo,
     });
     if (error) return { ok: false, error: error.message };
   }

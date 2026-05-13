@@ -64,6 +64,7 @@ export async function DayTransactionsSection({
       category_name: tx.category_name,
       category_icon: tx.category_icon,
       spent_at: tx.spent_at,
+      memo: tx.memo,
     }));
 
   const dayTotal = dayRows.reduce((sum, row) => sum + Number(row.amount), 0);

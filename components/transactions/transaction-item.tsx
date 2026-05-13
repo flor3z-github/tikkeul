@@ -17,6 +17,7 @@ export type TransactionListRow = {
   category_name: string | null;
   category_icon: string | null;
   spent_at: string;
+  memo: string | null;
 };
 
 type TransactionItemProps = {
@@ -35,6 +36,7 @@ export function TransactionItem({
     amount: Number(transaction.amount),
     category_id: transaction.category_id,
     spent_at: transaction.spent_at,
+    memo: transaction.memo,
   };
 
   return (
@@ -50,9 +52,16 @@ export function TransactionItem({
             className="size-5 text-muted-foreground"
           />
         </span>
-        <p className="min-w-0 flex-1 truncate text-[15px] font-medium">
-          {transaction.category_name ?? "기타"}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-medium">
+            {transaction.category_name ?? "기타"}
+          </p>
+          {transaction.memo ? (
+            <p className="truncate text-[12px] text-muted-foreground">
+              {transaction.memo}
+            </p>
+          ) : null}
+        </div>
         <span className="text-[15px] font-semibold tabular-nums">
           {formatKRW(Number(transaction.amount))}
         </span>

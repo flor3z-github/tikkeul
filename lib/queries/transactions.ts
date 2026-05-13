@@ -10,6 +10,7 @@ export type MonthlyTransaction = {
   category_name: string | null;
   category_icon: string | null;
   spent_at: string;
+  memo: string | null;
 };
 
 export type MonthlyTransactionsResult =
@@ -26,6 +27,7 @@ type RawRow = {
   amount: number;
   category_id: string | null;
   spent_at: string;
+  memo: string | null;
   categories: { name: string | null; icon: string | null } | null;
 };
 
@@ -51,7 +53,7 @@ export const getMonthlyTransactions = cache(
     const { data, error } = await supabase
       .from("transactions")
       .select(
-        "id, amount, category_id, spent_at, categories ( name, icon )",
+        "id, amount, category_id, spent_at, memo, categories ( name, icon )",
       )
       .eq("user_id", userId)
       .is("deleted_at", null)
@@ -70,6 +72,7 @@ export const getMonthlyTransactions = cache(
         category_name: row.categories?.name ?? null,
         category_icon: row.categories?.icon ?? null,
         spent_at: row.spent_at,
+        memo: row.memo,
       }),
     );
 

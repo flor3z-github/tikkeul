@@ -92,11 +92,15 @@ MVP에서는 다음 기능을 과하게 강조하지 않는다.
 
 소비 추가는 화면 오른쪽 아래 Floating Action Button으로 시작한다.
 
-소비 입력 필드는 다음 3개만 사용한다.
+소비 입력 필드는 다음 3개를 핵심으로 한다.
 
 - 카테고리
 - 금액
 - 날짜
+
+여기에 짧은 식별을 위한 선택 필드 1개가 더해진다.
+
+- 메모 (선택, 최대 100자)
 
 ---
 
@@ -670,6 +674,7 @@ Dashboard에서 보여주지 않을 것:
 
 - 카테고리
 - 금액
+- 메모 (선택, 최대 100자)
 - 날짜
 
 추가 모드:
@@ -678,6 +683,7 @@ Dashboard에서 보여주지 않을 것:
 소비 추가
 [카테고리]
 [금액]
+[메모]
 [날짜]
 [추가하기]
 ```
@@ -688,10 +694,18 @@ Dashboard에서 보여주지 않을 것:
 소비 수정
 [카테고리]
 [금액]
+[메모]
 [날짜]
 [수정하기]
 [삭제하기]
 ```
+
+메모 필드 규칙:
+
+- 한 줄 텍스트 입력, placeholder "무엇에 썼나요?".
+- 최대 100자. 입력란 우측 상단에 `현재길이/100` 카운터를 표시한다.
+- 비워두면 저장 시 `null`로 정규화한다 (앞뒤 공백 제거 후 빈 문자열도 동일).
+- 메모를 비우거나 수정하는 것이 곧 추가/수정/삭제다. 별도 메모 삭제 액션은 두지 않는다.
 
 수정 모드에서만 `삭제하기` 버튼을 노출한다. destructive variant 스타일로 `수정하기` 바로 아래 둔다.
 
@@ -795,8 +809,13 @@ MVP에서는 노출하지 않는다.
 
 ```txt
 [icon] 식비
-       5월 11일              12,000원
+       동네 백반                          12,000원
 ```
+
+메모가 있는 경우 카테고리명 바로 아래에 한 줄로 표시한다. 길이가 넘치면 truncate한다.
+
+- 카테고리명: `text-[15px] font-medium`, foreground
+- 메모: `text-[12px] text-muted-foreground`, 메모가 없는 행에서는 렌더하지 않는다 (한 줄짜리 그대로 유지)
 
 아이콘 컨테이너:
 
@@ -950,7 +969,7 @@ Service Worker는 다음만 캐싱한다.
 - 하단 탭에 3개 이상의 항목을 넣지 않는다 (이번 달 / 고정지출 두 개만).
 - MVP에서 Recharts를 사용하지 않는다.
 - 수입 내역을 transaction처럼 입력하게 만들지 않는다.
-- memo, merchant, payment method 같은 필드를 넣지 않는다.
+- merchant, payment method 같은 필드를 넣지 않는다. 메모(선택, 100자)만 허용한다.
 - private spending data를 Cache Storage에 저장하지 않는다.
 - Apple 브랜드나 고유 UI(글래스모피즘 탭 스위처 등)를 복제하지 않는다.
 - 카드 안에 카드를 중첩하지 않는다 — surface는 한 단계까지.
@@ -969,7 +988,7 @@ UI 코드를 생성할 때 다음을 지켜라.
 5. 홈 화면은 핵심 숫자와 progress bar 중심으로 만든다.
 6. 소비 추가는 Floating Action Button으로 시작한다.
 7. 소비 추가와 소비 수정은 같은 dialog 또는 sheet form을 재사용한다.
-8. 입력 필드는 카테고리, 금액, 날짜만 사용한다.
+8. 입력 필드는 카테고리, 금액, 날짜, 메모(선택)만 사용한다.
 9. MVP에서는 Recharts를 사용하지 않는다.
 10. MVP에서는 Bottom Navigation을 만들지 않는다.
 11. UI 컴포넌트와 데이터 로직을 분리한다.
@@ -1002,6 +1021,7 @@ UI 코드를 생성할 때 다음을 지켜라.
 <TransactionFormDialog mode="create">
   <CategorySelect />
   <AmountInput />
+  <MemoInput />
   <DatePicker />
   <SubmitButton>추가하기</SubmitButton>
 </TransactionFormDialog>
@@ -1013,6 +1033,7 @@ UI 코드를 생성할 때 다음을 지켜라.
 <TransactionFormDialog mode="edit" transaction={transaction}>
   <CategorySelect />
   <AmountInput />
+  <MemoInput />
   <DatePicker />
   <SubmitButton>수정하기</SubmitButton>
 </TransactionFormDialog>

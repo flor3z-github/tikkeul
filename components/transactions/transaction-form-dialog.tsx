@@ -55,7 +55,10 @@ export type TransactionFormInitial = {
   amount: number;
   category_id: string | null;
   spent_at: string;
+  memo: string | null;
 };
+
+const MEMO_MAX_LENGTH = 100;
 
 type TransactionFormDialogProps = {
   open: boolean;
@@ -147,6 +150,7 @@ function TransactionFormBody({
     if (initial) return new Date(initial.spent_at);
     return parseDefaultDate(defaultDate) ?? new Date();
   });
+  const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -220,6 +224,7 @@ function TransactionFormBody({
         amount: amountValue,
         categoryId,
         spentAt: toISODate(spentDate),
+        memo: memoText,
       });
       if (result.ok) {
         toast.success(mode === "edit" ? "수정됐어요." : "추가됐어요.");
@@ -327,6 +332,29 @@ function TransactionFormBody({
             );
           })}
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="transaction-memo"
+          className="flex items-center justify-between text-sm font-medium text-muted-foreground"
+        >
+          <span>메모 (선택)</span>
+          <span className="text-xs tabular-nums">
+            {memoText.length}/{MEMO_MAX_LENGTH}
+          </span>
+        </label>
+        <input
+          id="transaction-memo"
+          type="text"
+          value={memoText}
+          onChange={(event) =>
+            setMemoText(event.target.value.slice(0, MEMO_MAX_LENGTH))
+          }
+          maxLength={MEMO_MAX_LENGTH}
+          placeholder="무엇에 썼나요?"
+          className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:bg-background"
+        />
       </div>
 
       <div className="space-y-2">
