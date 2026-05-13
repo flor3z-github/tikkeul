@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Settings } from "lucide-react";
 
+import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-watcher";
 import { FriendSwitcher } from "@/components/dashboard/friend-switcher";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
@@ -114,18 +115,21 @@ export default async function DashboardPage({
       />
 
       {!isOwn ? (
-        <div className="mb-4 flex items-center justify-between rounded-2xl bg-muted px-4 py-3 text-sm">
-          <span className="text-muted-foreground">
-            {viewingNickname}님의 티끌을 보고 있어요
-          </span>
-          <Link
-            href="/dashboard"
-            prefetch
-            className="text-xs font-semibold underline-offset-4 hover:underline"
-          >
-            내 티끌로
-          </Link>
-        </div>
+        <>
+          <FriendRealtimeWatcher friendUserId={viewingUserId} />
+          <div className="mb-4 flex items-center justify-between rounded-2xl bg-muted px-4 py-3 text-sm">
+            <span className="text-muted-foreground">
+              {viewingNickname}님의 티끌을 보고 있어요
+            </span>
+            <Link
+              href="/dashboard"
+              prefetch
+              className="text-xs font-semibold underline-offset-4 hover:underline"
+            >
+              내 티끌로
+            </Link>
+          </div>
+        </>
       ) : null}
 
       <Suspense fallback={<SpendingSummarySkeleton />}>
