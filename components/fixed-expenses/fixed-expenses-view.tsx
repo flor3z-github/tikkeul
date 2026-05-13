@@ -218,38 +218,42 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
             &lsquo;직접 추가&rsquo;로 월세·통신비를 등록해주세요.
           </p>
         ) : (
-          <ul className="space-y-2">
-            {activeItems.map((item) => {
-              const plan = item.subscription_plan_id
-                ? planById.get(item.subscription_plan_id)
-                : null;
-              const showDefault =
-                plan != null && plan.default_amount !== item.amount;
-              return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveItem(item)}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted active:bg-muted"
-                  >
-                    <p className="min-w-0 flex-1 truncate text-[15px] font-medium">
-                      {item.name}
-                    </p>
-                    <div className="flex shrink-0 flex-col items-end leading-tight">
-                      <span className="text-[15px] font-semibold tabular-nums">
-                        {formatKRW(item.amount)}
-                      </span>
-                      {showDefault ? (
-                        <span className="text-[11px] text-muted-foreground tabular-nums">
-                          원래 가격 {formatKRW(plan.default_amount)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
+            <CardContent className="p-2">
+              <ul className="space-y-0.5">
+                {activeItems.map((item) => {
+                  const plan = item.subscription_plan_id
+                    ? planById.get(item.subscription_plan_id)
+                    : null;
+                  const showDefault =
+                    plan != null && plan.default_amount !== item.amount;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveItem(item)}
+                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted active:bg-muted"
+                      >
+                        <p className="min-w-0 flex-1 truncate text-[15px] font-medium">
+                          {item.name}
+                        </p>
+                        <div className="flex shrink-0 flex-col items-end leading-tight">
+                          <span className="text-[15px] font-semibold tabular-nums">
+                            {formatKRW(item.amount)}
+                          </span>
+                          {showDefault ? (
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                              원래 가격 {formatKRW(plan.default_amount)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
         )}
       </section>
 
