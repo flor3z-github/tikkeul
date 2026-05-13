@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
 import { parseYearMonth } from "@/lib/utils/calendar";
+import { toISODate } from "@/lib/utils/date";
 
 export type MonthlyTransaction = {
   id: string;
@@ -79,7 +80,9 @@ export const getMonthlyTransactions = cache(
     const dailyTotals: Record<string, number> = {};
     let monthlyTotal = 0;
     for (const tx of transactions) {
-      const day = tx.spent_at.slice(0, 10);
+      // Group by local date — spent_at can be a UTC datetime whose UTC date
+      // differs from the local date around midnight.
+      const day = toISODate(new Date(tx.spent_at));
       dailyTotals[day] = (dailyTotals[day] ?? 0) + tx.amount;
       monthlyTotal += tx.amount;
     }

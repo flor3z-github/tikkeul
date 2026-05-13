@@ -33,7 +33,12 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
-import { formatKoreanShortDate, toISODate } from "@/lib/utils/date";
+import {
+  formatKoreanShortDate,
+  formatKoreanTime,
+  hasExplicitTime,
+  toISODate,
+} from "@/lib/utils/date";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 
 const QUICK_AMOUNTS: { value: number; label: string }[] = [
@@ -129,6 +134,24 @@ function parseDefaultDate(value: string | undefined): Date | null {
   return dt;
 }
 
+function pickCreateDefaultDate(defaultDate: string | undefined): Date {
+  const fromDefault = parseDefaultDate(defaultDate);
+  const now = new Date();
+  if (!fromDefault) return now;
+  // If the picked day is today, default to current time so today's entries
+  // feel live. For past days, default to noon (12:00) — a neutral midday
+  // placeholder rather than midnight, which would group oddly near edges.
+  if (toISODate(fromDefault) === toISODate(now)) return now;
+  fromDefault.setHours(12, 0, 0, 0);
+  return fromDefault;
+}
+
+function formatTimeInputValue(d: Date): string {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 function TransactionFormBody({
   initial,
   categories,
@@ -145,7 +168,11 @@ function TransactionFormBody({
   );
   const [spentDate, setSpentDate] = useState<Date>(() => {
     if (initial) return new Date(initial.spent_at);
-    return parseDefaultDate(defaultDate) ?? new Date();
+    return pickCreateDefaultDate(defaultDate);
+  });
+  const [hasTime, setHasTime] = useState<boolean>(() => {
+    if (initial) return hasExplicitTime(initial.spent_at);
+    return true;
   });
   const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -215,12 +242,17 @@ function TransactionFormBody({
     event.preventDefault();
     if (!canSubmit) return;
 
+    if (hasTime && spentDate.getTime() > Date.now()) {
+      toast.error("미래 시간은 기록할 수 없어요.");
+      return;
+    }
+
     startTransition(async () => {
       const result = await submitTransactionAction({
         id: initial?.id,
         amount: amountValue,
         categoryId,
-        spentAt: toISODate(spentDate),
+        spentAt: hasTime ? spentDate.toISOString() : toISODate(spentDate),
         memo: memoText,
       });
       if (result.ok) {
@@ -366,21 +398,88 @@ function TransactionFormBody({
             )}
           >
             <CalendarIcon className="size-4" />
-            {formatKoreanShortDate(spentDate)}
+            <span>
+              {formatKoreanShortDate(spentDate)}
+              {hasTime ? (
+                <span className="ml-1.5 text-muted-foreground">
+                  · {formatKoreanTime(spentDate)}
+                </span>
+              ) : null}
+            </span>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent
+            className="w-auto p-0 [&_button]:pointer-events-auto [&_input]:pointer-events-auto"
+            align="start"
+          >
             <Calendar
               mode="single"
               selected={spentDate}
               onSelect={(date) => {
                 if (date) {
-                  setSpentDate(date);
-                  setDatePickerOpen(false);
+                  setSpentDate((prev) => {
+                    const next = new Date(date);
+                    next.setHours(
+                      prev.getHours(),
+                      prev.getMinutes(),
+                      0,
+                      0,
+                    );
+                    return next;
+                  });
                 }
               }}
-              disabled={(date) => date > new Date()}
+              disabled={(date) => {
+                const today = new Date();
+                const dayEnd = new Date(
+                  today.getFullYear(),
+                  today.getMonth(),
+                  today.getDate(),
+                  23,
+                  59,
+                  59,
+                  999,
+                );
+                return date > dayEnd;
+              }}
               autoFocus
             />
+            <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2">
+              <label
+                htmlFor="transaction-time"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                시간
+              </label>
+              <input
+                id="transaction-time"
+                type="time"
+                value={hasTime ? formatTimeInputValue(spentDate) : ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  const m = /^(\d{2}):(\d{2})$/.exec(value);
+                  if (!m) {
+                    if (value === "") setHasTime(false);
+                    return;
+                  }
+                  const hh = Number(m[1]);
+                  const mm = Number(m[2]);
+                  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return;
+                  const next = new Date(spentDate);
+                  next.setHours(hh, mm, 0, 0);
+                  const now = new Date();
+                  if (next.getTime() > now.getTime()) {
+                    toast.warning("미래 시간은 입력할 수 없어요.");
+                    const clamped = new Date(now);
+                    clamped.setSeconds(0, 0);
+                    setSpentDate(clamped);
+                  } else {
+                    setSpentDate(next);
+                  }
+                  setHasTime(true);
+                }}
+                className="rounded-lg border border-border bg-card px-2 py-1 text-sm tabular-nums outline-none focus:border-primary/40"
+              />
+            </div>
           </PopoverContent>
         </Popover>
       </div>

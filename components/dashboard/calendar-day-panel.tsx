@@ -13,6 +13,7 @@ import { AddTransactionButton } from "@/components/transactions/add-transaction-
 import type { TransactionFormCategory } from "@/components/transactions/transaction-form-dialog";
 import type { MonthlyTransaction } from "@/lib/queries/transactions";
 import { formatKoreanLongDate } from "@/lib/utils/calendar";
+import { toISODate } from "@/lib/utils/date";
 import { formatKRW } from "@/lib/utils/money";
 
 type CalendarDayPanelProps = {
@@ -42,7 +43,7 @@ export function CalendarDayPanel({
   const dailyTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const tx of transactions) {
-      const day = tx.spent_at.slice(0, 10);
+      const day = toISODate(new Date(tx.spent_at));
       totals[day] = (totals[day] ?? 0) + Number(tx.amount);
     }
     return totals;
@@ -51,7 +52,7 @@ export function CalendarDayPanel({
   const dayRows: TransactionListRow[] = useMemo(
     () =>
       transactions
-        .filter((tx) => tx.spent_at.slice(0, 10) === selectedDay)
+        .filter((tx) => toISODate(new Date(tx.spent_at)) === selectedDay)
         .map((tx) => ({
           id: tx.id,
           amount: tx.amount,

@@ -28,12 +28,19 @@ function normalizeMemo(value: string | null | undefined): string | null {
 
 function normalizeSpentAt(value: string): string {
   // Accept "YYYY-MM-DD" → "YYYY-MM-DDT00:00:00Z" so it lands at start of day UTC.
+  // Skip the future check here: server TZ ≠ client TZ, and a same-day local
+  // entry submitted early morning (KST) maps to a UTC midnight that may look
+  // "future" relative to UTC now. Calendar UI already blocks future date pick.
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return `${value}T00:00:00Z`;
   }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     throw new Error("올바른 날짜를 입력해주세요.");
+  }
+  // Full datetime carries a real instant — reject future.
+  if (parsed.getTime() > Date.now()) {
+    throw new Error("미래 시간은 기록할 수 없어요.");
   }
   return parsed.toISOString();
 }
