@@ -1,43 +1,54 @@
 import { redirect } from "next/navigation";
 
-import { SpendingMonthGrid } from "@/components/calendar/spending-month-grid";
+import { CalendarDayPanel } from "@/components/dashboard/calendar-day-panel";
 import { createClient } from "@/lib/supabase/server";
+import { getCategories } from "@/lib/queries/categories";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
-import { MonthSwitcher } from "@/app/dashboard/_components/month-switcher";
 
 type SpendingCalendarSectionProps = {
   ym: string;
-  day: string;
+  initialDay: string;
 };
 
 export async function SpendingCalendarSection({
   ym,
-  day,
+  initialDay,
 }: SpendingCalendarSectionProps) {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub ?? null;
   if (!userId) redirect("/login");
 
-  const [monthlyResult, settingsResult, fixedResult] = await Promise.all([
-    getMonthlyTransactions(userId, ym),
-    supabase
-      .from("user_settings")
-      .select("monthly_income")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("fixed_expenses")
-      .select("amount")
-      .eq("user_id", userId)
-      .eq("is_active", true),
-  ]);
+  const [monthlyResult, categoriesResult, settingsResult, fixedResult] =
+    await Promise.all([
+      getMonthlyTransactions(userId, ym),
+      getCategories(userId),
+      supabase
+        .from("user_settings")
+        .select("monthly_income")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("fixed_expenses")
+        .select("amount")
+        .eq("user_id", userId)
+        .eq("is_active", true),
+    ]);
 
   if (!monthlyResult.ok) {
     return (
       <div className="mt-3 space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
         <p className="font-semibold">달력을 불러오지 못했어요</p>
         <p className="break-all text-xs opacity-80">{monthlyResult.error}</p>
+      </div>
+    );
+  }
+
+  if (!categoriesResult.ok) {
+    return (
+      <div className="mt-3 space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
+        <p className="font-semibold">카테고리를 불러오지 못했어요</p>
+        <p className="break-all text-xs opacity-80">{categoriesResult.error}</p>
       </div>
     );
   }
@@ -50,14 +61,13 @@ export async function SpendingCalendarSection({
   const availableBudget = Math.max(0, monthlyIncome - fixedExpense);
 
   return (
-    <div className="mt-3 space-y-1.5 rounded-3xl border border-black/[0.08] bg-card p-3 dark:border-white/[0.10]">
-      <MonthSwitcher ym={ym} />
-      <SpendingMonthGrid
-        ym={ym}
-        selectedDay={day}
-        dailyTotals={monthlyResult.dailyTotals}
-        availableBudget={availableBudget}
-      />
-    </div>
+    <CalendarDayPanel
+      key={ym}
+      ym={ym}
+      initialDay={initialDay}
+      transactions={monthlyResult.transactions}
+      categories={categoriesResult.categories}
+      availableBudget={availableBudget}
+    />
   );
 }

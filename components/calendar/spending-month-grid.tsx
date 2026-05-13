@@ -1,8 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-
 import { DayCell } from "./day-cell";
 import {
   buildMonthMatrix,
@@ -15,6 +12,7 @@ type SpendingMonthGridProps = {
   selectedDay: string;
   dailyTotals: Record<string, number>;
   availableBudget: number;
+  onSelectDay: (iso: string) => void;
 };
 
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -24,25 +22,18 @@ export function SpendingMonthGrid({
   selectedDay,
   dailyTotals,
   availableBudget,
+  onSelectDay,
 }: SpendingMonthGridProps) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const cells = buildMonthMatrix(ym);
 
   function handleSelect(cell: MonthCell) {
     if (!cell.inMonth) return;
     if (cell.iso === selectedDay) return;
-    const next = `/dashboard?ym=${ym}&day=${cell.iso}`;
-    startTransition(() => {
-      router.push(next, { scroll: false });
-    });
+    onSelectDay(cell.iso);
   }
 
   return (
-    <div
-      data-pending={pending ? "true" : undefined}
-      className="space-y-2"
-    >
+    <div className="space-y-2">
       <div className="grid grid-cols-7 gap-x-1 px-0.5 pb-1.5 text-[11px] font-medium text-muted-foreground">
         {WEEKDAY_LABELS.map((label, index) => (
           <span

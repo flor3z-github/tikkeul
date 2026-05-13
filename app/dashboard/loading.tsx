@@ -7,7 +7,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
 import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
-import { DayTransactionsSkeleton } from "./_sections/day-transactions-skeleton";
 
 export default function DashboardLoading() {
   return (
@@ -34,7 +33,6 @@ export default function DashboardLoading() {
         <SpendingSummarySkeleton />
       </div>
       <SpendingCalendarSkeleton />
-      <DayTransactionsSkeleton />
     </AppShell>
   );
 }

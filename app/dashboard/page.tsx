@@ -14,8 +14,6 @@ import { SpendingSummarySection } from "./_sections/spending-summary-section";
 import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
 import { SpendingCalendarSection } from "./_sections/spending-calendar-section";
 import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
-import { DayTransactionsSection } from "./_sections/day-transactions-section";
-import { DayTransactionsSkeleton } from "./_sections/day-transactions-skeleton";
 
 // Kept until Next 16 PPR is stable enough to enable. To migrate:
 //   1) remove this line
@@ -25,7 +23,6 @@ export const dynamic = "force-dynamic";
 
 type DashboardSearchParams = Promise<{
   ym?: string;
-  day?: string;
 }>;
 
 export default async function DashboardPage({
@@ -62,11 +59,7 @@ export default async function DashboardPage({
       </Suspense>
 
       <Suspense fallback={<SpendingCalendarSkeleton />}>
-        <SpendingCalendarSection ym={ym} day={day} />
-      </Suspense>
-
-      <Suspense fallback={<DayTransactionsSkeleton />}>
-        <DayTransactionsSection ym={ym} day={day} />
+        <SpendingCalendarSection ym={ym} initialDay={day} />
       </Suspense>
     </AppShell>
   );
