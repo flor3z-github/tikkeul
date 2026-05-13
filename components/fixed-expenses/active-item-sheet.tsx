@@ -10,12 +10,12 @@ import {
 } from "@/app/fixed-expenses/actions";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
 import { SplitChips } from "./split-chips";
@@ -38,25 +38,21 @@ export function ActiveItemSheet({
 }: ActiveItemSheetProps) {
   const open = item !== null;
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        initialFocus={false}
-        className="rounded-t-[28px] border-white/10 bg-background px-5 pb-8 pt-4"
-      >
-        <SheetHeader className="border-b border-border px-0 pb-4 text-left">
-          <SheetTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
+        <DrawerHeader className="border-b border-border px-0 pb-4 pt-2 text-left">
+          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
             {plan ? plan.service_name : (item?.name ?? "고정지출")}
-          </SheetTitle>
+          </DrawerTitle>
           {plan?.plan_name ? (
             <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
               {plan.plan_name}
             </p>
           ) : null}
-          <SheetDescription className="sr-only">
+          <DrawerDescription className="sr-only">
             {item?.name ?? "고정지출"} 금액 수정, 해제, 또는 삭제를 선택합니다.
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         {item ? (
           <ActiveItemBody
@@ -66,8 +62,8 @@ export function ActiveItemSheet({
             onDone={() => onOpenChange(false)}
           />
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -125,7 +121,7 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   }
 
   return (
-    <form onSubmit={handleSave} className="space-y-5">
+    <form onSubmit={handleSave} className="space-y-5 pt-4">
       {isCatalog ? null : (
         <div className="space-y-2">
           <label

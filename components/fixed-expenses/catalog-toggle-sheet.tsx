@@ -6,12 +6,12 @@ import { toast } from "sonner";
 import { activateCatalogPlanAction } from "@/app/fixed-expenses/actions";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
 import { SplitChips } from "./split-chips";
@@ -29,24 +29,21 @@ export function CatalogToggleSheet({
   const open = plan !== null;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        className="rounded-t-[28px] border-white/10 bg-background px-5 pb-8 pt-4"
-      >
-        <SheetHeader className="border-b border-border px-0 pb-4 text-left">
-          <SheetTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
+        <DrawerHeader className="border-b border-border px-0 pb-4 pt-2 text-left">
+          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
             {plan ? plan.service_name : "고정지출 추가"}
-          </SheetTitle>
+          </DrawerTitle>
           {plan?.plan_name ? (
             <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
               {plan.plan_name}
             </p>
           ) : null}
-          <SheetDescription className="sr-only">
+          <DrawerDescription className="sr-only">
             {plan ? planLabel(plan) : "고정지출 추가"} 금액을 확인하고 사용 중인 고정지출로 추가합니다.
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         {plan ? (
           <CatalogToggleBody
@@ -55,8 +52,8 @@ export function CatalogToggleSheet({
             onSaved={() => onOpenChange(false)}
           />
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -92,12 +89,12 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5 pt-4">
       <div className="space-y-2">
         <p className="text-sm font-medium text-muted-foreground">
           {plan.category ? `${plan.category} · ` : ""}매달 결제 금액
         </p>
-        <AmountInput value={amountText} onChange={setAmountText} autoFocus />
+        <AmountInput value={amountText} onChange={setAmountText} />
         <SplitChips
           baseAmount={plan.default_amount}
           currentValue={amountValue}

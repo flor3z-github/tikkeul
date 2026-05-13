@@ -26,12 +26,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { formatKoreanShortDate, toISODate } from "@/lib/utils/date";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
@@ -79,19 +79,16 @@ export function TransactionFormDialog({
   onSaved,
 }: TransactionFormDialogProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        className="rounded-t-[28px] border-white/10 bg-background px-5 pb-8 pt-4"
-      >
-        <SheetHeader className="px-0 pb-3 text-left">
-          <SheetTitle className="text-[22px] font-bold tracking-[-0.025em]">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
+        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
+          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em]">
             {initial ? "소비 수정" : "소비 추가"}
-          </SheetTitle>
-          <SheetDescription className="sr-only">
+          </DrawerTitle>
+          <DrawerDescription className="sr-only">
             카테고리, 금액, 날짜를 입력해 소비를 기록합니다.
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         {open ? (
           <TransactionFormBody
@@ -105,8 +102,8 @@ export function TransactionFormDialog({
             }}
           />
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -282,7 +279,6 @@ function TransactionFormBody({
             <input
               ref={amountInputRef}
               inputMode="numeric"
-              autoFocus
               value={amountText}
               onChange={handleAmountChange}
               placeholder="0"

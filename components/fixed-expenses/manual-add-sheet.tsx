@@ -6,12 +6,12 @@ import { toast } from "sonner";
 import { addManualFixedExpenseAction } from "@/app/fixed-expenses/actions";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
 
@@ -22,25 +22,22 @@ type ManualAddSheetProps = {
 
 export function ManualAddSheet({ open, onOpenChange }: ManualAddSheetProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        className="rounded-t-[28px] border-white/10 bg-background px-5 pb-8 pt-4"
-      >
-        <SheetHeader className="px-0 pb-3 text-left">
-          <SheetTitle className="text-[22px] font-bold tracking-[-0.025em]">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
+        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
+          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em]">
             직접 추가
-          </SheetTitle>
-          <SheetDescription className="sr-only">
+          </DrawerTitle>
+          <DrawerDescription className="sr-only">
             카탈로그에 없는 고정지출 항목을 직접 입력합니다.
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         {open ? (
           <ManualAddBody onSaved={() => onOpenChange(false)} />
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -82,7 +79,6 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
           id="manual-name"
           type="text"
           autoComplete="off"
-          autoFocus
           maxLength={40}
           value={name}
           onChange={(event) => setName(event.target.value)}
