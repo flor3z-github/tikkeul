@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { CalendarIcon, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,8 +34,7 @@ import {
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import {
-  formatKoreanShortDate,
-  formatKoreanTime,
+  formatKoreanFullDate,
   hasExplicitTime,
   toISODate,
 } from "@/lib/utils/date";
@@ -188,6 +187,51 @@ function TransactionFormBody({
   const canSubmit = amountValue > 0 && categoryId !== null && !busy;
   const amountInputRef = useRef<HTMLInputElement>(null);
 
+  // Mirror the fixed-expenses catalog filter UX: single-row horizontal scroll
+  // for category chips, with edge fades that only appear when there's more to
+  // scroll on that side.
+  const categoryScrollRef = useRef<HTMLDivElement | null>(null);
+  const [categoryFadeLeft, setCategoryFadeLeft] = useState(false);
+  const [categoryFadeRight, setCategoryFadeRight] = useState(false);
+
+  useEffect(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+
+    function update() {
+      const node = categoryScrollRef.current;
+      if (!node) return;
+      const overflow = node.scrollWidth - node.clientWidth;
+      const threshold = 4;
+      setCategoryFadeLeft(node.scrollLeft > threshold);
+      setCategoryFadeRight(
+        overflow > threshold && node.scrollLeft < overflow - threshold,
+      );
+    }
+
+    update();
+    const rafId = requestAnimationFrame(update);
+
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, []);
+
+  const categoryFadeMask =
+    categoryFadeLeft || categoryFadeRight
+      ? `linear-gradient(to right, ${
+          categoryFadeLeft ? "transparent" : "black"
+        } 0, black 24px, black calc(100% - 24px), ${
+          categoryFadeRight ? "transparent" : "black"
+        } 100%)`
+      : undefined;
+
   function focusAmountInput() {
     const el = amountInputRef.current;
     if (!el) return;
@@ -339,7 +383,15 @@ function TransactionFormBody({
         <label className="block text-sm font-medium text-muted-foreground">
           카테고리
         </label>
-        <div className="-mx-1 flex flex-wrap gap-2">
+        <div
+          ref={categoryScrollRef}
+          className="flex gap-2 overflow-x-auto pb-1"
+          style={{
+            scrollbarWidth: "none",
+            maskImage: categoryFadeMask,
+            WebkitMaskImage: categoryFadeMask,
+          }}
+        >
           {categories.map((category) => {
             const selected = category.id === categoryId;
             return (
@@ -348,7 +400,7 @@ function TransactionFormBody({
                 type="button"
                 onClick={() => setCategoryId(category.id)}
                 className={cn(
-                  "h-9 rounded-full border px-3.5 text-[13px] font-medium transition-all",
+                  "h-9 shrink-0 rounded-full border px-3.5 text-[13px] font-medium transition-all",
                   "active:scale-[0.98]",
                   selected
                     ? "border-transparent bg-primary text-primary-foreground"
@@ -389,99 +441,88 @@ function TransactionFormBody({
         <label className="block text-sm font-medium text-muted-foreground">
           날짜
         </label>
-        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-          <PopoverTrigger
-            type="button"
-            className={cn(
-              buttonVariants({ variant: "outline" }),
-              "h-12 w-full justify-start gap-2 rounded-2xl px-4 text-[15px] font-medium",
-            )}
-          >
-            <CalendarIcon className="size-4" />
-            <span>
-              {formatKoreanShortDate(spentDate)}
-              {hasTime ? (
-                <span className="ml-1.5 text-muted-foreground">
-                  · {formatKoreanTime(spentDate)}
-                </span>
-              ) : null}
-            </span>
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-auto p-0 [&_button]:pointer-events-auto [&_input]:pointer-events-auto"
-            align="start"
-          >
-            <Calendar
-              mode="single"
-              selected={spentDate}
-              onSelect={(date) => {
-                if (date) {
-                  setSpentDate((prev) => {
-                    const next = new Date(date);
-                    next.setHours(
-                      prev.getHours(),
-                      prev.getMinutes(),
-                      0,
-                      0,
-                    );
-                    return next;
-                  });
-                }
-              }}
-              disabled={(date) => {
-                const today = new Date();
-                const dayEnd = new Date(
-                  today.getFullYear(),
-                  today.getMonth(),
-                  today.getDate(),
-                  23,
-                  59,
-                  59,
-                  999,
-                );
-                return date > dayEnd;
-              }}
-              autoFocus
-            />
-            <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2">
-              <label
-                htmlFor="transaction-time"
-                className="text-xs font-medium text-muted-foreground"
-              >
-                시간
-              </label>
-              <input
-                id="transaction-time"
-                type="time"
-                value={hasTime ? formatTimeInputValue(spentDate) : ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  const m = /^(\d{2}):(\d{2})$/.exec(value);
-                  if (!m) {
-                    if (value === "") setHasTime(false);
-                    return;
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+            <PopoverTrigger
+              type="button"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "h-12 w-full justify-start gap-2 rounded-2xl px-4 text-[15px] font-medium",
+              )}
+            >
+              <CalendarIcon className="size-4" />
+              <span>{formatKoreanFullDate(spentDate)}</span>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-auto p-0 [&_button]:pointer-events-auto [&_input]:pointer-events-auto"
+              align="start"
+            >
+              <Calendar
+                mode="single"
+                selected={spentDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setSpentDate((prev) => {
+                      const next = new Date(date);
+                      next.setHours(
+                        prev.getHours(),
+                        prev.getMinutes(),
+                        0,
+                        0,
+                      );
+                      return next;
+                    });
+                    setDatePickerOpen(false);
                   }
-                  const hh = Number(m[1]);
-                  const mm = Number(m[2]);
-                  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return;
-                  const next = new Date(spentDate);
-                  next.setHours(hh, mm, 0, 0);
-                  const now = new Date();
-                  if (next.getTime() > now.getTime()) {
-                    toast.warning("미래 시간은 입력할 수 없어요.");
-                    const clamped = new Date(now);
-                    clamped.setSeconds(0, 0);
-                    setSpentDate(clamped);
-                  } else {
-                    setSpentDate(next);
-                  }
-                  setHasTime(true);
                 }}
-                className="rounded-lg border border-border bg-card px-2 py-1 text-sm tabular-nums outline-none focus:border-primary/40"
+                disabled={(date) => {
+                  const today = new Date();
+                  const dayEnd = new Date(
+                    today.getFullYear(),
+                    today.getMonth(),
+                    today.getDate(),
+                    23,
+                    59,
+                    59,
+                    999,
+                  );
+                  return date > dayEnd;
+                }}
+                autoFocus
               />
-            </div>
-          </PopoverContent>
-        </Popover>
+            </PopoverContent>
+          </Popover>
+          <input
+            id="transaction-time"
+            type="time"
+            aria-label="시간"
+            value={hasTime ? formatTimeInputValue(spentDate) : ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              const m = /^(\d{2}):(\d{2})$/.exec(value);
+              if (!m) {
+                if (value === "") setHasTime(false);
+                return;
+              }
+              const hh = Number(m[1]);
+              const mm = Number(m[2]);
+              if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return;
+              const next = new Date(spentDate);
+              next.setHours(hh, mm, 0, 0);
+              const now = new Date();
+              if (next.getTime() > now.getTime()) {
+                toast.warning("미래 시간은 입력할 수 없어요.");
+                const clamped = new Date(now);
+                clamped.setSeconds(0, 0);
+                setSpentDate(clamped);
+              } else {
+                setSpentDate(next);
+              }
+              setHasTime(true);
+            }}
+            className="h-12 min-w-[7.5rem] rounded-2xl border border-border bg-card px-4 text-center text-[15px] font-medium tabular-nums outline-none transition-colors focus:border-primary/40 focus:bg-background"
+          />
+        </div>
       </div>
 
       {mode === "edit" && initial ? (
