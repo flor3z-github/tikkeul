@@ -690,9 +690,16 @@ Dashboard에서 보여주지 않을 것:
 [금액]
 [날짜]
 [수정하기]
+[삭제하기]
 ```
 
-삭제 기능은 MVP에서 제외한다.
+수정 모드에서만 `삭제하기` 버튼을 노출한다. destructive variant 스타일로 `수정하기` 바로 아래 둔다.
+
+삭제는 다음 규칙을 따른다.
+
+- 클릭 시 AlertDialog로 확인을 한 번 받는다 (제목: "이 소비를 삭제할까요?", 본문: "삭제한 소비는 목록과 합계에서 즉시 사라져요.").
+- DB는 row를 즉시 제거하지 않고 `transactions.deleted_at`을 채우는 soft delete를 사용한다. 모든 조회 쿼리는 `deleted_at is null` 조건을 함께 건다.
+- 사용자에게는 휴지통/복구 UI를 제공하지 않는다 — soft delete는 운영상 복구 여지를 남기기 위한 장치일 뿐, MVP UI 표면에는 hard delete처럼 보인다.
 
 ### 12.4 Recent Transactions
 
@@ -930,6 +937,7 @@ Service Worker는 다음만 캐싱한다.
 - 홈 화면을 핵심 숫자 중심으로 유지한다.
 - 소비 추가를 FAB로 빠르게 접근하게 한다.
 - 소비 추가와 소비 수정을 같은 form으로 처리한다.
+- 소비 삭제는 수정 form 안의 destructive 버튼 + AlertDialog 확인으로만 노출한다 (swipe / long-press / 별도 메뉴 금지).
 - 월 수입, 고정지출, 가용 예산, 소비율의 관계를 명확히 보여준다.
 - 대시보드와 고정지출 사이는 하단 2탭으로 이동한다 (§11.2).
 - 활성 고정지출 합계만 가용 예산 계산에 반영한다 (해제된 항목은 빠짐).
@@ -946,6 +954,7 @@ Service Worker는 다음만 캐싱한다.
 - private spending data를 Cache Storage에 저장하지 않는다.
 - Apple 브랜드나 고유 UI(글래스모피즘 탭 스위처 등)를 복제하지 않는다.
 - 카드 안에 카드를 중첩하지 않는다 — surface는 한 단계까지.
+- 소비 삭제를 hard delete로 처리하지 않는다 — `transactions.deleted_at` 컬럼을 사용한 soft delete만 사용한다.
 
 ---
 

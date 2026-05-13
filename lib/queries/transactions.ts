@@ -54,6 +54,7 @@ export const getMonthlyTransactions = cache(
         "id, amount, category_id, spent_at, categories ( name, icon )",
       )
       .eq("user_id", userId)
+      .is("deleted_at", null)
       .gte("spent_at", monthStart.toISOString())
       .lt("spent_at", monthEnd.toISOString())
       .order("spent_at", { ascending: false })

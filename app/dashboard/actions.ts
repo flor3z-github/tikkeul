@@ -79,3 +79,27 @@ export async function submitTransactionAction(
   revalidatePath("/dashboard");
   return { ok: true };
 }
+
+export async function deleteTransactionAction(
+  id: string,
+): Promise<TransactionActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!id) return { ok: false, error: "삭제할 항목이 없어요." };
+
+  const { error } = await supabase
+    .from("transactions")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .is("deleted_at", null);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard");
+  return { ok: true };
+}

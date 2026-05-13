@@ -1,10 +1,23 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { CalendarIcon, Undo2, X } from "lucide-react";
+import { CalendarIcon, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { submitTransactionAction } from "@/app/dashboard/actions";
+import {
+  deleteTransactionAction,
+  submitTransactionAction,
+} from "@/app/dashboard/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -135,13 +148,16 @@ function TransactionFormBody({
     return parseDefaultDate(defaultDate) ?? new Date();
   });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [deletePending, startDeleteTransition] = useTransition();
   // Stack of quick-amount additions for the undo (←) button. Cleared whenever
   // the amount is reset or edited manually so the history can't lie.
   const [quickHistory, setQuickHistory] = useState<number[]>([]);
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
-  const canSubmit = amountValue > 0 && categoryId !== null && !pending;
+  const busy = pending || deletePending;
+  const canSubmit = amountValue > 0 && categoryId !== null && !busy;
   const amountInputRef = useRef<HTMLInputElement>(null);
 
   function focusAmountInput() {
@@ -150,6 +166,20 @@ function TransactionFormBody({
     el.focus();
     const end = el.value.length;
     el.setSelectionRange(end, end);
+  }
+
+  function handleDelete() {
+    if (!initial) return;
+    startDeleteTransition(async () => {
+      const result = await deleteTransactionAction(initial.id);
+      if (result.ok) {
+        toast.success("삭제됐어요.");
+        setConfirmDeleteOpen(false);
+        onSaved();
+      } else {
+        toast.error(result.error);
+      }
+    });
   }
 
   function handleQuickAdd(value: number) {
@@ -344,6 +374,52 @@ function TransactionFormBody({
             ? "수정하기"
             : "추가하기"}
       </Button>
+
+      {mode === "edit" && initial ? (
+        <>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => setConfirmDeleteOpen(true)}
+            disabled={busy}
+            className="h-12 w-full rounded-full text-[15px] font-semibold"
+          >
+            <Trash2 className="size-4" />
+            삭제하기
+          </Button>
+
+          <AlertDialog
+            open={confirmDeleteOpen}
+            onOpenChange={(open) => {
+              if (!deletePending) setConfirmDeleteOpen(open);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>이 소비를 삭제할까요?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  삭제한 소비는 목록과 합계에서 즉시 사라져요.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deletePending}>
+                  취소
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(event) => {
+                    event.preventDefault();
+                    handleDelete();
+                  }}
+                  disabled={deletePending}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deletePending ? "삭제 중…" : "삭제"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      ) : null}
     </form>
   );
 }
