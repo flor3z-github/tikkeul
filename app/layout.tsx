@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
+import {
+  NavProgressBar,
+  NavProgressProvider,
+} from "@/components/layout/nav-progress";
 import { Toaster } from "@/components/ui/sonner";
 import { SerwistProvider } from "./serwist";
 
@@ -63,7 +67,10 @@ export default function RootLayout({
   return (
     <html lang="ko" className="h-full">
       <body className="min-h-dvh antialiased">
-        <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
+        <NavProgressProvider>
+          <NavProgressBar />
+          <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
+        </NavProgressProvider>
         <Toaster richColors closeButton position="top-center" />
         <Analytics />
       </body>

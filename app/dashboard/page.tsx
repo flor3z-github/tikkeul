@@ -6,6 +6,7 @@ import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-wa
 import { FriendSwitcher } from "@/components/dashboard/friend-switcher";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
+import { LinkPending } from "@/components/layout/nav-progress";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -144,6 +145,7 @@ export default async function DashboardPage({
               )}
             >
               <Settings className="size-5" />
+              <LinkPending />
             </Link>
           </div>
         }

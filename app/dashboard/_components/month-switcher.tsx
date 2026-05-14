@@ -1,6 +1,9 @@
-import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+"use client";
 
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+
+import { useLinkPendingStatus } from "@/components/layout/nav-progress";
 import { addMonths } from "@/lib/utils/calendar";
 
 type MonthSwitcherProps = {
@@ -18,9 +21,9 @@ export function MonthSwitcher({ ym, cycleLabel }: MonthSwitcherProps) {
         href={`/dashboard?ym=${prev}`}
         prefetch
         aria-label="이전 주기"
-        className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted active:scale-[0.96]"
+        className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 ease-out hover:bg-muted active:scale-[0.96]"
       >
-        <ChevronLeft className="size-5" />
+        <MonthChevron direction="left" />
       </Link>
       <span className="min-w-[7rem] text-center text-[15px] font-semibold tracking-[-0.02em] tabular-nums">
         {cycleLabel}
@@ -29,10 +32,28 @@ export function MonthSwitcher({ ym, cycleLabel }: MonthSwitcherProps) {
         href={`/dashboard?ym=${next}`}
         prefetch
         aria-label="다음 주기"
-        className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted active:scale-[0.96]"
+        className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 ease-out hover:bg-muted active:scale-[0.96]"
       >
-        <ChevronRight className="size-5" />
+        <MonthChevron direction="right" />
       </Link>
     </div>
+  );
+}
+
+/**
+ * Direct child of the surrounding <Link> so useLinkStatus picks up this
+ * link's pending state. Swaps the chevron for a spinner while the route
+ * transition is in flight — the user gets immediate feedback that their
+ * tap was registered, instead of a dead-feeling button.
+ */
+function MonthChevron({ direction }: { direction: "left" | "right" }) {
+  const pending = useLinkPendingStatus();
+  if (pending) {
+    return <Loader2 className="size-4 animate-spin" />;
+  }
+  return direction === "left" ? (
+    <ChevronLeft className="size-5" />
+  ) : (
+    <ChevronRight className="size-5" />
   );
 }

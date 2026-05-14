@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarDays, Wallet } from "lucide-react";
 
+import { LinkPending } from "@/components/layout/nav-progress";
 import { cn } from "@/lib/utils";
 
 type Tab = {
@@ -56,6 +57,7 @@ export function BottomTabNav() {
                     )}
                   />
                   <span>{label}</span>
+                  <LinkPending />
                 </Link>
               </li>
             );
