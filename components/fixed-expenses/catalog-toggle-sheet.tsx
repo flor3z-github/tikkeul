@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { activateCatalogPlanAction } from "@/app/fixed-expenses/actions";
@@ -27,28 +27,36 @@ export function CatalogToggleSheet({
   onOpenChange,
 }: CatalogToggleSheetProps) {
   const open = plan !== null;
+  // Keep the last non-null plan so the body stays mounted while vaul plays
+  // the close animation. Otherwise the body unmounts the moment the parent
+  // clears `plan`, the drawer collapses to header height mid-close, and the
+  // slide-down looks like an instant cut.
+  const lastPlanRef = useRef(plan);
+  if (plan) lastPlanRef.current = plan;
+  const displayPlan = plan ?? lastPlanRef.current;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
         <DrawerHeader className="border-b border-border px-0 pb-4 pt-2 text-left">
           <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
-            {plan ? plan.service_name : "고정지출 추가"}
+            {displayPlan ? displayPlan.service_name : "고정지출 추가"}
           </DrawerTitle>
-          {plan?.plan_name ? (
+          {displayPlan?.plan_name ? (
             <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
-              {plan.plan_name}
+              {displayPlan.plan_name}
             </p>
           ) : null}
           <DrawerDescription className="sr-only">
-            {plan ? planLabel(plan) : "고정지출 추가"} 금액을 확인하고 사용 중인 고정지출로 추가합니다.
+            {displayPlan ? planLabel(displayPlan) : "고정지출 추가"} 금액을
+            확인하고 사용 중인 고정지출로 추가합니다.
           </DrawerDescription>
         </DrawerHeader>
 
-        {plan ? (
+        {displayPlan ? (
           <CatalogToggleBody
-            key={plan.id}
-            plan={plan}
+            key={displayPlan.id}
+            plan={displayPlan}
             onSaved={() => onOpenChange(false)}
           />
         ) : null}

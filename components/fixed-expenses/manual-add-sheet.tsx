@@ -33,9 +33,11 @@ export function ManualAddSheet({ open, onOpenChange }: ManualAddSheetProps) {
           </DrawerDescription>
         </DrawerHeader>
 
-        {open ? (
-          <ManualAddBody onSaved={() => onOpenChange(false)} />
-        ) : null}
+        {/* Body renders unconditionally so the drawer keeps its full height
+            during vaul's close animation. Radix Presence unmounts the whole
+            DrawerContent (and this body with it) after the animation ends,
+            so each reopen gets a freshly mounted body with empty state. */}
+        <ManualAddBody onSaved={() => onOpenChange(false)} />
       </DrawerContent>
     </Drawer>
   );

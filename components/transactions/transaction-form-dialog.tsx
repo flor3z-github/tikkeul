@@ -94,18 +94,20 @@ export function TransactionFormDialog({
           </DrawerDescription>
         </DrawerHeader>
 
-        {open ? (
-          <TransactionFormBody
-            key={initial?.id ?? `create-${defaultDate ?? "today"}`}
-            initial={initial ?? null}
-            categories={categories}
-            defaultDate={defaultDate}
-            onSaved={() => {
-              onOpenChange(false);
-              onSaved?.();
-            }}
-          />
-        ) : null}
+        {/* Body renders unconditionally so the drawer keeps its full height
+            during vaul's close animation. Radix Presence unmounts the whole
+            DrawerContent (and this body with it) after the animation ends,
+            so each reopen gets a freshly mounted body with reset state. */}
+        <TransactionFormBody
+          key={initial?.id ?? `create-${defaultDate ?? "today"}`}
+          initial={initial ?? null}
+          categories={categories}
+          defaultDate={defaultDate}
+          onSaved={() => {
+            onOpenChange(false);
+            onSaved?.();
+          }}
+        />
       </DrawerContent>
     </Drawer>
   );

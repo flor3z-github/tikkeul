@@ -8,9 +8,23 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 function Drawer({
+  repositionInputs = false,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
-  return <DrawerPrimitive.Root data-slot="drawer" {...props} />;
+  // vaul's built-in iOS keyboard repositioning toggles `keyboardIsOpen` on
+  // every visualViewport.resize whose diff exceeds 60px. During the keyboard
+  // open animation that fires twice and flips the flag back to false, which
+  // sends the drawer down the "reset height" branch with a stale top offset.
+  // The result on short drawers is that the sheet ends up hidden behind the
+  // keyboard or pushed above the viewport top. We handle the inset ourselves
+  // in DrawerContent instead.
+  return (
+    <DrawerPrimitive.Root
+      data-slot="drawer"
+      repositionInputs={repositionInputs}
+      {...props}
+    />
+  );
 }
 
 function DrawerTrigger({
@@ -59,10 +73,43 @@ function DrawerContent({
   showHandle = true,
   ...props
 }: DrawerContentProps) {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  // Manually lift the sheet above the iOS software keyboard. We read the
+  // keyboard height from visualViewport on every resize and write it to
+  // `bottom`. Idempotent (no toggling state), so it can't drift across the
+  // multi-fire animation window where vaul's logic loses track.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    function applyKeyboardInset() {
+      const el = contentRef.current;
+      if (!el) return;
+      // While the drawer is animating out, the keyboard is also dismissing.
+      // If we let `bottom` snap from the lifted value back to 0 mid-close,
+      // it jumps and the slide-down animation looks broken. Hold the value
+      // until vaul unmounts the content.
+      if (el.getAttribute("data-state") === "closed") return;
+      const inset = Math.max(0, window.innerHeight - vv!.height);
+      // The URL bar shrinks visualViewport by ~50–80px; treat anything below
+      // 100px as not-a-keyboard so we don't snap during scroll.
+      el.style.bottom = inset > 100 ? `${inset}px` : "";
+    }
+
+    vv.addEventListener("resize", applyKeyboardInset);
+    applyKeyboardInset();
+    return () => {
+      vv.removeEventListener("resize", applyKeyboardInset);
+    };
+  }, []);
+
   return (
     <DrawerPortal>
       <DrawerOverlay />
       <DrawerPrimitive.Content
+        ref={contentRef}
         data-slot="drawer-content"
         className={cn(
           "fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md flex-col border-t bg-popover text-popover-foreground shadow-lg outline-none",

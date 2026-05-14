@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,28 +37,49 @@ export function ActiveItemSheet({
   onOpenChange,
 }: ActiveItemSheetProps) {
   const open = item !== null;
+  // Keep the last non-null item so the body stays mounted while vaul plays
+  // the close animation. Without this the body unmounts the moment the
+  // parent clears `item`, the drawer collapses to header height mid-close,
+  // and the slide-down looks like an instant cut.
+  const lastItemRef = useRef(item);
+  const lastPlanRef = useRef(plan);
+  const lastCatalogDefaultAmountRef = useRef(catalogDefaultAmount);
+  if (item) {
+    lastItemRef.current = item;
+    lastPlanRef.current = plan;
+    lastCatalogDefaultAmountRef.current = catalogDefaultAmount;
+  }
+  const displayItem = item ?? lastItemRef.current;
+  const displayPlan = item ? plan : lastPlanRef.current;
+  const displayCatalogDefaultAmount = item
+    ? catalogDefaultAmount
+    : lastCatalogDefaultAmountRef.current;
+
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
         <DrawerHeader className="border-b border-border px-0 pb-4 pt-2 text-left">
           <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
-            {plan ? plan.service_name : (item?.name ?? "고정지출")}
+            {displayPlan
+              ? displayPlan.service_name
+              : (displayItem?.name ?? "고정지출")}
           </DrawerTitle>
-          {(plan?.plan_name ?? item?.plan_name) ? (
+          {(displayPlan?.plan_name ?? displayItem?.plan_name) ? (
             <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
-              {plan?.plan_name ?? item?.plan_name}
+              {displayPlan?.plan_name ?? displayItem?.plan_name}
             </p>
           ) : null}
           <DrawerDescription className="sr-only">
-            {item?.name ?? "고정지출"} 금액 수정, 해제, 또는 삭제를 선택합니다.
+            {displayItem?.name ?? "고정지출"} 금액 수정, 해제, 또는 삭제를
+            선택합니다.
           </DrawerDescription>
         </DrawerHeader>
 
-        {item ? (
+        {displayItem ? (
           <ActiveItemBody
-            key={item.id}
-            item={item}
-            catalogDefaultAmount={catalogDefaultAmount}
+            key={displayItem.id}
+            item={displayItem}
+            catalogDefaultAmount={displayCatalogDefaultAmount}
             onDone={() => onOpenChange(false)}
           />
         ) : null}
