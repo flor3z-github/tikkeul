@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/auth/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -60,12 +60,7 @@ export default async function SignupPage({
           </p>
         ) : null}
 
-        <Button
-          type="submit"
-          className="h-12 w-full rounded-full text-[15px] font-semibold"
-        >
-          가입하기
-        </Button>
+        <SubmitButton pendingLabel="가입 중...">가입하기</SubmitButton>
       </form>
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
