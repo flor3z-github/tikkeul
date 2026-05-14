@@ -82,13 +82,15 @@ MVP에서는 다음 기능을 과하게 강조하지 않는다.
 각 화면의 목적은 명확해야 한다.
 
 ```txt
-/dashboard       현재 소비 상태 확인 (결과)
+/dashboard       현재 소비 상태 확인 (결과). 친구 모드는 ?viewing=<friendId> 쿼리
 /fixed-expenses  매달 빠지는 돈 구성 관리 (구성)
-/settings        월 수입 설정 / 로그아웃 (보조)
-/calendar        날짜별 소비 흐름 확인, MVP 1.5
+/friends         친구 코드 발급/입력, 친구 목록 (§12.8)
+/settings        월 수입·예산 주기·닉네임·로그아웃 (보조)
 /login           로그인
 /signup          회원가입
 ```
+
+캘린더는 별도 라우트가 아니라 대시보드에 임베드된다 (§12.6).
 
 ### 3.4 빠른 소비 입력
 
@@ -602,9 +604,10 @@ body {
 
 대시보드 추가 진입점:
 
-- 오른쪽 아래 소비 추가 FAB (탭 위로 떠 있음)
-- 우상단 설정 아이콘
+- 오른쪽 아래 소비 추가 FAB (탭 위로 떠 있음, 친구 모드에서는 숨김)
+- 우상단 헤더 trailing — 좌측 `FriendSwitcher`(시트로 본인 ↔ 친구 전환, 친구 모드는 `?viewing=<friendId>` 쿼리), 우측 설정 아이콘
 - 캘린더는 별도 라우트가 아니라 대시보드에 임베드된다 (§12.1, §14 참조).
+- 친구 모드 동작 전체는 §12.8.5 참조.
 
 ---
 
@@ -741,10 +744,13 @@ Dashboard에서 보여주지 않을 것:
 
 Settings에서는 다음만 관리한다.
 
+- 닉네임 — 친구가 보는 이름. 가입 시 한국어 자동 닉네임이 시드되며, 최대 20자, 공백/탭/줄바꿈 금지. 빈값이면 친구 화면에서 "이름 없음"으로 폴백 (§12.8.7)
 - 월 수입
 - 예산 주기 (§12.5a)
 - 월 고정지출 — 합계 표시 + `/fixed-expenses`로 진입하는 링크 카드
 - 로그아웃
+
+닉네임 섹션 보조 카피에는 친구 수와 `/friends` 진입 링크를 함께 노출한다 — 친구가 0명일 때 "친구 추가 →", 1명 이상일 때 "친구 N명 →" (§12.8.4).
 
 월 고정지출은 더 이상 단일 숫자 입력 필드가 아니다.
 별도 화면 `/fixed-expenses`에서 항목별로 관리한다. 자세한 내용은 §12.7 참조.
@@ -774,7 +780,7 @@ UI 구성 (월 수입 입력 다음):
 
 짧은 달 처리 규칙: 시작일이 그 달에 존재하지 않으면(예: 2월 31일) 자동으로 그 달의 말일로 clamp된다. 사이클 자체가 짧아지며, 다음 사이클은 다음 달의 (clamp된) 시작일에 다시 시작한다.
 
-친구 대시보드는 친구 본인의 사이클을 그대로 사용한다. 친구의 `monthly_income`은 노출하지 않으며, 사이클 정보(`cycle_mode`, `cycle_start_day`)만 `get_user_cycle` RPC로 가져온다. RPC는 friendship 관계가 있는 viewer에게만 row를 반환한다.
+친구 대시보드는 친구 본인의 사이클을 그대로 사용한다. 친구의 `monthly_income`은 노출하지 않으며, 사이클 정보(`cycle_mode`, `cycle_start_day`)만 `get_user_cycle` RPC로 가져온다. RPC는 friendship 관계가 있는 viewer에게만 row를 반환한다. 친구 모드 대시보드의 화면 동작 전체는 §12.8.5 참조.
 
 ### 12.7 Fixed Expenses
 
@@ -824,6 +830,89 @@ UI 구성 (월 수입 입력 다음):
 날짜 클릭 시 대시보드 하단 "DayTransactions" 섹션이 그 날짜의 거래로 갱신된다 (Sheet가 아님). 거래 항목을 누르면 기존 소비 수정 dialog를 연다.
 
 `calendar` 모드에서는 7×6 고정 그리드(다른 달 일부 회색)로 한 달 전체를 보여준다. `income_day` 모드(§12.5a)에서는 사이클 첫날부터 끝날까지만 렌더하는 **가변 그리드**를 사용한다. 첫 행 들여쓰기는 사이클 시작일의 요일에 따라, 마지막 행 패딩은 사이클 끝일 요일에 따라 결정되며, 행 수는 4~6 가변이다. MonthSwitcher의 이전/다음 버튼은 항상 사이클 단위로 이동하며 라벨은 모드에 따라 "5월" 또는 "5/20 – 6/19" 형식이다.
+
+### 12.8 Friends
+
+티끌은 친구의 이번 달 또는 사이클 소비 흐름을 함께 들여다볼 수 있는 가벼운 공유 기능을 제공한다. 가계부 공유나 정산 도구가 아니다. 친구의 "얼마 썼는가"만 볼 수 있고, 수입·고정지출·예산은 절대 공유하지 않는다.
+
+#### 12.8.1 목적과 원칙
+
+- 공유 단위는 친구의 사이클(달력 또는 급여일) 안의 **총 소비**와 **일별 흐름** 두 가지뿐이다.
+- 친구의 `monthly_income` / 가용 예산 / 소비율 / progress bar는 노출하지 않는다 (§19).
+- 페어링은 **양방향 자동**이다. 한쪽이 코드를 발급하고 다른 한쪽이 입력하면 양방향 friendship row가 한 번에 만들어진다. 한쪽이 해제하면 양쪽 모두 즉시 끊긴다.
+- 친구 데이터도 본인 데이터와 동일하게 캐시 금지다 (§16.2, §19).
+
+#### 12.8.2 데이터 모델
+
+세 테이블을 사용한다.
+
+- `friend_codes` — 6자 코드(혼동 글자 `0/O/1/I` 제외 32자 알파벳), 10분 TTL, 단일 사용. 동일 owner가 새 코드를 발급하면 기존 활성 코드는 즉시 만료 처리한다.
+- `friendships` — 양방향 두 row(`owner_id`, `viewer_id`). `owner_id ≠ viewer_id` 제약과 `(owner_id, viewer_id)` UNIQUE.
+- `redeem_attempts` — 코드 입력 rate-limit 로그. 60초 윈도우 안 5회까지 허용.
+
+`transactions`와 `profiles`는 friendship row가 있을 때 viewer에게 SELECT가 허용된다(`0019_friendship_view_policies.sql`). `user_settings`는 RLS로 친구에게 직접 노출하지 않는다 — 사이클은 아래 RPC로만 접근한다.
+
+#### 12.8.3 RPC
+
+두 함수 모두 `SECURITY DEFINER`로 정의하며 `authenticated` 역할에만 grant한다.
+
+- `redeem_friend_code(p_code text) returns text` — 호출자가 viewer가 된다. `for update`로 코드 row를 잠가 동시 redemption을 막은 뒤 `friendships` 양방향 row를 `on conflict do nothing`으로 INSERT하고 코드를 사용 처리한다. 반환값은 정확히 `ok` / `invalid` / `self` / `unauthenticated` 4종이며, 어떤 케이스인지 외부에 누설하지 않기 위해 만료/존재하지 않음/이미 사용됨을 모두 `invalid`로 묶는다.
+- `get_user_cycle(target uuid) returns table(cycle_mode text, cycle_start_day smallint)` — 호출자가 본인이거나, `target = owner_id ∧ caller = viewer_id`인 friendship row가 있을 때만 한 줄을 반환한다. `monthly_income`은 시그니처에 포함되지 않으므로 RPC 자체가 노출 차단의 마지막 방어선 역할을 한다.
+
+#### 12.8.4 화면 — `/friends`
+
+페이지 구조:
+
+```txt
+PageHeader
+  eyebrow: ◀ 설정
+  title:   친구
+
+FriendCodeIssueCard      ← 활성 코드 1개 / 만료 카운트다운 / 복사 / 새로 발급
+FriendCodeRedeemForm     ← 6자 코드 입력
+FriendList               ← 친구 N명 목록 + 해제 휴지통
+```
+
+규칙:
+
+- `<AppShell>`에 `withBottomNav`를 넘기지 않는다. 친구 페이지는 부모 화면이 아니라 설정에서 들어오는 보조 화면이다.
+- 코드 발급 카드는 동시에 활성 코드를 **1개만** 유지한다. 새로 발급 버튼은 이전 코드를 만료시키고 새 코드를 만든다.
+- 입력 폼은 자동으로 대문자화하고 `[^A-Z0-9]`를 제거하며 6자에서 잘린다. rate-limit 초과 시에는 일반화된 안내 카피만 보여준다(어떤 케이스인지 누설 금지).
+- 친구 해제 confirm 본문은 "서로의 티끌을 더 이상 볼 수 없게 돼요." 한 문장.
+
+#### 12.8.5 친구 모드 (대시보드)
+
+URL은 `/dashboard?viewing=<friendId>`. 친구 모드 진입 검증은 두 단계다.
+
+1. `viewing` 값이 UUID 정규식을 통과하는지.
+2. 호출자가 viewer로 페어링된 friendship row가 존재하는지.
+
+둘 중 하나라도 실패하면 본인 모드로 폴백한다.
+
+친구 모드에서의 화면 동작:
+
+- `<AppShell withBottomNav={false} withFab={false}>` — 하단 탭과 추가 FAB 모두 숨긴다. 친구 화면에서 거래를 추가할 수 없다.
+- 합계 카드 위에 친구 모드 배너 한 줄: `"{닉네임}님의 티끌을 보고 있어요"` 와 우측 "내 티끌로" 링크.
+- 합계 카드는 `friendView` 분기를 사용한다. **가용 예산·소비율·progress bar는 표시하지 않는다.** 총 소비 금액과 보조 카피 `"친구의 수입·고정지출·예산은 비공개예요."` 만 노출한다.
+- 헤더 trailing의 `<FriendSwitcher>`는 본인 "(나)" + 친구 목록을 시트로 보여주며, 친구가 0명이면 `/friends`로 안내하는 한 줄을 노출한다.
+- `<FriendRealtimeWatcher friendUserId={...}>`가 친구 모드에서만 마운트된다 (§12.8.6).
+
+#### 12.8.6 Realtime 인프라
+
+- `transactions` 테이블만 `supabase_realtime` publication에 등록되어 있다.
+- `replica identity full`로 설정해 UPDATE/DELETE 이벤트가 old row 전체를 실어 보내므로 client-side 필터(`user_id=eq.<friendId>`)가 soft delete와 hard delete 모두에서 안정적으로 동작한다.
+- Watcher는 채널 `friend-tx:<friendId>`에 `postgres_changes`(`event: "*"`)를 구독한다.
+- 변경 이벤트는 **300 ms 디바운스** 후 `router.refresh()`를 호출한다 — 짧은 시간 안에 여러 변경이 와도 한 번만 새로고침한다.
+- 본인 모드에서는 watcher를 마운트하지 않는다.
+- Realtime payload는 어디에도 캐시하지 않는다 (§16.2, §19).
+
+#### 12.8.7 닉네임
+
+- `profiles.display_name`을 사용한다. 가입 트리거가 한국어 형용사 + 명사 + 4자리 숫자 조합으로 자동 시드한다.
+- Settings에서 편집 가능 (최대 20자, 공백/탭/줄바꿈 금지).
+- 표시 규칙:
+  - 본인은 `FriendSwitcher`에서 `"{닉네임} (나)"` 라벨로 표시한다.
+  - 친구 닉네임이 빈 값이면 친구 화면에서 "이름 없음"으로 폴백한다.
 
 ---
 
@@ -928,11 +1017,15 @@ Service Worker는 다음만 캐싱한다.
 - HTML/CSS/JS 정적 리소스
 - 앱 shell, manifest, 아이콘
 
-다음은 캐싱하지 않는다.
+다음은 모두 `NetworkOnly`로 강제하며, 절대 캐싱하지 않는다.
 
 - 개인 소비 데이터
+- `*.supabase.co` 호스트로 향하는 모든 요청
 - Supabase 인증 요청 (`/auth/v1/*`)
 - Supabase REST 요청 (`/rest/v1/*`)
+- Supabase 스토리지 요청 (`/storage/v1/*`)
+- Supabase Realtime 요청 (`/realtime/v1/*`)
+- 친구의 거래 / 프로필 / Realtime payload (본인 데이터와 동일하게 캐시 금지)
 
 네트워크가 끊기면 앱은 정상 동작하지 않는다. 별도의 오프라인 fallback 페이지나 동기화 큐는 제공하지 않는다.
 
@@ -995,6 +1088,8 @@ Service Worker는 다음만 캐싱한다.
 - 수입 내역을 transaction처럼 입력하게 만들지 않는다.
 - merchant, payment method 같은 필드를 넣지 않는다. 메모(선택, 100자)만 허용한다.
 - private spending data를 Cache Storage에 저장하지 않는다.
+- 친구의 transactions / profile / Realtime payload를 Cache Storage에 저장하지 않는다 — 친구 데이터도 NetworkOnly다.
+- 친구 화면에 monthly_income / 가용 예산 / 소비율 / progress bar를 노출하지 않는다 — `get_user_cycle`로 사이클만 가져와 총 소비와 일별 흐름만 보여준다 (§12.8.5).
 - Apple 브랜드나 고유 UI(글래스모피즘 탭 스위처 등)를 복제하지 않는다.
 - 카드 안에 카드를 중첩하지 않는다 — surface는 한 단계까지.
 - 소비 삭제를 hard delete로 처리하지 않는다 — `transactions.deleted_at` 컬럼을 사용한 soft delete만 사용한다.
@@ -1024,15 +1119,22 @@ UI 코드를 생성할 때 다음을 지켜라.
 ### Dashboard
 
 ```tsx
-<AppShell withBottomNav>
+<AppShell withBottomNav={isOwn} withFab={isOwn}>
   <PageHeader
     eyebrow="{월라벨} 소비를 가볍게 확인해요"
     title="티끌"
-    trailing={<SettingsLink />}
+    trailing={
+      <>
+        <FriendSwitcher /> {/* 본인/친구 전환 시트 */}
+        <SettingsLink />
+      </>
+    }
   />
+  {!isOwn && <FriendModeBanner nickname={viewingNickname} />}
+  {!isOwn && <FriendRealtimeWatcher friendUserId={viewingUserId} />}
   <MonthSwitcher ym={ym} />
-  <MonthlySummaryCard />
-  <SpendingProgress />
+  <MonthlySummaryCard friendView={!isOwn} />
+  <SpendingProgress hidden={!isOwn} />
   <SpendingMonthGrid ym={ym} selectedDay={day} dailyTotals={…} />
   <DayTransactionList day={day} />
   <AddTransactionButton defaultDate={day} />
