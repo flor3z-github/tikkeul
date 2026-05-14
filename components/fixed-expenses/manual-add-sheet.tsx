@@ -43,10 +43,12 @@ export function ManualAddSheet({ open, onOpenChange }: ManualAddSheetProps) {
 
 function ManualAddBody({ onSaved }: { onSaved: () => void }) {
   const [name, setName] = useState("");
+  const [planName, setPlanName] = useState("");
   const [amountText, setAmountText] = useState("");
   const [pending, startTransition] = useTransition();
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const trimmedName = name.trim();
+  const trimmedPlanName = planName.trim();
   const canSubmit = trimmedName.length > 0 && amountValue > 0 && !pending;
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -55,6 +57,7 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
     startTransition(async () => {
       const result = await addManualFixedExpenseAction({
         name: trimmedName,
+        plan_name: trimmedPlanName.length > 0 ? trimmedPlanName : null,
         amount: amountValue,
       });
       if (result.ok) {
@@ -83,6 +86,25 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="예: 월세, 인터넷, 보험"
+          className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none placeholder:text-muted-foreground focus:border-ring"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="manual-plan-name"
+          className="block text-sm font-medium text-muted-foreground"
+        >
+          플랜 <span className="text-muted-foreground/70">(선택)</span>
+        </label>
+        <input
+          id="manual-plan-name"
+          type="text"
+          autoComplete="off"
+          maxLength={40}
+          value={planName}
+          onChange={(event) => setPlanName(event.target.value)}
+          placeholder="예: 프리미엄, 200GB, 가족"
           className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none placeholder:text-muted-foreground focus:border-ring"
         />
       </div>

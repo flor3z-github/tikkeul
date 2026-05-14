@@ -88,6 +88,7 @@ export type Database = {
           user_id: string;
           subscription_plan_id: string | null;
           name: string;
+          plan_name: string | null;
           amount: number;
           category: string | null;
           is_active: boolean;
@@ -99,6 +100,7 @@ export type Database = {
           user_id: string;
           subscription_plan_id?: string | null;
           name: string;
+          plan_name?: string | null;
           amount: number;
           category?: string | null;
           is_active?: boolean;
@@ -110,6 +112,7 @@ export type Database = {
           user_id?: string;
           subscription_plan_id?: string | null;
           name?: string;
+          plan_name?: string | null;
           amount?: number;
           category?: string | null;
           is_active?: boolean;

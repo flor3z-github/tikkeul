@@ -44,9 +44,9 @@ export function ActiveItemSheet({
           <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
             {plan ? plan.service_name : (item?.name ?? "고정지출")}
           </DrawerTitle>
-          {plan?.plan_name ? (
+          {(plan?.plan_name ?? item?.plan_name) ? (
             <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
-              {plan.plan_name}
+              {plan?.plan_name ?? item?.plan_name}
             </p>
           ) : null}
           <DrawerDescription className="sr-only">
@@ -76,14 +76,20 @@ type BodyProps = {
 function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   const isCatalog = item.subscription_plan_id !== null;
   const [name, setName] = useState(item.name);
+  const [planName, setPlanName] = useState(item.plan_name ?? "");
   const [amountText, setAmountText] = useState(formatNumber(item.amount));
   const [savePending, startSaveTransition] = useTransition();
   const [actionPending, startActionTransition] = useTransition();
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const trimmedName = name.trim();
+  const trimmedPlanName = planName.trim();
+  const planNameChanged =
+    !isCatalog && trimmedPlanName !== (item.plan_name ?? "");
   const dirty =
-    amountValue !== item.amount || (isCatalog ? false : trimmedName !== item.name);
+    amountValue !== item.amount ||
+    (isCatalog ? false : trimmedName !== item.name) ||
+    planNameChanged;
   const canSave =
     amountValue > 0 && trimmedName.length > 0 && dirty && !savePending;
 
@@ -97,7 +103,12 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
         amount: amountValue,
         // Catalog items keep their canonical name from the plan; manual items
         // let the user rename freely.
-        ...(isCatalog ? {} : { name: trimmedName }),
+        ...(isCatalog
+          ? {}
+          : {
+              name: trimmedName,
+              plan_name: trimmedPlanName.length > 0 ? trimmedPlanName : null,
+            }),
       });
       if (result.ok) {
         toast.success("수정됐어요.");
@@ -123,23 +134,43 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   return (
     <form onSubmit={handleSave} className="space-y-5 pt-4">
       {isCatalog ? null : (
-        <div className="space-y-2">
-          <label
-            htmlFor="active-item-name"
-            className="block text-sm font-medium text-muted-foreground"
-          >
-            이름
-          </label>
-          <input
-            id="active-item-name"
-            type="text"
-            autoComplete="off"
-            maxLength={40}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none placeholder:text-muted-foreground focus:border-ring"
-          />
-        </div>
+        <>
+          <div className="space-y-2">
+            <label
+              htmlFor="active-item-name"
+              className="block text-sm font-medium text-muted-foreground"
+            >
+              이름
+            </label>
+            <input
+              id="active-item-name"
+              type="text"
+              autoComplete="off"
+              maxLength={40}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none placeholder:text-muted-foreground focus:border-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label
+              htmlFor="active-item-plan-name"
+              className="block text-sm font-medium text-muted-foreground"
+            >
+              플랜 <span className="text-muted-foreground/70">(선택)</span>
+            </label>
+            <input
+              id="active-item-plan-name"
+              type="text"
+              autoComplete="off"
+              maxLength={40}
+              value={planName}
+              onChange={(event) => setPlanName(event.target.value)}
+              placeholder="예: 프리미엄, 200GB, 가족"
+              className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none placeholder:text-muted-foreground focus:border-ring"
+            />
+          </div>
+        </>
       )}
 
       <div className="space-y-2">

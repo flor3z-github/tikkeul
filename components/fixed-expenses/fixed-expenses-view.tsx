@@ -239,9 +239,9 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                           <p className="truncate text-[15px] font-medium leading-tight">
                             {plan ? plan.service_name : item.name}
                           </p>
-                          {plan?.plan_name ? (
+                          {(plan?.plan_name ?? item.plan_name) ? (
                             <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
-                              {plan.plan_name}
+                              {plan?.plan_name ?? item.plan_name}
                             </p>
                           ) : null}
                         </div>

@@ -121,13 +121,18 @@ export async function updateFixedExpenseAction(input: {
   id: string;
   amount: number;
   name?: string;
+  plan_name?: string | null;
 }): Promise<FixedExpenseActionResult> {
   const { supabase, user } = await requireUser();
 
   const amountError = validateAmount(input.amount);
   if (amountError) return amountError;
 
-  const patch: { amount: number; name?: string } = {
+  const patch: {
+    amount: number;
+    name?: string;
+    plan_name?: string | null;
+  } = {
     amount: Math.round(input.amount),
   };
 
@@ -136,6 +141,18 @@ export async function updateFixedExpenseAction(input: {
     const nameError = validateName(normalized);
     if (nameError) return nameError;
     patch.name = normalized;
+  }
+
+  if (input.plan_name !== undefined) {
+    if (input.plan_name === null) {
+      patch.plan_name = null;
+    } else {
+      const normalized = normalizeName(input.plan_name);
+      if (normalized.length > 40) {
+        return { ok: false, error: "플랜은 40자 이내로 입력해주세요." };
+      }
+      patch.plan_name = normalized.length > 0 ? normalized : null;
+    }
   }
 
   const { error } = await supabase
@@ -195,6 +212,7 @@ export async function addManualFixedExpenseAction(input: {
   name: string;
   amount: number;
   category?: string | null;
+  plan_name?: string | null;
 }): Promise<FixedExpenseActionResult> {
   const { supabase, user } = await requireUser();
 
@@ -205,11 +223,19 @@ export async function addManualFixedExpenseAction(input: {
   const amountError = validateAmount(input.amount);
   if (amountError) return amountError;
 
+  const planNameRaw =
+    typeof input.plan_name === "string" ? normalizeName(input.plan_name) : "";
+  if (planNameRaw.length > 40) {
+    return { ok: false, error: "플랜은 40자 이내로 입력해주세요." };
+  }
+  const plan_name = planNameRaw.length > 0 ? planNameRaw : null;
+
   const { error } = await supabase.from("fixed_expenses").insert({
     id: randomUUID(),
     user_id: user.id,
     subscription_plan_id: null,
     name,
+    plan_name,
     amount: Math.round(input.amount),
     category: input.category ?? null,
     is_active: true,

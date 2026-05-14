@@ -16,7 +16,9 @@ export async function FixedExpensesSection() {
   const [itemsResult, plansResult] = await Promise.all([
     supabase
       .from("fixed_expenses")
-      .select("id, subscription_plan_id, name, amount, category, is_active")
+      .select(
+        "id, subscription_plan_id, name, plan_name, amount, category, is_active",
+      )
       .eq("user_id", userId)
       .order("amount", { ascending: false })
       .order("created_at", { ascending: true }),
@@ -54,6 +56,7 @@ export async function FixedExpensesSection() {
     id: row.id,
     subscription_plan_id: row.subscription_plan_id,
     name: row.name,
+    plan_name: row.plan_name,
     amount: Number(row.amount),
     category: row.category,
     is_active: row.is_active,
