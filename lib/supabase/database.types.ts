@@ -26,18 +26,24 @@ export type Database = {
         Row: {
           user_id: string;
           monthly_income: number;
+          cycle_mode: "calendar" | "income_day";
+          cycle_start_day: number;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           user_id: string;
           monthly_income?: number;
+          cycle_mode?: "calendar" | "income_day";
+          cycle_start_day?: number;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           user_id?: string;
           monthly_income?: number;
+          cycle_mode?: "calendar" | "income_day";
+          cycle_start_day?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -263,6 +269,13 @@ export type Database = {
       redeem_friend_code: {
         Args: { p_code: string };
         Returns: string;
+      };
+      get_user_cycle: {
+        Args: { target: string };
+        Returns: {
+          cycle_mode: "calendar" | "income_day";
+          cycle_start_day: number;
+        }[];
       };
     };
     Enums: { [_ in never]: never };

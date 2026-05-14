@@ -35,12 +35,29 @@ export async function saveSettingsAction(
     };
   }
 
+  const cycleModeRaw = String(formData.get("cycle_mode") ?? "calendar");
+  if (cycleModeRaw !== "calendar" && cycleModeRaw !== "income_day") {
+    return { ok: false, error: "예산 주기 모드가 올바르지 않아요." };
+  }
+  const cycleMode = cycleModeRaw as "calendar" | "income_day";
+
+  const cycleStartDay = Number(formData.get("cycle_start_day") ?? 1);
+  if (
+    !Number.isInteger(cycleStartDay) ||
+    cycleStartDay < 1 ||
+    cycleStartDay > 31
+  ) {
+    return { ok: false, error: "시작일은 1~31일 사이여야 해요." };
+  }
+
   const { error: settingsError } = await supabase
     .from("user_settings")
     .upsert(
       {
         user_id: user.id,
         monthly_income: monthlyIncome,
+        cycle_mode: cycleMode,
+        cycle_start_day: cycleStartDay,
       },
       { onConflict: "user_id" },
     );

@@ -5,12 +5,16 @@ import { getMonthlyTransactions } from "@/lib/queries/transactions";
 import { createClient } from "@/lib/supabase/server";
 
 type SpendingSummarySectionProps = {
-  ym: string;
+  startIso: string;
+  endIso: string;
+  cycleLabel: string;
   targetUserId?: string;
 };
 
 export async function SpendingSummarySection({
-  ym,
+  startIso,
+  endIso,
+  cycleLabel,
   targetUserId,
 }: SpendingSummarySectionProps) {
   const supabase = await createClient();
@@ -20,7 +24,7 @@ export async function SpendingSummarySection({
   const userId = targetUserId ?? viewerId;
   const isOwn = userId === viewerId;
 
-  // Friend view: do not expose income/fixed-expense. Only show this-month
+  // Friend view: do not expose income/fixed-expense. Only show this-cycle
   // expense total. user_settings/fixed_expenses RLS would block these queries
   // anyway, but skipping the round-trip keeps the section deterministic.
   const [settingsResult, fixedResult, monthlyResult] = await Promise.all([
@@ -38,7 +42,7 @@ export async function SpendingSummarySection({
           .eq("user_id", userId)
           .eq("is_active", true)
       : Promise.resolve({ data: [], error: null as null | { message: string } }),
-    getMonthlyTransactions(userId, ym),
+    getMonthlyTransactions(userId, startIso, endIso),
   ]);
 
   const dataError =
@@ -49,7 +53,7 @@ export async function SpendingSummarySection({
   if (dataError) {
     return (
       <div className="space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
-        <p className="font-semibold">{`${ym} 요약을 불러오지 못했어요`}</p>
+        <p className="font-semibold">{`${cycleLabel} 요약을 불러오지 못했어요`}</p>
         <p className="break-all text-xs opacity-80">{dataError.message}</p>
       </div>
     );

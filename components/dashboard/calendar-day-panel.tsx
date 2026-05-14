@@ -12,13 +12,20 @@ import {
 import { AddTransactionButton } from "@/components/transactions/add-transaction-button";
 import type { TransactionFormCategory } from "@/components/transactions/transaction-form-dialog";
 import type { MonthlyTransaction } from "@/lib/queries/transactions";
-import { formatKoreanLongDate } from "@/lib/utils/calendar";
+import {
+  type CycleMode,
+  formatKoreanLongDate,
+} from "@/lib/utils/calendar";
 import { toISODate } from "@/lib/utils/date";
 import { formatKRW } from "@/lib/utils/money";
 
 type CalendarDayPanelProps = {
   ym: string;
   initialDay: string;
+  cycleStart: Date;
+  cycleEnd: Date;
+  cycleMode: CycleMode;
+  cycleLabel: string;
   transactions: MonthlyTransaction[];
   categories: TransactionFormCategory[];
   availableBudget: number;
@@ -33,6 +40,10 @@ type CalendarDayPanelProps = {
 export function CalendarDayPanel({
   ym,
   initialDay,
+  cycleStart,
+  cycleEnd,
+  cycleMode,
+  cycleLabel,
   transactions,
   categories,
   availableBudget,
@@ -71,9 +82,12 @@ export function CalendarDayPanel({
   return (
     <>
       <div className="mt-3 space-y-1.5 rounded-3xl border border-black/[0.08] bg-card p-3 dark:border-white/[0.10]">
-        <MonthSwitcher ym={ym} />
+        <MonthSwitcher ym={ym} cycleLabel={cycleLabel} />
         <SpendingMonthGrid
           ym={ym}
+          cycleStart={cycleStart}
+          cycleEnd={cycleEnd}
+          cycleMode={cycleMode}
           selectedDay={selectedDay}
           dailyTotals={dailyTotals}
           availableBudget={availableBudget}

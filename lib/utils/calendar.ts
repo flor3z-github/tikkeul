@@ -12,12 +12,37 @@ export type MonthCell = {
   isToday: boolean;
 };
 
+export type CycleMode = "calendar" | "income_day";
+
+export type CycleSettings = {
+  mode: CycleMode;
+  startDay: number;
+};
+
+export type CycleRange = {
+  mode: CycleMode;
+  start: Date;
+  end: Date;
+  anchorYm: string;
+  label: string;
+  labelLong: string;
+};
+
+export type CycleMatrixCell =
+  | { kind: "day"; date: Date; iso: string; isToday: boolean }
+  | { kind: "empty" };
+
 export type ResolvedDashboardParams = {
   ym: string;
   day: string;
-  monthStart: Date;
-  monthEnd: Date;
+  cycleStart: Date;
+  cycleEnd: Date;
+  cycleMode: CycleMode;
+  cycleLabel: string;
+  cycleLabelLong: string;
 };
+
+export const DEFAULT_CYCLE: CycleSettings = { mode: "calendar", startDay: 1 };
 
 export function parseYearMonth(ym: string): Date | null {
   const m = YM_RE.exec(ym);
@@ -137,6 +162,181 @@ export function buildMonthMatrix(
   return cells;
 }
 
+// Clamps a day-of-month to the actual last day of (year, monthIndex).
+// E.g. clampDayToMonth(2026, 1 /* Feb */, 31) === 28.
+export function clampDayToMonth(
+  year: number,
+  monthIndex: number,
+  day: number,
+): number {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return Math.min(Math.max(1, day), lastDay);
+}
+
+// Computes the cycle range (start inclusive, end exclusive) that contains
+// `anchor`. For calendar mode this is the calendar month of `anchor`. For
+// income_day mode this is [N of month, N of next month) with short-month
+// clamping on both ends.
+export function getCycleRange(
+  mode: CycleMode,
+  startDay: number,
+  anchor: Date,
+  now: Date = new Date(),
+): CycleRange {
+  if (mode === "calendar") {
+    const start = new Date(
+      anchor.getFullYear(),
+      anchor.getMonth(),
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
+    const end = new Date(
+      anchor.getFullYear(),
+      anchor.getMonth() + 1,
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
+    return {
+      mode,
+      start,
+      end,
+      anchorYm: formatYearMonth(start),
+      label: formatYearMonthKorean(formatYearMonth(start), {}, now),
+      labelLong: formatYearMonthKorean(
+        formatYearMonth(start),
+        { showYear: "always" },
+        now,
+      ),
+    };
+  }
+
+  const y = anchor.getFullYear();
+  const m = anchor.getMonth();
+  const d = anchor.getDate();
+  let startY: number;
+  let startM: number;
+  let endY: number;
+  let endM: number;
+  if (d >= Math.min(startDay, clampDayToMonth(y, m, startDay))) {
+    startY = y;
+    startM = m;
+    endY = m === 11 ? y + 1 : y;
+    endM = m === 11 ? 0 : m + 1;
+  } else {
+    startY = m === 0 ? y - 1 : y;
+    startM = m === 0 ? 11 : m - 1;
+    endY = y;
+    endM = m;
+  }
+  const start = new Date(
+    startY,
+    startM,
+    clampDayToMonth(startY, startM, startDay),
+    0,
+    0,
+    0,
+    0,
+  );
+  const end = new Date(
+    endY,
+    endM,
+    clampDayToMonth(endY, endM, startDay),
+    0,
+    0,
+    0,
+    0,
+  );
+  return {
+    mode,
+    start,
+    end,
+    anchorYm: formatYearMonth(start),
+    label: formatCycleLabel(start, end, now),
+    labelLong: formatCycleLabelLong(start, end),
+  };
+}
+
+// "5/20 – 6/19" when same year as `now`, otherwise "2026/12/15 – 2027/1/14".
+// `end` is exclusive, so display uses end-1 day.
+export function formatCycleLabel(
+  start: Date,
+  end: Date,
+  now: Date = new Date(),
+): string {
+  const lastDay = new Date(
+    end.getFullYear(),
+    end.getMonth(),
+    end.getDate() - 1,
+    0,
+    0,
+    0,
+    0,
+  );
+  const sameYear =
+    start.getFullYear() === lastDay.getFullYear() &&
+    start.getFullYear() === now.getFullYear();
+  if (sameYear) {
+    return `${start.getMonth() + 1}/${start.getDate()} – ${lastDay.getMonth() + 1}/${lastDay.getDate()}`;
+  }
+  return `${start.getFullYear()}/${start.getMonth() + 1}/${start.getDate()} – ${lastDay.getFullYear()}/${lastDay.getMonth() + 1}/${lastDay.getDate()}`;
+}
+
+// "5월 20일 – 6월 19일" (used in settings preview, dashboard subtitles).
+export function formatCycleLabelLong(start: Date, end: Date): string {
+  const lastDay = new Date(
+    end.getFullYear(),
+    end.getMonth(),
+    end.getDate() - 1,
+    0,
+    0,
+    0,
+    0,
+  );
+  return `${start.getMonth() + 1}월 ${start.getDate()}일 – ${lastDay.getMonth() + 1}월 ${lastDay.getDate()}일`;
+}
+
+// Variable-row matrix that renders only the cycle's days. Lead/tail are
+// padded with `empty` cells so rows stay 7 wide.
+export function buildCycleMatrix(
+  cycleStart: Date,
+  cycleEnd: Date,
+  now: Date = new Date(),
+): CycleMatrixCell[] {
+  const cells: CycleMatrixCell[] = [];
+  const leadEmpty = cycleStart.getDay();
+  for (let i = 0; i < leadEmpty; i++) cells.push({ kind: "empty" });
+
+  const todayIso = toISODate(now);
+  const cursor = new Date(
+    cycleStart.getFullYear(),
+    cycleStart.getMonth(),
+    cycleStart.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  while (cursor.getTime() < cycleEnd.getTime()) {
+    const iso = toISODate(cursor);
+    cells.push({
+      kind: "day",
+      date: new Date(cursor.getTime()),
+      iso,
+      isToday: iso === todayIso,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  while (cells.length % 7 !== 0) cells.push({ kind: "empty" });
+  return cells;
+}
+
 // `available / 30` baseline keeps the threshold predictable month-to-month and
 // avoids month-length skew (28 vs 31). 2× → warning, 3× → danger.
 export function classifyDailyAmount(
@@ -153,46 +353,57 @@ export function classifyDailyAmount(
 
 export function resolveDashboardParams(
   params: { ym?: string; day?: string },
+  cycle: CycleSettings = DEFAULT_CYCLE,
   now: Date = new Date(),
 ): ResolvedDashboardParams {
   const parsedYm = params.ym ? parseYearMonth(params.ym) : null;
-  const monthStartDate =
-    parsedYm ?? new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-  const ym = formatYearMonth(monthStartDate);
-  const monthEndDate = new Date(
-    monthStartDate.getFullYear(),
-    monthStartDate.getMonth() + 1,
-    1,
-    0,
-    0,
-    0,
-    0,
-  );
+  // For income_day, treat `?ym=YYYY-MM` as "the cycle whose start lives in
+  // that month". Anchor on the (clamped) start-day so `addMonths(ym, ±1)`
+  // from MonthSwitcher round-trips deterministically.
+  const anchor =
+    parsedYm == null
+      ? now
+      : cycle.mode === "income_day"
+        ? new Date(
+            parsedYm.getFullYear(),
+            parsedYm.getMonth(),
+            clampDayToMonth(
+              parsedYm.getFullYear(),
+              parsedYm.getMonth(),
+              cycle.startDay,
+            ),
+            0,
+            0,
+            0,
+            0,
+          )
+        : parsedYm;
+  const range = getCycleRange(cycle.mode, cycle.startDay, anchor, now);
 
-  const isCurrentMonth =
-    monthStartDate.getFullYear() === now.getFullYear() &&
-    monthStartDate.getMonth() === now.getMonth();
-
-  const fallbackDay = isCurrentMonth
-    ? toISODate(now)
-    : toISODate(monthStartDate);
+  const todayInCycle =
+    now.getTime() >= range.start.getTime() &&
+    now.getTime() < range.end.getTime();
+  const fallbackDay = todayInCycle ? toISODate(now) : toISODate(range.start);
 
   let day = fallbackDay;
   if (params.day) {
     const parsedDay = parseISODate(params.day);
     if (
       parsedDay &&
-      parsedDay.getFullYear() === monthStartDate.getFullYear() &&
-      parsedDay.getMonth() === monthStartDate.getMonth()
+      parsedDay.getTime() >= range.start.getTime() &&
+      parsedDay.getTime() < range.end.getTime()
     ) {
       day = params.day;
     }
   }
 
   return {
-    ym,
+    ym: range.anchorYm,
     day,
-    monthStart: monthStartDate,
-    monthEnd: monthEndDate,
+    cycleStart: range.start,
+    cycleEnd: range.end,
+    cycleMode: range.mode,
+    cycleLabel: range.label,
+    cycleLabelLong: range.labelLong,
   };
 }

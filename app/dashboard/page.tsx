@@ -9,7 +9,8 @@ import { PageHeader } from "@/components/layout/header";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-  formatYearMonthKorean,
+  type CycleSettings,
+  DEFAULT_CYCLE,
   resolveDashboardParams,
 } from "@/lib/utils/calendar";
 import { createClient } from "@/lib/supabase/server";
@@ -30,6 +31,7 @@ const UUID_RE =
 
 type DashboardSearchParams = Promise<{
   ym?: string;
+  day?: string;
   viewing?: string;
 }>;
 
@@ -39,8 +41,6 @@ export default async function DashboardPage({
   searchParams: DashboardSearchParams;
 }) {
   const sp = await searchParams;
-  const { ym, day } = resolveDashboardParams(sp);
-  const monthLabel = formatYearMonthKorean(ym);
 
   const supabase = await createClient();
   const {
@@ -67,6 +67,41 @@ export default async function DashboardPage({
       : user.id;
   const isOwn = viewingUserId === user.id;
 
+  // Fetch the *viewing* user's budget cycle so the dashboard aligns with how
+  // that person tracks spending. For self, read user_settings directly; for a
+  // friend, use the get_user_cycle RPC which gates access by friendship and
+  // never exposes monthly_income.
+  let cycle: CycleSettings = DEFAULT_CYCLE;
+  if (isOwn) {
+    const { data: ownCycle } = await supabase
+      .from("user_settings")
+      .select("cycle_mode, cycle_start_day")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (ownCycle) {
+      cycle = {
+        mode: ownCycle.cycle_mode,
+        startDay: Number(ownCycle.cycle_start_day ?? 1),
+      };
+    }
+  } else {
+    const { data: friendCycleRows } = await supabase.rpc("get_user_cycle", {
+      target: viewingUserId,
+    });
+    const row = (friendCycleRows ?? [])[0];
+    if (row) {
+      cycle = {
+        mode: row.cycle_mode,
+        startDay: Number(row.cycle_start_day ?? 1),
+      };
+    }
+  }
+
+  const { ym, day, cycleStart, cycleEnd, cycleMode, cycleLabel } =
+    resolveDashboardParams(sp, cycle);
+  const startIso = cycleStart.toISOString();
+  const endIso = cycleEnd.toISOString();
+
   // Profile lookups for the switcher + banner.
   const profileTargets = Array.from(new Set([user.id, ...friendIds]));
   const { data: profileRows } =
@@ -90,7 +125,7 @@ export default async function DashboardPage({
   return (
     <AppShell withBottomNav={isOwn} withFab={isOwn}>
       <PageHeader
-        title={`${monthLabel} 소비`}
+        title="티끌"
         trailing={
           <div className="flex items-center gap-1">
             <FriendSwitcher
@@ -134,7 +169,9 @@ export default async function DashboardPage({
 
       <Suspense fallback={<SpendingSummarySkeleton />}>
         <SpendingSummarySection
-          ym={ym}
+          startIso={startIso}
+          endIso={endIso}
+          cycleLabel={cycleLabel}
           targetUserId={isOwn ? undefined : viewingUserId}
         />
       </Suspense>
@@ -143,6 +180,12 @@ export default async function DashboardPage({
         <SpendingCalendarSection
           ym={ym}
           initialDay={day}
+          startIso={startIso}
+          endIso={endIso}
+          cycleStart={cycleStart}
+          cycleEnd={cycleEnd}
+          cycleMode={cycleMode}
+          cycleLabel={cycleLabel}
           targetUserId={isOwn ? undefined : viewingUserId}
         />
       </Suspense>

@@ -4,16 +4,29 @@ import { CalendarDayPanel } from "@/components/dashboard/calendar-day-panel";
 import { createClient } from "@/lib/supabase/server";
 import { getCategories } from "@/lib/queries/categories";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
+import type { CycleMode } from "@/lib/utils/calendar";
 
 type SpendingCalendarSectionProps = {
   ym: string;
   initialDay: string;
+  startIso: string;
+  endIso: string;
+  cycleStart: Date;
+  cycleEnd: Date;
+  cycleMode: CycleMode;
+  cycleLabel: string;
   targetUserId?: string;
 };
 
 export async function SpendingCalendarSection({
   ym,
   initialDay,
+  startIso,
+  endIso,
+  cycleStart,
+  cycleEnd,
+  cycleMode,
+  cycleLabel,
   targetUserId,
 }: SpendingCalendarSectionProps) {
   const supabase = await createClient();
@@ -29,7 +42,7 @@ export async function SpendingCalendarSection({
   // because the calendar is read-only, but the prop is still required.
   const [monthlyResult, categoriesResult, settingsResult, fixedResult] =
     await Promise.all([
-      getMonthlyTransactions(userId, ym),
+      getMonthlyTransactions(userId, startIso, endIso),
       getCategories(viewerId),
       isOwn
         ? supabase
@@ -80,9 +93,13 @@ export async function SpendingCalendarSection({
 
   return (
     <CalendarDayPanel
-      key={ym}
+      key={`${ym}-${cycleMode}`}
       ym={ym}
       initialDay={initialDay}
+      cycleStart={cycleStart}
+      cycleEnd={cycleEnd}
+      cycleMode={cycleMode}
+      cycleLabel={cycleLabel}
       transactions={monthlyResult.transactions}
       categories={categoriesResult.categories}
       availableBudget={availableBudget}

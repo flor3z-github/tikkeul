@@ -117,7 +117,7 @@ export function SpendingSummary({
                     aria-hidden
                     className={cn("size-2 rounded-full", STATUS_DOT[status])}
                   />
-                  이번 달 소비
+                  소비
                 </span>
               </div>
               <div className="flex items-baseline justify-between text-sm">

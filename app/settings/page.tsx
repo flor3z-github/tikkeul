@@ -20,7 +20,7 @@ export default async function SettingsPage() {
   const [settingsResult, profileResult, friendsCount] = await Promise.all([
     supabase
       .from("user_settings")
-      .select("monthly_income")
+      .select("monthly_income, cycle_mode, cycle_start_day")
       .eq("user_id", userId)
       .maybeSingle(),
     supabase
@@ -78,6 +78,8 @@ export default async function SettingsPage() {
       <SettingsForm
         initialIncome={Number(settingsResult.data?.monthly_income ?? 0)}
         initialNickname={profileResult.data?.display_name ?? ""}
+        initialCycleMode={settingsResult.data?.cycle_mode ?? "calendar"}
+        initialCycleStartDay={Number(settingsResult.data?.cycle_start_day ?? 1)}
       />
 
       <Link

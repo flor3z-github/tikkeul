@@ -12,7 +12,7 @@ export default function DashboardLoading() {
   return (
     <AppShell withBottomNav>
       <PageHeader
-        title="이번 달 소비"
+        title="티끌"
         trailing={
           <Link
             href="/settings"

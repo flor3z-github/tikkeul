@@ -1,7 +1,6 @@
 import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
-import { parseYearMonth } from "@/lib/utils/calendar";
 import { toISODate } from "@/lib/utils/date";
 
 export type MonthlyTransaction = {
@@ -33,22 +32,17 @@ type RawRow = {
 };
 
 // React `cache()` dedups within a single request so multiple sections
-// (summary / calendar / day list) share one Supabase round-trip.
+// (summary / calendar / day list) share one Supabase round-trip. The range is
+// passed as ISO strings (not Date objects) so the cache key stays stable.
 export const getMonthlyTransactions = cache(
-  async (userId: string, ym: string): Promise<MonthlyTransactionsResult> => {
-    const monthStart = parseYearMonth(ym);
-    if (!monthStart) {
-      return { ok: false, error: "잘못된 월입니다." };
+  async (
+    userId: string,
+    startIso: string,
+    endIso: string,
+  ): Promise<MonthlyTransactionsResult> => {
+    if (!startIso || !endIso) {
+      return { ok: false, error: "잘못된 주기 범위입니다." };
     }
-    const monthEnd = new Date(
-      monthStart.getFullYear(),
-      monthStart.getMonth() + 1,
-      1,
-      0,
-      0,
-      0,
-      0,
-    );
 
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -58,8 +52,8 @@ export const getMonthlyTransactions = cache(
       )
       .eq("user_id", userId)
       .is("deleted_at", null)
-      .gte("spent_at", monthStart.toISOString())
-      .lt("spent_at", monthEnd.toISOString())
+      .gte("spent_at", startIso)
+      .lt("spent_at", endIso)
       .order("spent_at", { ascending: false })
       .order("created_at", { ascending: false });
 
