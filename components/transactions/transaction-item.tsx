@@ -32,7 +32,7 @@ type TransactionItemProps = {
 };
 
 const ROW_CLASS =
-  "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left";
+  "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200";
 
 export function TransactionItem({
   transaction,

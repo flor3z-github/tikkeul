@@ -60,10 +60,11 @@ export function DayCell({
       className="flex h-[clamp(3.75rem,14vw,4rem)] min-h-11 min-w-0 items-stretch justify-center p-px transition-transform active:scale-[0.96]"
     >
       <span
+        key={isSelected ? "selected" : "unselected"}
         className={cn(
           "flex h-full min-w-0 flex-col items-center justify-start gap-0.5 rounded-[16px] pb-2 pt-2 transition-colors",
           isSelected
-            ? "-mx-0.5 w-[calc(100%+0.25rem)] bg-primary px-0.5"
+            ? "-mx-0.5 w-[calc(100%+0.25rem)] bg-primary px-0.5 animate-in zoom-in-95 duration-150"
             : hasAmount
               ? "w-full px-1 hover:bg-muted"
               : "w-full px-1 hover:bg-muted",
@@ -80,7 +81,7 @@ export function DayCell({
         {hasAmount ? (
           <span
             className={cn(
-              "block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[clamp(0.46875rem,2vw,0.5625rem)] font-medium leading-none tabular-nums",
+              "block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[clamp(0.46875rem,2vw,0.5625rem)] font-medium leading-none tabular-nums animate-in fade-in duration-200",
               amountTone,
             )}
           >

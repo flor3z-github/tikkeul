@@ -32,7 +32,7 @@ export default function GlobalRootError({
           <button
             type="button"
             onClick={() => reset()}
-            className="mt-6 h-12 w-full rounded-full bg-[#007AFF] text-[15px] font-semibold text-white active:scale-[0.98]"
+            className="mt-6 h-12 w-full rounded-full bg-[#007AFF] text-[15px] font-semibold text-white transition-transform duration-150 ease-out active:scale-[0.98]"
           >
             다시 시도
           </button>

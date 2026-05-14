@@ -21,6 +21,12 @@ type SpendingSummaryProps = {
    * to the data owner. Used when viewing a friend's dashboard.
    */
   friendView?: boolean;
+  /**
+   * Identifier for the current budget cycle. When this changes (e.g. user
+   * navigates to a different month), the hero number re-mounts and fades in
+   * instead of snapping. Optional — friendView card also uses it.
+   */
+  cycleLabel?: string;
 };
 
 const STATUS_COPY: Record<SpendingStatus, { tone: string; label: string }> = {
@@ -43,6 +49,7 @@ export function SpendingSummary({
   monthlyExpense,
   hasSettings,
   friendView = false,
+  cycleLabel,
 }: SpendingSummaryProps) {
   if (friendView) {
     return (
@@ -52,7 +59,10 @@ export function SpendingSummary({
             <p className="text-sm font-medium text-muted-foreground">
               총 소비
             </p>
-            <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
+            <p
+              key={cycleLabel}
+              className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
+            >
               {formatNumber(monthlyExpense)} 원
             </p>
           </div>
@@ -79,7 +89,10 @@ export function SpendingSummary({
           <p className="text-sm font-medium text-muted-foreground">
             총 소비
           </p>
-          <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
+          <p
+            key={cycleLabel}
+            className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
+          >
             {formatNumber(monthlyExpense)} 원
           </p>
         </div>

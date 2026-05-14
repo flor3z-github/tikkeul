@@ -293,7 +293,7 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
           <button
             type="button"
             onClick={() => setManualOpen(true)}
-            className="flex h-10 shrink-0 items-center gap-1 rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.98]"
+            className="flex h-10 shrink-0 items-center gap-1 rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground transition-all duration-150 ease-out hover:bg-primary/90 active:scale-[0.98]"
           >
             <Plus className="size-3.5" />
             <span>직접 추가</span>
@@ -428,7 +428,7 @@ function FilterChip({ active, onClick, children }: FilterChipProps) {
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "h-8 shrink-0 rounded-full border px-3 text-xs font-medium transition-colors",
+        "h-8 shrink-0 rounded-full border px-3 text-xs font-medium transition-all duration-150 ease-out",
         "active:scale-[0.98]",
         active
           ? "border-primary bg-primary/10 text-primary"
@@ -453,7 +453,7 @@ function CatalogButton({ plan, active, onClick }: CatalogButtonProps) {
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "group flex max-w-full items-center gap-1.5 rounded-full border px-3.5 py-2 text-left text-[13px] font-medium transition-colors",
+        "group flex max-w-full items-center gap-1.5 rounded-full border px-3.5 py-2 text-left text-[13px] font-medium transition-all duration-150 ease-out",
         "active:scale-[0.98]",
         active
           ? "border-primary bg-primary/10 text-primary"

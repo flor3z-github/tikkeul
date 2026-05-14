@@ -332,7 +332,7 @@ function TransactionFormBody({
                     handleUndoQuickAdd();
                     focusAmountInput();
                   }}
-                  className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
+                  className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-all duration-150 ease-out hover:bg-background active:scale-[0.96]"
                 >
                   <Undo2 className="size-3.5" />
                 </button>
@@ -346,7 +346,7 @@ function TransactionFormBody({
                     handleClearAmount();
                     focusAmountInput();
                   }}
-                  className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
+                  className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-all duration-150 ease-out hover:bg-background active:scale-[0.96]"
                 >
                   <X className="size-3.5" />
                 </button>
@@ -373,7 +373,7 @@ function TransactionFormBody({
               key={value}
               type="button"
               onClick={() => handleQuickAdd(value)}
-              className="h-9 rounded-full border border-border bg-card text-xs font-medium tabular-nums transition-colors hover:bg-muted active:scale-[0.98]"
+              className="h-9 rounded-full border border-border bg-card text-xs font-medium tabular-nums transition-all duration-150 ease-out hover:bg-muted active:scale-[0.98]"
             >
               +{label}
             </button>
@@ -402,7 +402,7 @@ function TransactionFormBody({
                 type="button"
                 onClick={() => setCategoryId(category.id)}
                 className={cn(
-                  "h-9 shrink-0 rounded-full border px-3.5 text-[13px] font-medium transition-all",
+                  "h-9 shrink-0 rounded-full border px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
                   "active:scale-[0.98]",
                   selected
                     ? "border-transparent bg-primary text-primary-foreground"

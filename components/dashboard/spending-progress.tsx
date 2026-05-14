@@ -62,12 +62,12 @@ export function SpendingProgress({
       className="flex h-2 w-full overflow-hidden rounded-full bg-muted"
     >
       <div
-        className="h-full bg-foreground/25 transition-all duration-300"
+        className="h-full bg-foreground/25 transition-[width,background-color] duration-500 ease-out"
         style={{ width: `${fixedPct}%` }}
       />
       <div
         className={cn(
-          "h-full transition-all duration-300",
+          "h-full transition-[width,background-color] duration-500 ease-out",
           STATUS_BAR_COLOR[status],
         )}
         style={{ width: `${spendPct}%` }}

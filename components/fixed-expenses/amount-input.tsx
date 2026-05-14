@@ -47,7 +47,7 @@ export function AmountInput({ value, onChange, autoFocus }: AmountInputProps) {
             onChange("");
             focusInput();
           }}
-          className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-background active:scale-[0.96]"
+          className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-all duration-150 ease-out hover:bg-background active:scale-[0.96]"
         >
           <X className="size-3.5" />
         </button>

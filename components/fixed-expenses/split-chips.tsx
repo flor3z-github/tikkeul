@@ -42,7 +42,7 @@ export function SplitChips({
             onClick={() => onPick(computed)}
             aria-pressed={active}
             className={cn(
-              "h-9 rounded-full border px-3 text-xs font-medium tabular-nums transition-colors",
+              "h-9 rounded-full border px-3 text-xs font-medium tabular-nums transition-all duration-150 ease-out",
               "active:scale-[0.98]",
               active
                 ? "border-primary bg-primary/10 text-primary"

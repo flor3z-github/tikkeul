@@ -75,6 +75,7 @@ export async function SpendingSummarySection({
       monthlyExpense={monthlyExpense}
       hasSettings={hasSettings}
       friendView={!isOwn}
+      cycleLabel={cycleLabel}
     />
   );
 }
