@@ -292,7 +292,7 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
           <button
             type="button"
             onClick={() => setManualOpen(true)}
-            className="flex h-10 shrink-0 items-center gap-1 rounded-full border border-border bg-card px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-muted active:scale-[0.98]"
+            className="flex h-10 shrink-0 items-center gap-1 rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.98]"
           >
             <Plus className="size-3.5" />
             <span>직접 추가</span>
