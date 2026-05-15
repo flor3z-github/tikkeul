@@ -8,8 +8,18 @@ import {
   deactivateFixedExpenseAction,
   updateFixedExpenseAction,
 } from "@/app/fixed-expenses/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { BottomSheet, useStableNonNull } from "@/components/ui/bottom-sheet";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
 import { SplitChips } from "./split-chips";
@@ -77,6 +87,7 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   const [amountText, setAmountText] = useState(formatNumber(item.amount));
   const [savePending, startSaveTransition] = useTransition();
   const [actionPending, startActionTransition] = useTransition();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const trimmedName = name.trim();
@@ -117,6 +128,7 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   }
 
   function handleDeactivate() {
+    setConfirmDeleteOpen(false);
     startActionTransition(async () => {
       const result = await deactivateFixedExpenseAction(item.id);
       if (result.ok) {
@@ -201,7 +213,7 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
         <Button
           type="button"
           variant="destructive"
-          onClick={handleDeactivate}
+          onClick={() => setConfirmDeleteOpen(true)}
           disabled={actionPending}
           aria-label="삭제하기"
           className="col-span-1 h-12 rounded-full px-0 text-[15px] font-semibold"
@@ -209,6 +221,35 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
           <Trash2 className="size-4" />
         </Button>
       </div>
+
+      <AlertDialog
+        open={confirmDeleteOpen}
+        onOpenChange={(open) => {
+          if (!actionPending) setConfirmDeleteOpen(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>이 고정지출을 삭제할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              가용 예산 계산에서도 즉시 빠져요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionPending}>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                handleDeactivate();
+              }}
+              disabled={actionPending}
+              className={buttonVariants({ variant: "destructive" })}
+            >
+              {actionPending ? "삭제 중…" : "삭제"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }
