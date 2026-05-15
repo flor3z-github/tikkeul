@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -30,7 +29,6 @@ type SettingsFormProps = {
   initialNickname: string;
   initialCycleMode: CycleMode;
   initialCycleStartDay: number;
-  friendsCount: number;
 };
 
 export function SettingsForm({
@@ -38,7 +36,6 @@ export function SettingsForm({
   initialNickname,
   initialCycleMode,
   initialCycleStartDay,
-  friendsCount,
 }: SettingsFormProps) {
   const [state, formAction, pending] = useActionState(saveSettingsAction, null);
   const [income, setIncome] = useState(formatNumber(initialIncome));
@@ -65,16 +62,7 @@ export function SettingsForm({
     <form action={formAction} className="space-y-6">
       <div className="space-y-2">
         <Label htmlFor="nickname">닉네임</Label>
-        <p className="text-xs text-muted-foreground">
-          친구가 보는 이름이에요.{" "}
-          <Link
-            href="/friends"
-            prefetch
-            className="font-medium text-primary underline-offset-4 hover:underline"
-          >
-            {friendsCount > 0 ? `친구 ${friendsCount}명 →` : "친구 추가 →"}
-          </Link>
-        </p>
+        <p className="text-xs text-muted-foreground">친구가 보는 이름이에요.</p>
         <Input
           id="nickname"
           name="nickname"

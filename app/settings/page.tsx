@@ -17,7 +17,7 @@ export default async function SettingsPage() {
   const userId = claimsData?.claims?.sub ?? null;
   if (!userId) redirect("/login");
 
-  const [settingsResult, profileResult, friendsCount] = await Promise.all([
+  const [settingsResult, profileResult] = await Promise.all([
     supabase
       .from("user_settings")
       .select("monthly_income, cycle_mode, cycle_start_day")
@@ -28,10 +28,6 @@ export default async function SettingsPage() {
       .select("display_name")
       .eq("id", userId)
       .maybeSingle(),
-    supabase
-      .from("friendships")
-      .select("id", { count: "exact", head: true })
-      .eq("viewer_id", userId),
   ]);
 
   if (settingsResult.error) {
@@ -80,7 +76,6 @@ export default async function SettingsPage() {
         initialNickname={profileResult.data?.display_name ?? ""}
         initialCycleMode={settingsResult.data?.cycle_mode ?? "calendar"}
         initialCycleStartDay={Number(settingsResult.data?.cycle_start_day ?? 1)}
-        friendsCount={friendsCount.count ?? 0}
       />
 
       <div className="mt-10 border-t border-border pt-6">

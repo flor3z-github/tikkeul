@@ -57,7 +57,7 @@ export function FriendCodeRedeemForm() {
           }
           maxLength={FRIEND_CODE_LENGTH}
           placeholder="예: A3F9K2"
-          className="h-14 rounded-2xl text-center font-mono text-[24px] font-bold tracking-[0.3em]"
+          className="h-14 rounded-2xl text-center text-[24px] font-bold tracking-[0.3em]"
         />
       </div>
       <Button

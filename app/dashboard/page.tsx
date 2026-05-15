@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Settings } from "lucide-react";
 
 import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-watcher";
-import { FriendSwitcher } from "@/components/dashboard/friend-switcher";
+import { DashboardFriendHeader } from "@/components/dashboard/dashboard-friend-header";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { LinkPending } from "@/components/layout/nav-progress";
@@ -50,15 +50,37 @@ export default async function DashboardPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Friends: who can this viewer see?
-  const { data: friendshipRows } = await supabase
+  // Friends: outbound rows where this user is the owner. Carries the
+  // visibility flags too so the omnibox/visibility sheet can render without
+  // an extra round trip. Auto-mutual pairing means viewer_id here is the
+  // same set the inbound query (viewer_id = user.id) would return.
+  const { data: outboundRows } = await supabase
     .from("friendships")
-    .select("owner_id")
-    .eq("viewer_id", user.id);
+    .select(
+      "viewer_id, show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+    )
+    .eq("owner_id", user.id);
 
-  const friendIds = (friendshipRows ?? [])
-    .map((row) => row.owner_id)
-    .filter((id): id is string => Boolean(id) && id !== user.id);
+  const outboundByFriendId = new Map<
+    string,
+    {
+      show_spending_total: boolean;
+      show_spending_items: boolean;
+      show_fixed_total: boolean;
+      show_fixed_items: boolean;
+    }
+  >();
+  for (const row of outboundRows ?? []) {
+    if (!row.viewer_id || row.viewer_id === user.id) continue;
+    outboundByFriendId.set(row.viewer_id, {
+      show_spending_total: row.show_spending_total,
+      show_spending_items: row.show_spending_items,
+      show_fixed_total: row.show_fixed_total,
+      show_fixed_items: row.show_fixed_items,
+    });
+  }
+
+  const friendIds = Array.from(outboundByFriendId.keys());
 
   // Validate viewing param: must be a friend the viewer is paired with.
   const requestedViewing =
@@ -121,8 +143,30 @@ export default async function DashboardPage({
   const friendOptions = friendIds.map((id) => ({
     userId: id,
     nickname: nicknameById.get(id) ?? "이름 없음",
+    perms: outboundByFriendId.get(id) ?? {
+      show_spending_total: true,
+      show_spending_items: true,
+      show_fixed_total: false,
+      show_fixed_items: false,
+    },
   }));
   const viewingNickname = nicknameById.get(viewingUserId) ?? "";
+
+  // Prefetch the user's currently active friend code (if any) so the
+  // omnibox-nested AddFriendSheet can show it without an extra round trip.
+  const nowIso = new Date().toISOString();
+  const { data: activeCodeRow } = await supabase
+    .from("friend_codes")
+    .select("code, expires_at")
+    .eq("owner_id", user.id)
+    .is("used_at", null)
+    .gt("expires_at", nowIso)
+    .order("expires_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const initialActiveCode = activeCodeRow
+    ? { code: activeCodeRow.code, expiresAt: activeCodeRow.expires_at }
+    : null;
 
   // Friend-mode visibility perms. Defaults to fully-open in own mode so the
   // existing UI is unchanged. In friend mode we fetch the outbound row from
@@ -165,11 +209,14 @@ export default async function DashboardPage({
         title="티끌"
         trailing={
           <div className="flex items-center gap-1">
-            <FriendSwitcher
+            <DashboardFriendHeader
+              isOwn={isOwn}
               selfNickname={selfNickname}
               viewerUserId={user.id}
               friends={friendOptions}
               currentViewingUserId={viewingUserId}
+              viewingNickname={viewingNickname}
+              initialActiveCode={initialActiveCode}
             />
             <Link
               href="/settings"
@@ -187,23 +234,7 @@ export default async function DashboardPage({
         }
       />
 
-      {!isOwn ? (
-        <>
-          <FriendRealtimeWatcher friendUserId={viewingUserId} />
-          <div className="mb-4 flex items-center justify-between rounded-2xl bg-muted px-4 py-3 text-sm">
-            <span className="text-muted-foreground">
-              {viewingNickname}님의 티끌을 보고 있어요
-            </span>
-            <Link
-              href="/dashboard"
-              prefetch
-              className="text-xs font-semibold underline-offset-4 hover:underline"
-            >
-              내 티끌로
-            </Link>
-          </div>
-        </>
-      ) : null}
+      {!isOwn ? <FriendRealtimeWatcher friendUserId={viewingUserId} /> : null}
 
       {allHiddenInFriendMode ? (
         <div className="mt-6 rounded-2xl border border-dashed border-border bg-card/50 px-4 py-8 text-center text-sm text-muted-foreground">
