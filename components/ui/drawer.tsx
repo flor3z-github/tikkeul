@@ -7,6 +7,13 @@ import { XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+// IMPORTANT: every bottom sheet in this app must go through DrawerContent so
+// the iOS keyboard handling below applies. Do NOT call vaul's
+// `<DrawerPrimitive.Content>` directly from feature code, and do NOT collapse
+// the keyboard handling into something simpler "because it looks redundant" —
+// each piece below addresses a specific quirk that bit us in production. See
+// the comments in DrawerContent for the failure modes each line prevents.
+
 function Drawer({
   repositionInputs = false,
   ...props
@@ -75,10 +82,20 @@ function DrawerContent({
 }: DrawerContentProps) {
   const contentRef = React.useRef<HTMLDivElement>(null);
 
-  // Manually lift the sheet above the iOS software keyboard. We read the
-  // keyboard height from visualViewport on every resize and write it to
-  // `bottom`. Idempotent (no toggling state), so it can't drift across the
-  // multi-fire animation window where vaul's logic loses track.
+  // iOS soft-keyboard handling. Two iOS Safari quirks combine to break a
+  // naive bottom sheet:
+  //   1) When the keyboard opens, visualViewport shrinks but the layout
+  //      viewport stays the same. A `position: fixed; bottom: 0` sheet ends
+  //      up *behind* the keyboard.
+  //   2) When a TEXT input gets focus, iOS scrolls the layout viewport so
+  //      the input is centered in the visualViewport. `vv.offsetTop` becomes
+  //      positive. A sheet pinned only by layout-viewport coordinates slides
+  //      *above* the visible area and the user sees only an empty gap.
+  // The fix anchors the sheet's bottom edge to the visualViewport's bottom
+  // edge (`window.innerHeight - vv.offsetTop - vv.height`) and clamps its
+  // max-height to `vv.height` so it never grows above the visible area.
+  // Numeric keypads tend not to scroll the layout viewport (only quirk #1
+  // applies); QWERTY/text keyboards trigger both. We must handle both.
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     const vv = window.visualViewport;
@@ -87,21 +104,65 @@ function DrawerContent({
     function applyKeyboardInset() {
       const el = contentRef.current;
       if (!el) return;
-      // While the drawer is animating out, the keyboard is also dismissing.
+      // While the drawer is animating out the keyboard is also dismissing.
       // If we let `bottom` snap from the lifted value back to 0 mid-close,
       // it jumps and the slide-down animation looks broken. Hold the value
       // until vaul unmounts the content.
       if (el.getAttribute("data-state") === "closed") return;
-      const inset = Math.max(0, window.innerHeight - vv!.height);
-      // The URL bar shrinks visualViewport by ~50–80px; treat anything below
-      // 100px as not-a-keyboard so we don't snap during scroll.
-      el.style.bottom = inset > 100 ? `${inset}px` : "";
+
+      // Treat any meaningful shrink of the visualViewport as a keyboard
+      // event. Mobile Safari's URL bar also shrinks vv by ~50–80px when the
+      // user scrolls the page; ignore anything below 100px so we don't snap
+      // the sheet during ordinary scroll.
+      const keyboardHeight = window.innerHeight - vv!.height;
+      if (keyboardHeight > 100) {
+        // Anchor to the visualViewport bottom (NOT the layout viewport
+        // bottom — see quirk #2 above). `vv.offsetTop` is the layout-Y of
+        // the visualViewport's top; the bottom of the visualViewport in
+        // layout coords is `vv.offsetTop + vv.height`, and the inset from
+        // the layout bottom is therefore the value below.
+        const bottomInset = Math.max(
+          0,
+          window.innerHeight - vv!.offsetTop - vv!.height,
+        );
+        el.style.bottom = `${bottomInset}px`;
+        // Clamp to visible viewport — without this a tall sheet's top edge
+        // slides above the visualViewport and the user can't reach the
+        // first form field.
+        el.style.maxHeight = `${vv!.height}px`;
+        // Sheets use `pb-8` for breathing room above the safe-area inset
+        // when there's no keyboard. With the keyboard up the sheet sits
+        // flush against the keyboard, so that bottom padding becomes a
+        // visible gap of empty space — drop it.
+        el.style.paddingBottom = "0px";
+      } else {
+        el.style.bottom = "";
+        el.style.maxHeight = "";
+        el.style.paddingBottom = "";
+      }
     }
 
     vv.addEventListener("resize", applyKeyboardInset);
+    // iOS scrolls the visualViewport (not just resizes it) when focusing a
+    // text input — without the scroll listener the sheet doesn't follow.
+    vv.addEventListener("scroll", applyKeyboardInset);
     applyKeyboardInset();
+    // Re-measure across focus changes — iOS sometimes fires the keyboard
+    // resize before our content has reflowed, and switching from a numeric
+    // input to a text input changes both vv.height and vv.offsetTop in one
+    // gesture without a discrete blur+focus cycle.
+    const onFocus = () => {
+      requestAnimationFrame(applyKeyboardInset);
+      setTimeout(applyKeyboardInset, 100);
+      setTimeout(applyKeyboardInset, 300);
+    };
+    window.addEventListener("focusin", onFocus);
+    window.addEventListener("focusout", onFocus);
     return () => {
       vv.removeEventListener("resize", applyKeyboardInset);
+      vv.removeEventListener("scroll", applyKeyboardInset);
+      window.removeEventListener("focusin", onFocus);
+      window.removeEventListener("focusout", onFocus);
     };
   }, []);
 
@@ -125,7 +186,14 @@ function DrawerContent({
             className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/30"
           />
         ) : null}
-        {children}
+        {/* Inner scroller: the sheet itself is a fixed-height flex column
+            (clamped by maxHeight when the keyboard is open), so any body
+            content longer than that has to scroll inside this wrapper or
+            it would overflow the viewport. min-h-0 is required for a
+            flex child to actually shrink and let overflow take effect. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+          {children}
+        </div>
         {showCloseButton ? (
           <DrawerPrimitive.Close asChild>
             <Button

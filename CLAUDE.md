@@ -27,6 +27,8 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=   # the sb_publishable_... key, NOT the legacy anon key
 ```
 
+Optional: `NEXT_DEV_ALLOWED_ORIGINS=192.168.x.y` (comma-separated) to whitelist a LAN origin for `next dev`. Without it, hitting the dev server from a phone on the same Wi-Fi gets a `Blocked cross-origin request to /_next/webpack-hmr` warning and React Refresh fails to hydrate, so client `onClick` handlers never attach. The value is read by `next.config.ts` and ignored in prod.
+
 ### Database
 
 Migrations live in `supabase/migrations/` (run in order via the Supabase SQL Editor). `0001_init.sql` creates schema + the `auth.users → profiles` trigger; `0002_rls.sql` enables RLS and per-user policies; `0003_seed_categories.sql` seeds shared categories with `user_id IS NULL`; `0004_remove_subscription_category.sql` drops 구독 (treated as fixed expense).
@@ -95,6 +97,7 @@ Per the Supabase SSR guide notes in `server.ts`/`middleware.ts`: do **not** hois
 - `components/layout/header.tsx` is `<PageHeader eyebrow title trailing />`. The dashboard `trailing` slot mounts `<FriendSwitcher>` (sheet to swap viewer between self and friends) and the settings link, in that order.
 - The add-transaction FAB (`components/transactions/add-transaction-button.tsx`) is positioned with `bottom: max(24px, env(safe-area-inset-bottom))` — preserve that when modifying.
 - **Add and edit reuse the same `TransactionFormDialog`** (`components/transactions/transaction-form-dialog.tsx`) keyed by `initial?.id`. Pass `initial` to enter edit mode; omit it to create. Don't fork a second form.
+- **Bottom sheets must use `DrawerContent`** from `components/ui/drawer.tsx` — never call vaul's `<DrawerPrimitive.Content>` directly and never replicate sheet markup elsewhere. The shared component owns iOS soft-keyboard handling (visualViewport `resize`+`scroll` listeners, `bottom`/`maxHeight`/`paddingBottom` rewrites, an inner `overflow-y-auto` scroller) for two specific Mobile Safari quirks: visualViewport shrinking behind the keyboard, and the layout viewport scrolling on text-input focus. Each line in `DrawerContent` addresses a real failure mode — read the comments before "simplifying."
 
 ## DESIGN.md is the visual contract
 
