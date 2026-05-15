@@ -232,18 +232,30 @@ export type Database = {
           id: string;
           owner_id: string;
           viewer_id: string;
+          show_spending_total: boolean;
+          show_spending_items: boolean;
+          show_fixed_total: boolean;
+          show_fixed_items: boolean;
           created_at: string;
         };
         Insert: {
           id?: string;
           owner_id: string;
           viewer_id: string;
+          show_spending_total?: boolean;
+          show_spending_items?: boolean;
+          show_fixed_total?: boolean;
+          show_fixed_items?: boolean;
           created_at?: string;
         };
         Update: {
           id?: string;
           owner_id?: string;
           viewer_id?: string;
+          show_spending_total?: boolean;
+          show_spending_items?: boolean;
+          show_fixed_total?: boolean;
+          show_fixed_items?: boolean;
           created_at?: string;
         };
         Relationships: [];
@@ -279,6 +291,14 @@ export type Database = {
           cycle_mode: "calendar" | "income_day";
           cycle_start_day: number;
         }[];
+      };
+      get_friend_spending_total: {
+        Args: { target: string; start_iso: string; end_iso: string };
+        Returns: number;
+      };
+      get_friend_fixed_total: {
+        Args: { target: string };
+        Returns: number;
       };
     };
     Enums: { [_ in never]: never };

@@ -124,6 +124,96 @@ export async function redeemFriendCodeAction(
   return { ok: false, error: "유효하지 않은 코드예요." };
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const VISIBILITY_KEYS = [
+  "show_spending_total",
+  "show_spending_items",
+  "show_fixed_total",
+  "show_fixed_items",
+] as const;
+
+type FriendVisibilityKey = (typeof VISIBILITY_KEYS)[number];
+type FriendVisibilityPatch = Partial<Record<FriendVisibilityKey, boolean>>;
+
+export async function updateFriendVisibilityAction(
+  friendUserId: string,
+  patch: FriendVisibilityPatch,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!friendUserId || !UUID_RE.test(friendUserId) || friendUserId === user.id) {
+    return { ok: false, error: "잘못된 요청이에요." };
+  }
+
+  // Whitelist patch keys: only the four boolean flags are settable. Anything
+  // else passed in is ignored so a tampered client can't update arbitrary
+  // columns via this action.
+  const safePatch: FriendVisibilityPatch = {};
+  for (const key of VISIBILITY_KEYS) {
+    const value = patch[key];
+    if (typeof value === "boolean") safePatch[key] = value;
+  }
+  if (Object.keys(safePatch).length === 0) {
+    return { ok: false, error: "변경할 항목이 없어요." };
+  }
+
+  // Outbound direction: this user is the owner, friend is the viewer.
+  // Idempotent path: read the current row first. If every key in the patch
+  // already matches the stored value, return ok without issuing an UPDATE or
+  // triggering revalidation. This avoids spurious DB writes and unnecessary
+  // route revalidations on rapid identical clicks or duplicate requests.
+  const { data: current, error: readError } = await supabase
+    .from("friendships")
+    .select(
+      "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+    )
+    .eq("owner_id", user.id)
+    .eq("viewer_id", friendUserId)
+    .maybeSingle();
+
+  if (readError) {
+    return { ok: false, error: readError.message };
+  }
+  if (!current) {
+    // Either the friendship doesn't exist or RLS filtered the SELECT out.
+    return { ok: false, error: "권한 설정을 저장하지 못했어요." };
+  }
+
+  const isNoop = (Object.entries(safePatch) as [FriendVisibilityKey, boolean][])
+    .every(([key, value]) => current[key] === value);
+
+  if (isNoop) {
+    return { ok: true };
+  }
+
+  const { data, error } = await supabase
+    .from("friendships")
+    .update(safePatch)
+    .eq("owner_id", user.id)
+    .eq("viewer_id", friendUserId)
+    .select("id");
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  if (!data || data.length === 0) {
+    // Defense-in-depth: a SELECT succeeded above but the UPDATE returned 0
+    // rows. Indicates the UPDATE RLS policy is missing or the row vanished
+    // between the two queries.
+    return { ok: false, error: "권한 설정을 저장하지 못했어요." };
+  }
+
+  revalidatePath("/friends");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 export async function removeFriendAction(
   friendUserId: string,
 ): Promise<ActionResult> {

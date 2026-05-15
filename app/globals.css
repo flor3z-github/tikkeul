@@ -147,6 +147,64 @@
   }
 }
 
+/* SavedFlash: container "pop" with overshoot. The 60% keyframe goes slightly
+   past the resting scale so the icon feels like it lands, not just appears. */
+@keyframes saved-flash-pop {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* SavedFlash exit: mirror of saved-flash-pop. The 40% keyframe lifts past
+   the resting scale (anticipation) before shrinking to nothing - visually
+   symmetric with the entry overshoot. */
+@keyframes saved-flash-pop-out {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+}
+
+/* SavedFlash: animated check stroke. Combined with pathLength={1} on the path
+   so any path geometry tweaks don't break the dasharray math. */
+@keyframes saved-flash-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* SavedFlash exit: erase the check stroke in the SAME direction it was
+   drawn (front to back along the path). A negative dashoffset slides the
+   dash pattern forward, so the start of the path enters the gap region
+   first while the end stays visible until last. Using a positive offset
+   would reverse the direction (back-to-front erase), which felt wrong
+   compared to the entry. */
+@keyframes saved-flash-undraw {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
 @layer utilities {
   .skeleton {
     position: relative;

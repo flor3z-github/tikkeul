@@ -16,6 +16,11 @@ type SpendingCalendarSectionProps = {
   cycleMode: CycleMode;
   cycleLabel: string;
   targetUserId?: string;
+  /**
+   * Friend-mode flag: render only when the owner has granted the spending
+   * items perm. Ignored in own mode. Defaults to true for backward compat.
+   */
+  showSpendingItems?: boolean;
 };
 
 export async function SpendingCalendarSection({
@@ -28,6 +33,7 @@ export async function SpendingCalendarSection({
   cycleMode,
   cycleLabel,
   targetUserId,
+  showSpendingItems = true,
 }: SpendingCalendarSectionProps) {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
@@ -35,6 +41,9 @@ export async function SpendingCalendarSection({
   if (!viewerId) redirect("/login");
   const userId = targetUserId ?? viewerId;
   const isOwn = userId === viewerId;
+
+  // Friend mode without items perm: hide entire calendar + day list block.
+  if (!isOwn && !showSpendingItems) return null;
 
   // Categories are shared seeds + the viewer's own customs; pass viewerId so
   // we still surface the viewer's category list (which is what they can pick

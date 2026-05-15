@@ -52,22 +52,18 @@ export function SpendingSummary({
   cycleLabel,
 }: SpendingSummaryProps) {
   if (friendView) {
+    // Friend mode: render only the total spending number. The surrounding
+    // page composition (presence/absence of the fixed-expense block, etc.)
+    // tells the user what's hidden — no explicit disclaimer needed here.
     return (
       <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
-        <CardContent className="space-y-4 p-6">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              총 소비
-            </p>
-            <p
-              key={cycleLabel}
-              className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
-            >
-              {formatNumber(monthlyExpense)} 원
-            </p>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            친구의 수입·고정지출·예산은 비공개예요.
+        <CardContent className="space-y-2 p-6">
+          <p className="text-sm font-medium text-muted-foreground">총 소비</p>
+          <p
+            key={cycleLabel}
+            className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
+          >
+            {formatNumber(monthlyExpense)} 원
           </p>
         </CardContent>
       </Card>
