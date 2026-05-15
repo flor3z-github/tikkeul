@@ -1,17 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { activateCatalogPlanAction } from "@/app/fixed-expenses/actions";
+import { BottomSheet, useStableNonNull } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
 import { SplitChips } from "./split-chips";
@@ -27,41 +21,28 @@ export function CatalogToggleSheet({
   onOpenChange,
 }: CatalogToggleSheetProps) {
   const open = plan !== null;
-  // Keep the last non-null plan so the body stays mounted while vaul plays
+  // Retain the last non-null plan so the body stays mounted while vaul plays
   // the close animation. Otherwise the body unmounts the moment the parent
   // clears `plan`, the drawer collapses to header height mid-close, and the
   // slide-down looks like an instant cut.
-  const lastPlanRef = useRef(plan);
-  if (plan) lastPlanRef.current = plan;
-  const displayPlan = plan ?? lastPlanRef.current;
+  const displayPlan = useStableNonNull(plan);
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
-        <DrawerHeader className="border-b border-border px-0 pb-4 pt-2 text-left">
-          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
-            {displayPlan ? displayPlan.service_name : "고정지출 추가"}
-          </DrawerTitle>
-          {displayPlan?.plan_name ? (
-            <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
-              {displayPlan.plan_name}
-            </p>
-          ) : null}
-          <DrawerDescription className="sr-only">
-            {displayPlan ? planLabel(displayPlan) : "고정지출 추가"} 금액을
-            확인하고 사용 중인 고정지출로 추가합니다.
-          </DrawerDescription>
-        </DrawerHeader>
-
-        {displayPlan ? (
-          <CatalogToggleBody
-            key={displayPlan.id}
-            plan={displayPlan}
-            onSaved={() => onOpenChange(false)}
-          />
-        ) : null}
-      </DrawerContent>
-    </Drawer>
+    <BottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={displayPlan ? displayPlan.service_name : "고정지출 추가"}
+      subtitle={displayPlan?.plan_name ?? undefined}
+      description={`${displayPlan ? planLabel(displayPlan) : "고정지출 추가"} 금액을 확인하고 사용 중인 고정지출로 추가합니다.`}
+    >
+      {displayPlan ? (
+        <CatalogToggleBody
+          key={displayPlan.id}
+          plan={displayPlan}
+          onSaved={() => onOpenChange(false)}
+        />
+      ) : null}
+    </BottomSheet>
   );
 }
 

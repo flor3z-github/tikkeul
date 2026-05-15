@@ -1,5 +1,11 @@
 "use client";
 
+// Note: project standard bottom-sheet wrapper is `BottomSheet`
+// (Drawer/vaul-based, see components/ui/bottom-sheet.tsx). This component
+// uses Radix `Sheet` with `side="bottom"`; no clear semantic justification
+// was found in the implementation. Consider consolidating onto `BottomSheet`
+// in a follow-up.
+
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";

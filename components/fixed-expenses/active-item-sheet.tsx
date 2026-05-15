@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -8,14 +8,8 @@ import {
   deactivateFixedExpenseAction,
   updateFixedExpenseAction,
 } from "@/app/fixed-expenses/actions";
+import { BottomSheet, useStableNonNull } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
 import { SplitChips } from "./split-chips";
@@ -37,54 +31,36 @@ export function ActiveItemSheet({
   onOpenChange,
 }: ActiveItemSheetProps) {
   const open = item !== null;
-  // Keep the last non-null item so the body stays mounted while vaul plays
-  // the close animation. Without this the body unmounts the moment the
-  // parent clears `item`, the drawer collapses to header height mid-close,
-  // and the slide-down looks like an instant cut.
-  const lastItemRef = useRef(item);
-  const lastPlanRef = useRef(plan);
-  const lastCatalogDefaultAmountRef = useRef(catalogDefaultAmount);
-  if (item) {
-    lastItemRef.current = item;
-    lastPlanRef.current = plan;
-    lastCatalogDefaultAmountRef.current = catalogDefaultAmount;
-  }
-  const displayItem = item ?? lastItemRef.current;
-  const displayPlan = item ? plan : lastPlanRef.current;
-  const displayCatalogDefaultAmount = item
-    ? catalogDefaultAmount
-    : lastCatalogDefaultAmountRef.current;
+  // Retain the last non-null payload for each independent input so the body
+  // stays mounted while vaul plays the close animation. Without these the
+  // body unmounts the moment the parent clears `item`, the drawer collapses
+  // to header height mid-close, and the slide-down looks like an instant cut.
+  const displayItem = useStableNonNull(item);
+  const displayPlan = useStableNonNull(plan);
+  const displayCatalogDefaultAmount = useStableNonNull(catalogDefaultAmount);
+
+  const title = displayPlan
+    ? displayPlan.service_name
+    : (displayItem?.name ?? "고정지출");
+  const subtitle = displayPlan?.plan_name ?? displayItem?.plan_name ?? undefined;
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
-        <DrawerHeader className="border-b border-border px-0 pb-4 pt-2 text-left">
-          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em] leading-tight">
-            {displayPlan
-              ? displayPlan.service_name
-              : (displayItem?.name ?? "고정지출")}
-          </DrawerTitle>
-          {(displayPlan?.plan_name ?? displayItem?.plan_name) ? (
-            <p className="mt-1 text-[13px] font-medium text-muted-foreground leading-tight">
-              {displayPlan?.plan_name ?? displayItem?.plan_name}
-            </p>
-          ) : null}
-          <DrawerDescription className="sr-only">
-            {displayItem?.name ?? "고정지출"} 금액 수정, 해제, 또는 삭제를
-            선택합니다.
-          </DrawerDescription>
-        </DrawerHeader>
-
-        {displayItem ? (
-          <ActiveItemBody
-            key={displayItem.id}
-            item={displayItem}
-            catalogDefaultAmount={displayCatalogDefaultAmount}
-            onDone={() => onOpenChange(false)}
-          />
-        ) : null}
-      </DrawerContent>
-    </Drawer>
+    <BottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      subtitle={subtitle}
+      description={`${displayItem?.name ?? "고정지출"} 금액 수정, 해제, 또는 삭제를 선택합니다.`}
+    >
+      {displayItem ? (
+        <ActiveItemBody
+          key={displayItem.id}
+          item={displayItem}
+          catalogDefaultAmount={displayCatalogDefaultAmount}
+          onDone={() => onOpenChange(false)}
+        />
+      ) : null}
+    </BottomSheet>
   );
 }
 

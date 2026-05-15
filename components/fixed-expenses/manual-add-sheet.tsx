@@ -4,14 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { addManualFixedExpenseAction } from "@/app/fixed-expenses/actions";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
 import { parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
 
@@ -22,24 +16,18 @@ type ManualAddSheetProps = {
 
 export function ManualAddSheet({ open, onOpenChange }: ManualAddSheetProps) {
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
-        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
-          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em]">
-            직접 추가
-          </DrawerTitle>
-          <DrawerDescription className="sr-only">
-            카탈로그에 없는 고정지출 항목을 직접 입력합니다.
-          </DrawerDescription>
-        </DrawerHeader>
-
-        {/* Body renders unconditionally so the drawer keeps its full height
-            during vaul's close animation. Radix Presence unmounts the whole
-            DrawerContent (and this body with it) after the animation ends,
-            so each reopen gets a freshly mounted body with empty state. */}
-        <ManualAddBody onSaved={() => onOpenChange(false)} />
-      </DrawerContent>
-    </Drawer>
+    <BottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="직접 추가"
+      description="카탈로그에 없는 고정지출 항목을 직접 입력합니다."
+    >
+      {/* Body renders unconditionally so the drawer keeps its full height
+          during vaul's close animation. Radix Presence unmounts the whole
+          DrawerContent (and this body with it) after the animation ends,
+          so each reopen gets a freshly mounted body with empty state. */}
+      <ManualAddBody onSaved={() => onOpenChange(false)} />
+    </BottomSheet>
   );
 }
 

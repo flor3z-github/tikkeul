@@ -32,20 +32,9 @@ import {
  * animates the close — without it the body unmounts the instant the consumer
  * clears its state and the sheet collapses mid-animation.
  *
- * --- MIGRATION TODO -------------------------------------------------------
- * The following sheets still apply the project drawer tokens by hand. Move
- * them to <BottomSheet> in a follow-up. Out of scope for the per-friend
- * visibility feature PR; tracked as a separate task.
- *   - components/fixed-expenses/manual-add-sheet.tsx     (open boolean)
- *   - components/fixed-expenses/active-item-sheet.tsx    (value-based; uses lastItemRef pattern)
- *   - components/fixed-expenses/catalog-toggle-sheet.tsx (value-based; uses lastPlanRef pattern)
- *   - components/dashboard/friend-switcher.tsx           (uses `Sheet`, not `Drawer` — verify whether to consolidate)
- *
- * When migrating, replace each `<Drawer><DrawerContent>...` block with
- * `<BottomSheet open={...} onOpenChange={...} title={...} description={...}>`
- * and move any visible hint copy into the body (DrawerDescription stays
- * sr-only for a11y, matching the existing pattern in manual-add-sheet.tsx).
- * --------------------------------------------------------------------------
+ * Note: components/dashboard/friend-switcher.tsx uses Radix `Sheet` rather
+ * than vaul `Drawer`. Consolidating it onto `BottomSheet` is tracked at the
+ * top of that file; out of scope for this wrapper's migration history.
  */
 
 type BottomSheetProps = {
@@ -53,6 +42,12 @@ type BottomSheetProps = {
   onOpenChange: (open: boolean) => void;
   /** Visible title; sized with the project's standard sheet-title typography. */
   title: string;
+  /**
+   * Optional small muted line rendered under the title. Use for secondary
+   * identifiers like a plan name under a service name (catalog/active-item
+   * sheets). Omit for sheets with a single title line.
+   */
+  subtitle?: string;
   /** Screen-reader-only description; required for Radix a11y. */
   description: string;
   /** Pass `true` to render vaul's built-in close (X) button at top-right. */
@@ -64,6 +59,7 @@ export function BottomSheet({
   open,
   onOpenChange,
   title,
+  subtitle,
   description,
   showCloseButton = false,
   children,
@@ -75,9 +71,14 @@ export function BottomSheet({
         className="border-white/10 bg-background px-5 pb-8 pt-2"
       >
         <DrawerHeader className="px-0 pb-3 pt-2 text-left">
-          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em]">
+          <DrawerTitle className="text-[22px] font-bold leading-tight tracking-[-0.025em]">
             {title}
           </DrawerTitle>
+          {subtitle ? (
+            <p className="mt-1 text-[13px] font-medium leading-tight text-muted-foreground">
+              {subtitle}
+            </p>
+          ) : null}
           <DrawerDescription className="sr-only">
             {description}
           </DrawerDescription>
