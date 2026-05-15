@@ -84,10 +84,7 @@ function AlertDialogFooter({
   return (
     <div
       data-slot="alert-dialog-footer"
-      className={cn(
-        "flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end",
-        className
-      )}
+      className={cn("mt-2 flex flex-col-reverse gap-2", className)}
       {...props}
     />
   )
@@ -100,7 +97,10 @@ function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn("text-base leading-none font-semibold", className)}
+      className={cn(
+        "text-[18px] font-bold leading-tight tracking-[-0.025em]",
+        className,
+      )}
       {...props}
     />
   )
@@ -113,11 +113,20 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-[14px] text-muted-foreground", className)}
       {...props}
     />
   )
 }
+
+// Project-wide AlertDialog button sizing: full-width pill CTAs stacked
+// vertically (destructive action on top via flex-col-reverse from
+// AlertDialogFooter). ALERT_BUTTON_BASE comes AFTER any consumer className
+// so it wins tailwind-merge conflicts — without that, consumers passing
+// `buttonVariants({variant: "destructive"})` would re-introduce the cva
+// default size (h-8 px-2.5) and shrink the button.
+const ALERT_BUTTON_BASE =
+  "h-12 w-full rounded-full text-[15px] font-semibold"
 
 type CloseProps = AlertDialogPrimitive.Close.Props
 
@@ -125,7 +134,11 @@ function AlertDialogAction({ className, ...props }: CloseProps) {
   return (
     <AlertDialogPrimitive.Close
       data-slot="alert-dialog-action"
-      className={cn(buttonVariants({ variant: "default" }), className)}
+      className={cn(
+        buttonVariants({ variant: "default" }),
+        className,
+        ALERT_BUTTON_BASE,
+      )}
       {...props}
     />
   )
@@ -135,7 +148,11 @@ function AlertDialogCancel({ className, ...props }: CloseProps) {
   return (
     <AlertDialogPrimitive.Close
       data-slot="alert-dialog-cancel"
-      className={cn(buttonVariants({ variant: "outline" }), className)}
+      className={cn(
+        buttonVariants({ variant: "outline" }),
+        className,
+        ALERT_BUTTON_BASE,
+      )}
       {...props}
     />
   )

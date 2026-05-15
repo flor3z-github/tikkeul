@@ -34,6 +34,24 @@ function Drawer({
   );
 }
 
+// Nested drawer root. Used when a sheet must open from inside another open
+// sheet (e.g. an "add friend" sheet on top of the omnibox sheet). vaul's
+// NestedRoot handles parent scaling/restoration automatically; pair it with
+// the same `DrawerContent` so the iOS keyboard handler applies at the inner
+// level too.
+function DrawerNestedRoot({
+  repositionInputs = false,
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.NestedRoot>) {
+  return (
+    <DrawerPrimitive.NestedRoot
+      data-slot="drawer-nested"
+      repositionInputs={repositionInputs}
+      {...props}
+    />
+  );
+}
+
 function DrawerTrigger({
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Trigger>) {
@@ -265,6 +283,7 @@ function DrawerDescription({
 
 export {
   Drawer,
+  DrawerNestedRoot,
   DrawerTrigger,
   DrawerPortal,
   DrawerClose,

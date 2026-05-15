@@ -584,7 +584,10 @@ function TransactionFormBody({
                     handleDelete();
                   }}
                   disabled={deletePending}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className={cn(
+                    buttonVariants({ variant: "destructive" }),
+                    "h-12 w-full rounded-full text-[15px] font-semibold",
+                  )}
                 >
                   {deletePending ? "삭제 중…" : "삭제"}
                 </AlertDialogAction>

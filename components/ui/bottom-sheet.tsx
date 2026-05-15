@@ -7,6 +7,7 @@ import {
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
+  DrawerNestedRoot,
   DrawerTitle,
 } from "@/components/ui/drawer";
 
@@ -31,10 +32,6 @@ import {
  * pair this with `useStableNonNull` so the body keeps rendering while vaul
  * animates the close — without it the body unmounts the instant the consumer
  * clears its state and the sheet collapses mid-animation.
- *
- * Note: components/dashboard/friend-switcher.tsx uses Radix `Sheet` rather
- * than vaul `Drawer`. Consolidating it onto `BottomSheet` is tracked at the
- * top of that file; out of scope for this wrapper's migration history.
  */
 
 type BottomSheetProps = {
@@ -86,6 +83,51 @@ export function BottomSheet({
         {children}
       </DrawerContent>
     </Drawer>
+  );
+}
+
+/**
+ * Nested bottom sheet — opens on top of an already-open `BottomSheet`.
+ *
+ * vaul's `Drawer.NestedRoot` automatically scales/restores the parent sheet
+ * when this one opens or closes. We must use the same `DrawerContent` so the
+ * iOS keyboard handler runs at the inner level too — never reach for
+ * `DrawerPrimitive.Content` directly.
+ *
+ * Use this for flows like "open the friends omnibox sheet, then open an
+ * 'add friend' sheet on top of it" without unmounting the parent body.
+ */
+export function BottomSheetNested({
+  open,
+  onOpenChange,
+  title,
+  subtitle,
+  description,
+  showCloseButton = false,
+  children,
+}: BottomSheetProps) {
+  return (
+    <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
+      <DrawerContent
+        showCloseButton={showCloseButton}
+        className="border-white/10 bg-background px-5 pb-8 pt-2"
+      >
+        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
+          <DrawerTitle className="text-[22px] font-bold leading-tight tracking-[-0.025em]">
+            {title}
+          </DrawerTitle>
+          {subtitle ? (
+            <p className="mt-1 text-[13px] font-medium leading-tight text-muted-foreground">
+              {subtitle}
+            </p>
+          ) : null}
+          <DrawerDescription className="sr-only">
+            {description}
+          </DrawerDescription>
+        </DrawerHeader>
+        {children}
+      </DrawerContent>
+    </DrawerNestedRoot>
   );
 }
 
