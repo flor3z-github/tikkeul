@@ -44,6 +44,10 @@ export function FriendSwitcher({
     } else {
       params.delete("viewing");
     }
+    // Reset the cycle on every viewer switch so the dashboard always opens
+    // on the current month/cycle rather than carrying the previous viewer's.
+    params.delete("ym");
+    params.delete("day");
     const qs = params.toString();
     router.push(qs ? `/dashboard?${qs}` : "/dashboard");
     setOpen(false);

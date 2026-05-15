@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import { useLinkPendingStatus } from "@/components/layout/nav-progress";
@@ -14,11 +15,20 @@ type MonthSwitcherProps = {
 export function MonthSwitcher({ ym, cycleLabel }: MonthSwitcherProps) {
   const prev = addMonths(ym, -1);
   const next = addMonths(ym, +1);
+  const searchParams = useSearchParams();
+  const viewing = searchParams?.get("viewing");
+
+  const buildHref = (targetYm: string) => {
+    const params = new URLSearchParams();
+    params.set("ym", targetYm);
+    if (viewing) params.set("viewing", viewing);
+    return `/dashboard?${params.toString()}`;
+  };
 
   return (
     <div className="flex items-center justify-center gap-1 pb-1">
       <Link
-        href={`/dashboard?ym=${prev}`}
+        href={buildHref(prev)}
         prefetch
         aria-label="이전 주기"
         className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 ease-out hover:bg-muted active:scale-[0.96]"
@@ -29,7 +39,7 @@ export function MonthSwitcher({ ym, cycleLabel }: MonthSwitcherProps) {
         {cycleLabel}
       </span>
       <Link
-        href={`/dashboard?ym=${next}`}
+        href={buildHref(next)}
         prefetch
         aria-label="다음 주기"
         className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 ease-out hover:bg-muted active:scale-[0.96]"
