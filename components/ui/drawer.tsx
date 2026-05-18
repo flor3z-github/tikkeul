@@ -201,7 +201,7 @@ function DrawerContent({
         {showHandle ? (
           <div
             aria-hidden
-            className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/30"
+            className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30"
           />
         ) : null}
         {/* Inner scroller: the sheet itself is a fixed-height flex column
