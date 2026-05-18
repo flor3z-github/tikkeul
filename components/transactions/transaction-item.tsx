@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { CategoryIcon } from "@/lib/utils/category-icon";
-import { formatKoreanTime, hasExplicitTime } from "@/lib/utils/date";
 import { formatKRW } from "@/lib/utils/money";
 import {
   TransactionFormDialog,
@@ -60,11 +59,6 @@ export function TransactionItem({
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] font-medium">
           {transaction.category_name ?? "기타"}
-          {hasExplicitTime(transaction.spent_at) ? (
-            <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">
-              {formatKoreanTime(transaction.spent_at)}
-            </span>
-          ) : null}
         </p>
         {transaction.memo ? (
           <p className="truncate text-[12px] text-muted-foreground">

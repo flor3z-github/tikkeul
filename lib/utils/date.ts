@@ -74,28 +74,3 @@ export function formatKoreanMonth(input: string | Date): string {
   return koreanMonthFormatter.format(date);
 }
 
-const koreanTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-export function formatKoreanTime(input: string | Date): string {
-  const date = typeof input === "string" ? new Date(input) : input;
-  if (Number.isNaN(date.getTime())) return "";
-  return koreanTimeFormatter.format(date);
-}
-
-/**
- * Legacy transactions were stored as exact UTC midnight (date-only). Use the
- * UTC components rather than local — local 00:00 KST would be 15:00 UTC of the
- * previous day, so testing UTC midnight is a stable "no time recorded" marker.
- */
-export function hasExplicitTime(iso: string): boolean {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
-  return (
-    d.getUTCHours() !== 0 ||
-    d.getUTCMinutes() !== 0 ||
-    d.getUTCSeconds() !== 0
-  );
-}
