@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import {
   NavProgressBar,
@@ -73,6 +74,7 @@ export default function RootLayout({
         </NavProgressProvider>
         <Toaster richColors closeButton position="top-center" />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
