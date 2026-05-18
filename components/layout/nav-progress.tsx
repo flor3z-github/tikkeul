@@ -93,6 +93,21 @@ export function useLinkPendingStatus() {
   return status.pending;
 }
 
+/**
+ * For callers that drive navigation imperatively (e.g. router.push wrapped
+ * in useTransition) instead of via <Link>. Bridges the external pending
+ * boolean into the shared NavProgress context so the top bar still fires.
+ */
+export function useExternalNavPending(pending: boolean) {
+  const ctx = useNavProgress();
+
+  useEffect(() => {
+    if (!ctx || !pending) return;
+    ctx.increment();
+    return () => ctx.decrement();
+  }, [ctx, pending]);
+}
+
 export function NavProgressBar() {
   const ctx = useNavProgress();
   const pending = (ctx?.pendingCount ?? 0) > 0;

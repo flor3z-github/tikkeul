@@ -1,8 +1,21 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ArrowLeftCircle, Check, Plus, Search, Settings2 } from "lucide-react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
+import {
+  ArrowLeftCircle,
+  Check,
+  Loader2,
+  Plus,
+  Search,
+  Settings2,
+} from "lucide-react";
 
 import {
   AddFriendSheet,
@@ -13,6 +26,7 @@ import {
   type FriendVisibilityTarget,
 } from "@/components/friends/friend-visibility-sheet";
 import type { FriendVisibilityPerms } from "@/components/friends/friend-visibility-toggles";
+import { useExternalNavPending } from "@/components/layout/nav-progress";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -51,6 +65,19 @@ export function FriendOmniboxSheet({
   const [visibilityTarget, setVisibilityTarget] =
     useState<FriendVisibilityTarget | null>(null);
 
+  // Track navigation state so we can show a spinner on the clicked row and
+  // keep the sheet open until the RSC payload lands. Without this the user
+  // taps a friend, the sheet vanishes, and the dashboard stays frozen on the
+  // previous viewer until the network finishes — there's no feedback that
+  // the tap was even registered.
+  const [isPending, startTransition] = useTransition();
+  const [pendingTarget, setPendingTarget] = useState<string | null>(null);
+
+  // Push the pending bit into the shared NavProgress context so the
+  // top-of-page progress bar fires too. Belt and suspenders with the row
+  // spinner in case the sheet closes faster than the user can register it.
+  useExternalNavPending(isPending);
+
   const isOwnView = currentViewingUserId === viewerUserId;
 
   // Warm the RSC payload for every friend (and the self view) the moment the
@@ -73,7 +100,18 @@ export function FriendOmniboxSheet({
     }
   }, [open, friends, viewerUserId, router, searchParams]);
 
+  // Close the sheet once the server commits the navigation — i.e. the page
+  // re-renders with `currentViewingUserId` matching the row the user tapped.
+  // Spinner display uses isPending which flips back to false at the same
+  // time, so pendingTarget itself doesn't need to be reset.
+  useEffect(() => {
+    if (pendingTarget !== null && currentViewingUserId === pendingTarget) {
+      onOpenChange(false);
+    }
+  }, [currentViewingUserId, pendingTarget, onOpenChange]);
+
   function navigate(viewing: string) {
+    if (isPending) return;
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     if (viewing && viewing !== viewerUserId) {
       params.set("viewing", viewing);
@@ -85,8 +123,12 @@ export function FriendOmniboxSheet({
     params.delete("ym");
     params.delete("day");
     const qs = params.toString();
-    router.push(qs ? `/dashboard?${qs}` : "/dashboard");
-    onOpenChange(false);
+    const href = qs ? `/dashboard?${qs}` : "/dashboard";
+
+    setPendingTarget(viewing);
+    startTransition(() => {
+      router.push(href);
+    });
   }
 
   const filteredFriends = useMemo(() => {
@@ -126,6 +168,8 @@ export function FriendOmniboxSheet({
             nickname={selfNickname}
             selected={isOwnView}
             isFriendMode={!isOwnView}
+            pending={isPending && pendingTarget === viewerUserId}
+            disabled={isPending}
             onClick={() => navigate(viewerUserId)}
           />
 
@@ -141,6 +185,8 @@ export function FriendOmniboxSheet({
                 key={f.userId}
                 friend={f}
                 selected={f.userId === currentViewingUserId}
+                pending={isPending && pendingTarget === f.userId}
+                disabled={isPending}
                 onSelect={() => navigate(f.userId)}
                 onOpenVisibility={() => setVisibilityTarget(f)}
               />
@@ -178,11 +224,15 @@ function SelfRow({
   nickname,
   selected,
   isFriendMode,
+  pending,
+  disabled,
   onClick,
 }: {
   nickname: string;
   selected: boolean;
   isFriendMode: boolean;
+  pending: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
@@ -190,9 +240,12 @@ function SelfRow({
       <button
         type="button"
         onClick={onClick}
+        disabled={disabled}
+        aria-busy={pending}
         className={cn(
           "flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors",
           selected ? "bg-secondary" : "hover:bg-muted",
+          disabled && !pending && "opacity-50",
         )}
       >
         <span className="flex min-w-0 items-center gap-2 text-[15px] font-medium">
@@ -201,7 +254,12 @@ function SelfRow({
             (나)
           </span>
         </span>
-        {selected ? (
+        {pending ? (
+          <Loader2
+            className="size-4 animate-spin text-muted-foreground"
+            aria-hidden
+          />
+        ) : selected ? (
           <Check className="size-4 text-muted-foreground" aria-hidden />
         ) : isFriendMode ? (
           <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary">
@@ -217,11 +275,15 @@ function SelfRow({
 function FriendRow({
   friend,
   selected,
+  pending,
+  disabled,
   onSelect,
   onOpenVisibility,
 }: {
   friend: FriendOption;
   selected: boolean;
+  pending: boolean;
+  disabled: boolean;
   onSelect: () => void;
   onOpenVisibility: () => void;
 }) {
@@ -230,23 +292,35 @@ function FriendRow({
       <button
         type="button"
         onClick={onSelect}
+        disabled={disabled}
+        aria-busy={pending}
         className={cn(
           "flex flex-1 items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors",
           selected ? "bg-secondary" : "hover:bg-muted",
+          disabled && !pending && "opacity-50",
         )}
       >
         <span className="truncate text-[15px] font-medium">
           {friend.nickname}
         </span>
-        {selected ? (
+        {pending ? (
+          <Loader2
+            className="size-4 animate-spin text-muted-foreground"
+            aria-hidden
+          />
+        ) : selected ? (
           <Check className="size-4 text-muted-foreground" aria-hidden />
         ) : null}
       </button>
       <button
         type="button"
         onClick={onOpenVisibility}
+        disabled={disabled}
+        className={cn(
+          "inline-flex items-center justify-center rounded-2xl px-3 text-muted-foreground hover:bg-muted",
+          disabled && "opacity-50",
+        )}
         aria-label={`${friend.nickname} 노출 항목 설정`}
-        className="inline-flex items-center justify-center rounded-2xl px-3 text-muted-foreground hover:bg-muted"
       >
         <Settings2 className="size-4" />
       </button>
