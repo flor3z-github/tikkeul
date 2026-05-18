@@ -72,7 +72,7 @@ export default function RootLayout({
           <NavProgressBar />
           <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
         </NavProgressProvider>
-        <Toaster richColors closeButton position="top-center" />
+        <Toaster richColors position="top-center" />
         <Analytics />
         <SpeedInsights />
       </body>
