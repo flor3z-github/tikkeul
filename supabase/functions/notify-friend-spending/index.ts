@@ -133,9 +133,12 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
   const nickname = (senderProfile?.display_name ?? "").trim() || "친구";
 
+  // iOS Safari Web Push always appends a "from <manifest.name>" line, so
+  // keeping title="티끌" produced visible duplication. Put the sender's
+  // nickname in the title slot to use that prominent first line meaningfully.
   const body = JSON.stringify({
-    title: "티끌",
-    body: `${nickname}님이 소비를 추가했어요`,
+    title: nickname,
+    body: "소비를 추가했어요",
     url: `/dashboard?viewing=${senderId}`,
     tag: `friend-spend-${senderId}`,
   });
