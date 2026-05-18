@@ -1,12 +1,11 @@
-import { redirect } from "next/navigation";
-
 import { CalendarDayPanel } from "@/components/dashboard/calendar-day-panel";
-import { createClient } from "@/lib/supabase/server";
 import { getCategories } from "@/lib/queries/categories";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
 import type { CycleMode } from "@/lib/utils/calendar";
 
 type SpendingCalendarSectionProps = {
+  /** Viewer id resolved by the page from JWT claims — no auth call here. */
+  viewerId: string;
   ym: string;
   initialDay: string;
   startIso: string;
@@ -16,6 +15,10 @@ type SpendingCalendarSectionProps = {
   cycleMode: CycleMode;
   cycleLabel: string;
   targetUserId?: string;
+  /** Own-mode user_settings prefetched by the page. Ignored in friend mode. */
+  ownSettings?: { hasSettings: boolean; monthlyIncome: number };
+  /** Own-mode fixed-expense total prefetched by the page. Ignored in friend mode. */
+  ownFixedExpense?: number;
   /**
    * Friend-mode flag: render only when the owner has granted the spending
    * items perm. Ignored in own mode. Defaults to true for backward compat.
@@ -24,6 +27,7 @@ type SpendingCalendarSectionProps = {
 };
 
 export async function SpendingCalendarSection({
+  viewerId,
   ym,
   initialDay,
   startIso,
@@ -33,12 +37,10 @@ export async function SpendingCalendarSection({
   cycleMode,
   cycleLabel,
   targetUserId,
+  ownSettings,
+  ownFixedExpense,
   showSpendingItems = true,
 }: SpendingCalendarSectionProps) {
-  const supabase = await createClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const viewerId = claimsData?.claims?.sub ?? null;
-  if (!viewerId) redirect("/login");
   const userId = targetUserId ?? viewerId;
   const isOwn = userId === viewerId;
 
@@ -49,31 +51,14 @@ export async function SpendingCalendarSection({
   // we still surface the viewer's category list (which is what they can pick
   // when adding their own transactions). For friend-view mode this is unused
   // because the calendar is read-only, but the prop is still required.
-  const [monthlyResult, categoriesResult, settingsResult, fixedResult] =
-    await Promise.all([
-      getMonthlyTransactions(userId, startIso, endIso),
-      getCategories(viewerId),
-      isOwn
-        ? supabase
-            .from("user_settings")
-            .select("monthly_income")
-            .eq("user_id", userId)
-            .maybeSingle()
-        : Promise.resolve({
-            data: null,
-            error: null as null | { message: string },
-          }),
-      isOwn
-        ? supabase
-            .from("fixed_expenses")
-            .select("amount")
-            .eq("user_id", userId)
-            .eq("is_active", true)
-        : Promise.resolve({
-            data: [],
-            error: null as null | { message: string },
-          }),
-    ]);
+  //
+  // user_settings + fixed_expenses are prefetched by the page (own mode only).
+  // monthly transactions go through React `cache()` so this overlaps with the
+  // summary section's call.
+  const [monthlyResult, categoriesResult] = await Promise.all([
+    getMonthlyTransactions(userId, startIso, endIso),
+    getCategories(viewerId),
+  ]);
 
   if (!monthlyResult.ok) {
     return (
@@ -93,11 +78,8 @@ export async function SpendingCalendarSection({
     );
   }
 
-  const monthlyIncome = Number(settingsResult.data?.monthly_income ?? 0);
-  const fixedExpense = (fixedResult.data ?? []).reduce(
-    (sum, row) => sum + Number(row.amount ?? 0),
-    0,
-  );
+  const monthlyIncome = isOwn ? (ownSettings?.monthlyIncome ?? 0) : 0;
+  const fixedExpense = isOwn ? (ownFixedExpense ?? 0) : 0;
   const availableBudget = Math.max(0, monthlyIncome - fixedExpense);
 
   return (

@@ -22,11 +22,11 @@ import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
 import { SpendingCalendarSection } from "./_sections/spending-calendar-section";
 import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
 
-// Kept until Next 16 PPR is stable enough to enable. To migrate:
-//   1) remove this line
-//   2) add: export const experimental_ppr = true
-//   3) set experimental.ppr = "incremental" in next.config.ts
-export const dynamic = "force-dynamic";
+// PPR is enabled globally via `cacheComponents: true` in next.config.ts; no
+// per-route opt-in needed in Next 16. The dashboard's loading.tsx provides
+// the static shell that Next prerenders and serves from CDN edge while the
+// dynamic body streams in. Per-Suspense fallbacks inside the page (Summary
+// / Calendar skeletons) still apply once the body starts streaming.
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,21 +45,42 @@ export default async function DashboardPage({
   const sp = await searchParams;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Use getClaims (local JWKS verify, no Auth API RTT) instead of getUser.
+  // Middleware already verified the JWT via the same mechanism — RLS still
+  // fences every query, so we don't lose authorization safety.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const viewerId = claimsData?.claims?.sub ?? null;
+  if (!viewerId) redirect("/login");
 
-  // Friends: outbound rows where this user is the owner. Carries the
-  // visibility flags too so the omnibox/visibility sheet can render without
-  // an extra round trip. Auto-mutual pairing means viewer_id here is the
-  // same set the inbound query (viewer_id = user.id) would return.
-  const { data: outboundRows } = await supabase
-    .from("friendships")
-    .select(
-      "viewer_id, show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
-    )
-    .eq("owner_id", user.id);
+  // Round 1: independent queries fired in parallel. We need `friendships`
+  // (to know friend ids before validating the `viewing` param) and we
+  // opportunistically prefetch the self user_settings + active friend code
+  // here too — the network cost overlaps with the friendships query.
+  const nowIso = new Date().toISOString();
+  const [outboundRowsRes, ownSettingsRes, activeCodeRowRes] = await Promise.all(
+    [
+      supabase
+        .from("friendships")
+        .select(
+          "viewer_id, show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+        )
+        .eq("owner_id", viewerId),
+      supabase
+        .from("user_settings")
+        .select("cycle_mode, cycle_start_day, monthly_income")
+        .eq("user_id", viewerId)
+        .maybeSingle(),
+      supabase
+        .from("friend_codes")
+        .select("code, expires_at")
+        .eq("owner_id", viewerId)
+        .is("used_at", null)
+        .gt("expires_at", nowIso)
+        .order("expires_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ],
+  );
 
   const outboundByFriendId = new Map<
     string,
@@ -70,8 +91,8 @@ export default async function DashboardPage({
       show_fixed_items: boolean;
     }
   >();
-  for (const row of outboundRows ?? []) {
-    if (!row.viewer_id || row.viewer_id === user.id) continue;
+  for (const row of outboundRowsRes.data ?? []) {
+    if (!row.viewer_id || row.viewer_id === viewerId) continue;
     outboundByFriendId.set(row.viewer_id, {
       show_spending_total: row.show_spending_total,
       show_spending_items: row.show_spending_items,
@@ -88,31 +109,66 @@ export default async function DashboardPage({
   const viewingUserId =
     requestedViewing && friendIds.includes(requestedViewing)
       ? requestedViewing
-      : user.id;
-  const isOwn = viewingUserId === user.id;
+      : viewerId;
+  const isOwn = viewingUserId === viewerId;
 
-  // Fetch the *viewing* user's budget cycle so the dashboard aligns with how
-  // that person tracks spending. For self, read user_settings directly; for a
-  // friend, use the get_user_cycle RPC which gates access by friendship and
-  // never exposes monthly_income.
+  // Round 2: queries that need either round-1 results or the resolved
+  // viewingUserId. All independent — fired in parallel. Friend-only queries
+  // are stubbed in own mode so the array shape stays stable.
+  const profileTargets = Array.from(new Set([viewerId, ...friendIds]));
+  const [profileRowsRes, friendCycleRes, permsRowRes, ownFixedRes] =
+    await Promise.all([
+      profileTargets.length > 0
+        ? supabase
+            .from("profiles")
+            .select("id, display_name")
+            .in("id", profileTargets)
+        : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
+      !isOwn
+        ? supabase.rpc("get_user_cycle", { target: viewingUserId })
+        : Promise.resolve({ data: null }),
+      !isOwn
+        ? supabase
+            .from("friendships")
+            .select(
+              "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+            )
+            .eq("owner_id", viewingUserId)
+            .eq("viewer_id", viewerId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      isOwn
+        ? supabase
+            .from("fixed_expenses")
+            .select("amount")
+            .eq("user_id", viewerId)
+            .eq("is_active", true)
+        : Promise.resolve({ data: [] as { amount: number }[] }),
+    ]);
+
+  // Resolve cycle: own → from user_settings; friend → from get_user_cycle.
   let cycle: CycleSettings = DEFAULT_CYCLE;
+  let ownSettings: { hasSettings: boolean; monthlyIncome: number } = {
+    hasSettings: false,
+    monthlyIncome: 0,
+  };
   if (isOwn) {
-    const { data: ownCycle } = await supabase
-      .from("user_settings")
-      .select("cycle_mode, cycle_start_day")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (ownCycle) {
+    const ownRow = ownSettingsRes.data;
+    if (ownRow) {
       cycle = {
-        mode: ownCycle.cycle_mode,
-        startDay: Number(ownCycle.cycle_start_day ?? 1),
+        mode: ownRow.cycle_mode,
+        startDay: Number(ownRow.cycle_start_day ?? 1),
+      };
+      ownSettings = {
+        hasSettings: true,
+        monthlyIncome: Number(ownRow.monthly_income ?? 0),
       };
     }
   } else {
-    const { data: friendCycleRows } = await supabase.rpc("get_user_cycle", {
-      target: viewingUserId,
-    });
-    const row = (friendCycleRows ?? [])[0];
+    const row = ((friendCycleRes.data ?? []) as Array<{
+      cycle_mode: "calendar" | "income_day";
+      cycle_start_day: number | null;
+    }>)[0];
     if (row) {
       cycle = {
         mode: row.cycle_mode,
@@ -126,20 +182,13 @@ export default async function DashboardPage({
   const startIso = cycleStart.toISOString();
   const endIso = cycleEnd.toISOString();
 
-  // Profile lookups for the switcher + banner.
-  const profileTargets = Array.from(new Set([user.id, ...friendIds]));
-  const { data: profileRows } =
-    profileTargets.length > 0
-      ? await supabase
-          .from("profiles")
-          .select("id, display_name")
-          .in("id", profileTargets)
-      : { data: [] };
-
   const nicknameById = new Map<string, string>(
-    (profileRows ?? []).map((row) => [row.id, row.display_name ?? "이름 없음"]),
+    (profileRowsRes.data ?? []).map((row) => [
+      row.id,
+      row.display_name ?? "이름 없음",
+    ]),
   );
-  const selfNickname = nicknameById.get(user.id) ?? "나";
+  const selfNickname = nicknameById.get(viewerId) ?? "나";
   const friendOptions = friendIds.map((id) => ({
     userId: id,
     nickname: nicknameById.get(id) ?? "이름 없음",
@@ -152,26 +201,21 @@ export default async function DashboardPage({
   }));
   const viewingNickname = nicknameById.get(viewingUserId) ?? "";
 
-  // Prefetch the user's currently active friend code (if any) so the
-  // omnibox-nested AddFriendSheet can show it without an extra round trip.
-  const nowIso = new Date().toISOString();
-  const { data: activeCodeRow } = await supabase
-    .from("friend_codes")
-    .select("code, expires_at")
-    .eq("owner_id", user.id)
-    .is("used_at", null)
-    .gt("expires_at", nowIso)
-    .order("expires_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const activeCodeRow = activeCodeRowRes.data;
   const initialActiveCode = activeCodeRow
     ? { code: activeCodeRow.code, expiresAt: activeCodeRow.expires_at }
     : null;
 
-  // Friend-mode visibility perms. Defaults to fully-open in own mode so the
-  // existing UI is unchanged. In friend mode we fetch the outbound row from
-  // the owner's perspective (owner_id = viewingUserId, viewer_id = me) and
-  // fail closed: a missing row or nullish columns => visibility off.
+  // Own-mode fixed-expense total, hoisted from sections so both Summary and
+  // Calendar receive the same prefetched number.
+  const ownFixedExpense = (ownFixedRes.data ?? []).reduce(
+    (sum, row) => sum + Number(row.amount ?? 0),
+    0,
+  );
+
+  // Friend-mode visibility perms. In own mode the owner has full visibility.
+  // Friend mode fails closed: missing row or nullish columns => visibility off.
+  const permsRow = permsRowRes.data;
   const perms = isOwn
     ? {
         spendingTotal: true,
@@ -179,22 +223,12 @@ export default async function DashboardPage({
         fixedTotal: true,
         fixedItems: true,
       }
-    : await (async () => {
-        const { data: permsRow } = await supabase
-          .from("friendships")
-          .select(
-            "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
-          )
-          .eq("owner_id", viewingUserId)
-          .eq("viewer_id", user.id)
-          .maybeSingle();
-        return {
-          spendingTotal: permsRow?.show_spending_total ?? false,
-          spendingItems: permsRow?.show_spending_items ?? false,
-          fixedTotal: permsRow?.show_fixed_total ?? false,
-          fixedItems: permsRow?.show_fixed_items ?? false,
-        };
-      })();
+    : {
+        spendingTotal: permsRow?.show_spending_total ?? false,
+        spendingItems: permsRow?.show_spending_items ?? false,
+        fixedTotal: permsRow?.show_fixed_total ?? false,
+        fixedItems: permsRow?.show_fixed_items ?? false,
+      };
 
   const allHiddenInFriendMode =
     !isOwn &&
@@ -212,7 +246,7 @@ export default async function DashboardPage({
             <DashboardFriendHeader
               isOwn={isOwn}
               selfNickname={selfNickname}
-              viewerUserId={user.id}
+              viewerUserId={viewerId}
               friends={friendOptions}
               currentViewingUserId={viewingUserId}
               viewingNickname={viewingNickname}
@@ -244,10 +278,13 @@ export default async function DashboardPage({
         <>
           <Suspense fallback={<SpendingSummarySkeleton />}>
             <SpendingSummarySection
+              viewerId={viewerId}
               startIso={startIso}
               endIso={endIso}
               cycleLabel={cycleLabel}
               targetUserId={undefined}
+              ownSettings={ownSettings}
+              ownFixedExpense={ownFixedExpense}
               showSpendingTotal={perms.spendingTotal}
               showSpendingItems={perms.spendingItems}
             />
@@ -255,6 +292,7 @@ export default async function DashboardPage({
 
           <Suspense fallback={<SpendingCalendarSkeleton />}>
             <SpendingCalendarSection
+              viewerId={viewerId}
               ym={ym}
               initialDay={day}
               startIso={startIso}
@@ -264,6 +302,8 @@ export default async function DashboardPage({
               cycleMode={cycleMode}
               cycleLabel={cycleLabel}
               targetUserId={undefined}
+              ownSettings={ownSettings}
+              ownFixedExpense={ownFixedExpense}
               showSpendingItems={perms.spendingItems}
             />
           </Suspense>
@@ -286,6 +326,7 @@ export default async function DashboardPage({
                   </h2>
                   <Suspense fallback={<SpendingSummarySkeleton />}>
                     <SpendingSummarySection
+                      viewerId={viewerId}
                       startIso={startIso}
                       endIso={endIso}
                       cycleLabel={cycleLabel}
@@ -296,6 +337,7 @@ export default async function DashboardPage({
                   </Suspense>
                   <Suspense fallback={<SpendingCalendarSkeleton />}>
                     <SpendingCalendarSection
+                      viewerId={viewerId}
                       ym={ym}
                       initialDay={day}
                       startIso={startIso}

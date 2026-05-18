@@ -9,9 +9,6 @@ import { cn } from "@/lib/utils";
 import { FixedExpensesSection } from "./_sections/fixed-expenses-section";
 import { FixedExpensesSkeleton } from "./_sections/fixed-expenses-skeleton";
 
-// Kept until Next 16 PPR is stable enough to enable (see app/dashboard/page.tsx).
-export const dynamic = "force-dynamic";
-
 export default function FixedExpensesPage() {
   return (
     <AppShell withBottomNav>

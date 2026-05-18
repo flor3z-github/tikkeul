@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { ArrowLeftCircle, Check, Plus, Search, Settings2 } from "lucide-react";
 
 import {
@@ -52,6 +52,26 @@ export function FriendOmniboxSheet({
     useState<FriendVisibilityTarget | null>(null);
 
   const isOwnView = currentViewingUserId === viewerUserId;
+
+  // Warm the RSC payload for every friend (and the self view) the moment the
+  // sheet opens. By the time the user picks a row, Next has likely already
+  // fetched the React tree for that target — `router.push` becomes a swap
+  // instead of a full Korea→US→Korea round-trip stack.
+  useEffect(() => {
+    if (!open) return;
+    const baseParams = new URLSearchParams(searchParams?.toString() ?? "");
+    baseParams.delete("ym");
+    baseParams.delete("day");
+
+    const targets = [viewerUserId, ...friends.map((f) => f.userId)];
+    for (const target of targets) {
+      const p = new URLSearchParams(baseParams);
+      if (target === viewerUserId) p.delete("viewing");
+      else p.set("viewing", target);
+      const qs = p.toString();
+      router.prefetch(qs ? `/dashboard?${qs}` : "/dashboard");
+    }
+  }, [open, friends, viewerUserId, router, searchParams]);
 
   function navigate(viewing: string) {
     const params = new URLSearchParams(searchParams?.toString() ?? "");

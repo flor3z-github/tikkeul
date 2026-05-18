@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
     process.env.NEXT_DEV_ALLOWED_ORIGINS?.split(",")
       .map((s) => s.trim())
       .filter(Boolean) ?? [],
+  // Cache Components (Next 16): subsumes the old `experimental.ppr` flag.
+  // Routes become dynamic by default; anything tracked outside a Suspense
+  // boundary requires explicit caching via the `use cache` directive. For
+  // each Suspense boundary, Next prerenders the fallback as a static shell
+  // and streams the dynamic content in — this is what gives the dashboard
+  // a near-instant first paint even though the page itself is dynamic.
+  cacheComponents: true,
   experimental: {
     // Reuse the router cache when navigating back to a recently-visited tab.
     // `dynamic` applies when <Link> has no explicit prefetch prop; `static`

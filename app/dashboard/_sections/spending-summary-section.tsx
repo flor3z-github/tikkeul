@@ -1,14 +1,21 @@
-import { redirect } from "next/navigation";
-
 import { SpendingSummary } from "@/components/dashboard/spending-summary";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
 import { createClient } from "@/lib/supabase/server";
 
 type SpendingSummarySectionProps = {
+  /** Viewer id resolved by the page from JWT claims — no auth call here. */
+  viewerId: string;
   startIso: string;
   endIso: string;
   cycleLabel: string;
   targetUserId?: string;
+  /**
+   * Own-mode user_settings prefetched by the page so this section can skip a
+   * round-trip. Ignored in friend mode.
+   */
+  ownSettings?: { hasSettings: boolean; monthlyIncome: number };
+  /** Own-mode fixed-expense total, prefetched by the page. Ignored in friend mode. */
+  ownFixedExpense?: number;
   /**
    * Friend-mode visibility flags. Ignored in own mode (where the data owner
    * always has full visibility of their own data).
@@ -18,17 +25,16 @@ type SpendingSummarySectionProps = {
 };
 
 export async function SpendingSummarySection({
+  viewerId,
   startIso,
   endIso,
   cycleLabel,
   targetUserId,
+  ownSettings,
+  ownFixedExpense,
   showSpendingTotal = true,
   showSpendingItems = true,
 }: SpendingSummarySectionProps) {
-  const supabase = await createClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const viewerId = claimsData?.claims?.sub ?? null;
-  if (!viewerId) redirect("/login");
   const userId = targetUserId ?? viewerId;
   const isOwn = userId === viewerId;
 
@@ -71,6 +77,7 @@ export async function SpendingSummarySection({
     }
 
     // Total-only path (items OFF, total ON).
+    const supabase = await createClient();
     const { data: totalData, error: totalError } = await supabase.rpc(
       "get_friend_spending_total",
       { target: userId, start_iso: startIso, end_iso: endIso },
@@ -95,50 +102,26 @@ export async function SpendingSummarySection({
     );
   }
 
-  // Own mode: existing path — fetch income + fixed + transactions.
-  const [settingsResult, fixedResult, monthlyResult] = await Promise.all([
-    supabase
-      .from("user_settings")
-      .select("monthly_income")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("fixed_expenses")
-      .select("amount")
-      .eq("user_id", userId)
-      .eq("is_active", true),
-    getMonthlyTransactions(userId, startIso, endIso),
-  ]);
+  // Own mode: user_settings + fixed_expenses are prefetched by the page.
+  // Only transactions remain — single round-trip (dedup'd by React cache()
+  // when SpendingCalendarSection asks for the same range).
+  const monthlyResult = await getMonthlyTransactions(userId, startIso, endIso);
 
-  const dataError =
-    settingsResult.error ??
-    fixedResult.error ??
-    (!monthlyResult.ok ? new Error(monthlyResult.error) : null);
-
-  if (dataError) {
+  if (!monthlyResult.ok) {
     return (
       <div className="space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
         <p className="font-semibold">{`${cycleLabel} 요약을 불러오지 못했어요`}</p>
-        <p className="break-all text-xs opacity-80">{dataError.message}</p>
+        <p className="break-all text-xs opacity-80">{monthlyResult.error}</p>
       </div>
     );
   }
 
-  const settings = settingsResult.data;
-  const hasSettings = settings !== null && settings !== undefined;
-  const monthlyIncome = Number(settings?.monthly_income ?? 0);
-  const fixedExpense = (fixedResult.data ?? []).reduce(
-    (sum, row) => sum + Number(row.amount ?? 0),
-    0,
-  );
-  const monthlyExpense = monthlyResult.ok ? monthlyResult.monthlyTotal : 0;
-
   return (
     <SpendingSummary
-      monthlyIncome={monthlyIncome}
-      fixedExpense={fixedExpense}
-      monthlyExpense={monthlyExpense}
-      hasSettings={hasSettings}
+      monthlyIncome={ownSettings?.monthlyIncome ?? 0}
+      fixedExpense={ownFixedExpense ?? 0}
+      monthlyExpense={monthlyResult.monthlyTotal}
+      hasSettings={ownSettings?.hasSettings ?? false}
       friendView={false}
       cycleLabel={cycleLabel}
     />

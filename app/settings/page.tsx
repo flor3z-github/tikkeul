@@ -9,8 +9,6 @@ import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
-
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
