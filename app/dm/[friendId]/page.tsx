@@ -190,7 +190,7 @@ export default async function DmThreadPage({
 
   return (
     <AppShell>
-      <div className="sticky top-0 z-20 -mx-5 border-b border-border/40 bg-background/95 px-5 pb-3 pt-4 backdrop-blur">
+      <div className="sticky top-0 z-20 -mx-5 mb-6 border-b border-border/40 bg-background/95 px-5 pb-4 pt-4 backdrop-blur">
         <PageHeader
           eyebrow={
             <Link
