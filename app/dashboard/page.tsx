@@ -5,6 +5,7 @@ import { Settings } from "lucide-react";
 import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-watcher";
 import { DashboardFriendHeader } from "@/components/dashboard/dashboard-friend-header";
 import { AppShell } from "@/components/layout/app-shell";
+import { PwaInstallBanner } from "@/components/pwa/install-banner";
 import { PageHeader } from "@/components/layout/header";
 import { LinkPending } from "@/components/layout/nav-progress";
 import { buttonVariants } from "@/components/ui/button";
@@ -289,6 +290,8 @@ export default async function DashboardPage({
               showSpendingItems={perms.spendingItems}
             />
           </Suspense>
+
+          <PwaInstallBanner />
 
           <Suspense fallback={<SpendingCalendarSkeleton />}>
             <SpendingCalendarSection
