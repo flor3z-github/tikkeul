@@ -144,7 +144,7 @@ export function DmChat({
   }
 
   return (
-    <div className="flex flex-col gap-3 pb-[calc(env(safe-area-inset-bottom)+96px)]">
+    <div className="flex flex-col gap-3 pb-[calc(env(safe-area-inset-bottom)+104px)]">
       {initialMessages.length === 0 ? (
         <p className="rounded-2xl bg-muted/50 px-4 py-6 text-center text-[13px] text-muted-foreground">
           {friendNickname}님과의 첫 메시지를 남겨보세요.
@@ -165,7 +165,7 @@ export function DmChat({
 
       <form
         onSubmit={handleSubmit}
-        className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md border-t border-border bg-background/95 px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md border-t border-border bg-background/95 px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-3 backdrop-blur"
       >
         {pendingQuote ? (
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2 text-[12px]">
