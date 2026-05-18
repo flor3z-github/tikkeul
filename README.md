@@ -62,8 +62,27 @@ cp .env.local.example .env.local
 |------|------|------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL | `https://xxxxx.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (anon key의 신형) | `sb_publishable_...` |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web Push 공개키 (브라우저 구독용) | `B...` |
+| `VAPID_PRIVATE_KEY` | Web Push 개인키 (서버 서명용, 절대 브라우저 노출 금지) | `...` |
+| `VAPID_SUBJECT` | VAPID 식별 URI (운영자 연락처) | `mailto:lie9730@gmail.com` |
 
-값은 Supabase Dashboard → **Project Settings → API**에서 확인.
+Supabase 값은 Supabase Dashboard → **Project Settings → API**에서 확인.
+
+VAPID 키는 친구 소비 알림(Web Push)용. 한 번만 생성:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+출력된 `Public Key` → `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `Private Key` → `VAPID_PRIVATE_KEY`.
+Edge Function에서도 같은 키가 필요하므로 Supabase secret으로도 등록:
+
+```bash
+supabase secrets set \
+  VAPID_PUBLIC_KEY=... \
+  VAPID_PRIVATE_KEY=... \
+  VAPID_SUBJECT=mailto:lie9730@gmail.com
+```
 
 ### 3. Supabase 마이그레이션 실행
 

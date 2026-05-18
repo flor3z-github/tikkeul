@@ -80,3 +80,108 @@ export async function saveSettingsAction(
   revalidatePath("/friends");
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Friend-spending push notifications
+// ---------------------------------------------------------------------------
+
+type PushSubscriptionPayload = {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent?: string | null;
+};
+
+// Upsert the device's push subscription. Called from the client right after
+// pushManager.subscribe succeeds. endpoint is the natural unique key — if the
+// same device resubscribes we just refresh the keys + last_seen_at.
+export async function registerPushSubscriptionAction(
+  payload: PushSubscriptionPayload,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!payload.endpoint || !payload.p256dh || !payload.auth) {
+    return { ok: false, error: "구독 정보가 올바르지 않아요." };
+  }
+
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    {
+      user_id: user.id,
+      endpoint: payload.endpoint,
+      p256dh: payload.p256dh,
+      auth: payload.auth,
+      user_agent: payload.userAgent ?? null,
+      last_seen_at: new Date().toISOString(),
+    },
+    { onConflict: "endpoint" },
+  );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+// Remove the device's push subscription row. Caller passes the endpoint
+// returned by unsubscribeDevice() — the row may already be gone, so missing
+// rows are not an error.
+export async function unregisterPushSubscriptionAction(
+  endpoint: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!endpoint) {
+    return { ok: false, error: "endpoint가 비어있어요." };
+  }
+
+  const { error } = await supabase
+    .from("push_subscriptions")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("endpoint", endpoint);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+// Flip the friend_spending_notifications flag. The flag is the source of
+// truth for "should the Edge Function send to this user"; subscriptions stay
+// in the table either way so that toggling back on doesn't require a fresh
+// permission prompt.
+export async function setFriendSpendingNotificationsAction(
+  enabled: boolean,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      { user_id: user.id, friend_spending_notifications: enabled },
+      { onConflict: "user_id" },
+    );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/settings");
+  return { ok: true };
+}

@@ -28,6 +28,7 @@ export type Database = {
           monthly_income: number;
           cycle_mode: "calendar" | "income_day";
           cycle_start_day: number;
+          friend_spending_notifications: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -36,6 +37,7 @@ export type Database = {
           monthly_income?: number;
           cycle_mode?: "calendar" | "income_day";
           cycle_start_day?: number;
+          friend_spending_notifications?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -44,6 +46,7 @@ export type Database = {
           monthly_income?: number;
           cycle_mode?: "calendar" | "income_day";
           cycle_start_day?: number;
+          friend_spending_notifications?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -275,6 +278,39 @@ export type Database = {
           id?: number;
           user_id?: string;
           attempted_at?: string;
+        };
+        Relationships: [];
+      };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent: string | null;
+          created_at: string;
+          last_seen_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent?: string | null;
+          created_at?: string;
+          last_seen_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          endpoint?: string;
+          p256dh?: string;
+          auth?: string;
+          user_agent?: string | null;
+          created_at?: string;
+          last_seen_at?: string;
         };
         Relationships: [];
       };
