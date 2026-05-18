@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useOptimistic, useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { Smile, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -9,7 +9,7 @@ import {
   deleteCommentAction,
   toggleReactionAction,
 } from "@/app/dashboard/interactions";
-import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { BottomSheet, BottomSheetNested } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { CategoryIcon } from "@/lib/utils/category-icon";
 import { cn } from "@/lib/utils";
@@ -147,6 +147,7 @@ function InteractionBody({
   const [deleteCommentId, setDeleteCommentId] = useState<string | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
   const [commentText, setCommentText] = useState("");
+  const [reactorsOpen, setReactorsOpen] = useState(false);
 
   // Optimistic reactions: tapping an emoji updates the UI immediately while
   // the server action runs in the background. The reducer mirrors the
@@ -178,6 +179,28 @@ function InteractionBody({
   const grouped = useMemo(
     () => groupReactions(optimisticReactions, viewerId),
     [optimisticReactions, viewerId],
+  );
+
+  // Emoji-keyed reactor list for the nested "반응" drawer. The top row of
+  // the drawer renders one tab per emoji and the bottom shows the nicknames
+  // who tapped the currently selected emoji.
+  const reactorGroups = useMemo(
+    () => groupReactorsByEmoji(optimisticReactions),
+    [optimisticReactions],
+  );
+  const hasAnyReaction = reactorGroups.length > 0;
+  const [selectedReactorEmoji, setSelectedReactorEmoji] = useState<
+    string | null
+  >(null);
+  // Clamp to a still-present emoji: optimistic toggles can remove the active
+  // tab while the drawer is open, in which case fall back to the first group.
+  const activeReactorEmoji =
+    selectedReactorEmoji &&
+    reactorGroups.some((group) => group.emoji === selectedReactorEmoji)
+      ? selectedReactorEmoji
+      : (reactorGroups[0]?.emoji ?? null);
+  const activeReactorGroup = reactorGroups.find(
+    (group) => group.emoji === activeReactorEmoji,
   );
 
   function handleToggleReaction(emoji: string) {
@@ -249,7 +272,7 @@ function InteractionBody({
 
       <section className="space-y-2">
         <p className="text-xs font-medium text-muted-foreground">반응</p>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {EMOJI_CHOICES.map((emoji) => {
             const summary = grouped.get(emoji);
             const mine = summary?.byMe ?? false;
@@ -276,8 +299,71 @@ function InteractionBody({
               </button>
             );
           })}
+          {hasAnyReaction ? (
+            <button
+              type="button"
+              onClick={() => setReactorsOpen(true)}
+              aria-label="반응한 사람 보기"
+              className="flex size-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:bg-muted"
+            >
+              <Smile className="size-4" aria-hidden />
+            </button>
+          ) : null}
         </div>
       </section>
+
+      <BottomSheetNested
+        open={reactorsOpen}
+        onOpenChange={setReactorsOpen}
+        title="반응"
+        description="이 소비에 반응한 사람들이에요."
+      >
+        <div className="space-y-4 pb-2">
+          <div
+            role="tablist"
+            aria-label="이모지 별 반응자"
+            className="flex flex-wrap gap-1.5"
+          >
+            {reactorGroups.map(({ emoji, userIds }) => {
+              const active = emoji === activeReactorEmoji;
+              return (
+                <button
+                  key={emoji}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setSelectedReactorEmoji(emoji)}
+                  className={cn(
+                    "flex h-9 items-center gap-1 rounded-full border px-3 text-[14px] transition-colors",
+                    active
+                      ? "border-primary/50 bg-primary/10 text-primary"
+                      : "border-border bg-card text-foreground hover:bg-muted",
+                  )}
+                >
+                  <span aria-hidden>{emoji}</span>
+                  <span className="text-[12px] font-semibold tabular-nums">
+                    {userIds.length}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <ul className="space-y-1">
+            {activeReactorGroup?.userIds.map((userId) => {
+              const nickname = nicknameById.get(userId) ?? "이름 없음";
+              const isMe = userId === viewerId;
+              return (
+                <li
+                  key={userId}
+                  className="rounded-xl px-3 py-2 text-[14px]"
+                >
+                  {isMe ? `${nickname} (나)` : nickname}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </BottomSheetNested>
 
       <section className="space-y-2">
         <p className="text-xs font-medium text-muted-foreground">
@@ -379,4 +465,23 @@ function groupReactions(rows: TransactionReactionRow[], viewerId: string) {
     grouped.set(row.emoji, current);
   }
   return grouped;
+}
+
+// Emoji-keyed grouping for the reactor drawer's tab row. Sort: reactor count
+// desc, then emoji asc for stable ordering across re-renders. user_ids
+// preserve input order (query returns reactions sorted ascending by
+// created_at).
+function groupReactorsByEmoji(rows: TransactionReactionRow[]) {
+  const map = new Map<string, string[]>();
+  for (const row of rows) {
+    const list = map.get(row.emoji) ?? [];
+    list.push(row.user_id);
+    map.set(row.emoji, list);
+  }
+  return Array.from(map.entries())
+    .map(([emoji, userIds]) => ({ emoji, userIds }))
+    .sort(
+      (a, b) =>
+        b.userIds.length - a.userIds.length || a.emoji.localeCompare(b.emoji),
+    );
 }
