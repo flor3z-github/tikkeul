@@ -1,18 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MessageCircle } from "lucide-react";
+import { useState } from "react";
 
 import {
   TransactionInteractionSheet,
   type InteractionTransaction,
-  type TransactionCommentRow,
-  type TransactionReactionRow,
 } from "@/components/dashboard/transaction-interaction-sheet";
+import {
+  TransactionFormDialog,
+  type TransactionFormCategory,
+  type TransactionFormInitial,
+} from "@/components/transactions/transaction-form-dialog";
 import { CategoryIcon } from "@/lib/utils/category-icon";
 import { formatKRW } from "@/lib/utils/money";
-
-import type { TransactionFormCategory } from "./transaction-form-dialog";
 
 export type TransactionListRow = {
   id: string;
@@ -22,19 +22,18 @@ export type TransactionListRow = {
   category_icon: string | null;
   spent_at: string;
   memo: string | null;
-  reactions: TransactionReactionRow[];
-  comments: TransactionCommentRow[];
 };
 
 type TransactionItemProps = {
   transaction: TransactionListRow;
   categories: TransactionFormCategory[];
-  /** Current viewer's user_id. Used by the interaction sheet for ownership UI. */
-  viewerId: string;
-  /** True when the transaction belongs to the viewer (own dashboard). */
+  /** True when the transaction belongs to the viewer (own dashboard). When
+   *  true, clicking the row opens the edit form directly; the friend-mode
+   *  interaction sheet is skipped entirely. */
   isOwn: boolean;
-  /** display_name lookup for all users in scope (owner + friends). */
-  nicknameById: Map<string, string>;
+  /** Transaction owner's user_id. Used by the sheet's [답장] button to route
+   *  the viewer to the right DM thread in friend mode. */
+  ownerUserId: string;
 };
 
 const ROW_CLASS =
@@ -43,30 +42,10 @@ const ROW_CLASS =
 export function TransactionItem({
   transaction,
   categories,
-  viewerId,
   isOwn,
-  nicknameById,
+  ownerUserId,
 }: TransactionItemProps) {
   const [open, setOpen] = useState(false);
-
-  // Pre-grouped reaction summary for the inline badge — same shape as the
-  // sheet uses, computed once at the row level so we don't render dozens of
-  // empty maps in dense days.
-  const reactionPreview = useMemo(
-    () => previewReactions(transaction.reactions),
-    [transaction.reactions],
-  );
-
-  const commentCount = transaction.comments.length;
-  // Comments arrive sorted ascending by created_at from the query, so the
-  // last element is the most recent. We surface it inline so the row doubles
-  // as a conversation preview without forcing the user to open the sheet.
-  const latestComment =
-    commentCount > 0 ? transaction.comments[commentCount - 1] : null;
-  const latestCommentNickname = latestComment
-    ? (nicknameById.get(latestComment.author_id) ?? "이름 없음")
-    : null;
-  const hasFooter = reactionPreview.length > 0 || commentCount > 0;
 
   const interactionTransaction: InteractionTransaction = {
     id: transaction.id,
@@ -76,8 +55,6 @@ export function TransactionItem({
     category_icon: transaction.category_icon,
     spent_at: transaction.spent_at,
     memo: transaction.memo,
-    reactions: transaction.reactions,
-    comments: transaction.comments,
   };
 
   return (
@@ -108,66 +85,34 @@ export function TransactionItem({
             {formatKRW(Number(transaction.amount))}
           </span>
         </div>
-
-        {hasFooter ? (
-          <div className="mt-1 space-y-1 pl-[52px]">
-            {reactionPreview.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {reactionPreview.map(({ emoji, count }) => (
-                  <span
-                    key={emoji}
-                    className="flex items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-[11px]"
-                  >
-                    <span aria-hidden>{emoji}</span>
-                    <span className="font-semibold tabular-nums">{count}</span>
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {latestComment && latestCommentNickname ? (
-              <div className="flex min-w-0 items-start gap-1 text-[12px] text-muted-foreground">
-                <MessageCircle
-                  className="mt-[3px] size-3 shrink-0"
-                  aria-hidden
-                />
-                <p className="min-w-0 flex-1 truncate">
-                  <span className="font-semibold text-foreground">
-                    {latestCommentNickname}
-                  </span>
-                  <span className="mx-1">·</span>
-                  <span>{latestComment.content}</span>
-                  {commentCount > 1 ? (
-                    <span className="ml-1.5 text-[11px] tabular-nums opacity-60">
-                      +{commentCount - 1}
-                    </span>
-                  ) : null}
-                </p>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </button>
 
-      <TransactionInteractionSheet
-        open={open}
-        onOpenChange={setOpen}
-        transaction={interactionTransaction}
-        viewerId={viewerId}
-        isOwn={isOwn}
-        nicknameById={nicknameById}
-        categories={categories}
-      />
+      {isOwn ? (
+        <TransactionFormDialog
+          open={open}
+          onOpenChange={setOpen}
+          categories={categories}
+          initial={toFormInitial(interactionTransaction)}
+          onSaved={() => setOpen(false)}
+        />
+      ) : (
+        <TransactionInteractionSheet
+          open={open}
+          onOpenChange={setOpen}
+          transaction={interactionTransaction}
+          ownerUserId={ownerUserId}
+        />
+      )}
     </>
   );
 }
 
-function previewReactions(rows: TransactionReactionRow[]) {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    counts.set(row.emoji, (counts.get(row.emoji) ?? 0) + 1);
-  }
-  // Sort by count desc, then by emoji for stable order.
-  return Array.from(counts.entries())
-    .map(([emoji, count]) => ({ emoji, count }))
-    .sort((a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji));
+function toFormInitial(tx: InteractionTransaction): TransactionFormInitial {
+  return {
+    id: tx.id,
+    amount: tx.amount,
+    category_id: tx.category_id,
+    spent_at: tx.spent_at,
+    memo: tx.memo,
+  };
 }

@@ -171,9 +171,9 @@ export async function setFriendSpendingNotificationsAction(
   return updateNotificationFlag("friend_spending_notifications", enabled);
 }
 
-// Flip the transaction_interaction_notifications flag (reactions + comments
-// on my own transactions). Independent from friend_spending_notifications;
-// see migration 0035.
+// Flip the transaction_interaction_notifications flag (reactions on my own
+// transactions + DM messages addressed to me). Independent from
+// friend_spending_notifications; see migration 0035.
 export async function setTransactionInteractionNotificationsAction(
   enabled: boolean,
 ): Promise<FlagResult> {

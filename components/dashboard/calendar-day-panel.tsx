@@ -29,16 +29,16 @@ type CalendarDayPanelProps = {
   transactions: MonthlyTransaction[];
   categories: TransactionFormCategory[];
   availableBudget: number;
-  /** Current viewer's user_id — passed through to the interaction sheet. */
-  viewerId: string;
   /**
    * True when the user is viewing their own dashboard. Controls whether the
    * add-transaction FAB renders and is forwarded to the interaction sheet so
    * the owner sees the "수정" button.
    */
   isOwn: boolean;
-  /** display_name lookup for the owner + all friends in scope. */
-  nicknameById: Map<string, string>;
+  /** Transaction owner's user_id — same as the viewer in own mode, the friend's
+   *  user_id in friend mode. Forwarded to TransactionItem so [답장] in the
+   *  interaction sheet can route to /dm/<ownerUserId>. */
+  ownerUserId: string;
 };
 
 export function CalendarDayPanel({
@@ -51,9 +51,8 @@ export function CalendarDayPanel({
   transactions,
   categories,
   availableBudget,
-  viewerId,
   isOwn,
-  nicknameById,
+  ownerUserId,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
 
@@ -78,8 +77,6 @@ export function CalendarDayPanel({
           category_icon: tx.category_icon,
           spent_at: tx.spent_at,
           memo: tx.memo,
-          reactions: tx.reactions,
-          comments: tx.comments,
         })),
     [transactions, selectedDay],
   );
@@ -128,9 +125,8 @@ export function CalendarDayPanel({
                     <TransactionItem
                       transaction={transaction}
                       categories={categories}
-                      viewerId={viewerId}
                       isOwn={isOwn}
-                      nicknameById={nicknameById}
+                      ownerUserId={ownerUserId}
                     />
                   </li>
                 ))}

@@ -269,7 +269,11 @@ export default async function DashboardPage({
         }
       />
 
-      <FriendRealtimeWatcher ownerUserId={viewingUserId} isOwn={isOwn} />
+      <FriendRealtimeWatcher
+        ownerUserId={viewingUserId}
+        isOwn={isOwn}
+        nicknameById={nicknameById}
+      />
 
       {allHiddenInFriendMode ? (
         <div className="mt-6 rounded-2xl border border-dashed border-border bg-card/50 px-4 py-8 text-center text-sm text-muted-foreground">
@@ -308,7 +312,6 @@ export default async function DashboardPage({
               ownSettings={ownSettings}
               ownFixedExpense={ownFixedExpense}
               showSpendingItems={perms.spendingItems}
-              nicknameById={nicknameById}
             />
           </Suspense>
         </>
@@ -352,7 +355,6 @@ export default async function DashboardPage({
                       cycleLabel={cycleLabel}
                       targetUserId={viewingUserId}
                       showSpendingItems={perms.spendingItems}
-                      nicknameById={nicknameById}
                     />
                   </Suspense>
                 </section>

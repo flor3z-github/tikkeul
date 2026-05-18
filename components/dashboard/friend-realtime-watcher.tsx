@@ -2,35 +2,44 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
 
 /**
  * Live-refresh the dashboard when the data source we're viewing changes.
  *
- * Two modes:
+ * - **Friend mode** (`isOwn=false`): watches the friend's `transactions` so a
+ *   viewer sees the friend add/remove transactions in real time.
  *
- * - **Friend mode** (`isOwn=false`): watches the friend's `transactions`,
- *   plus `transaction_reactions` and `transaction_comments` for any
- *   transaction owned by that friend. This is how a viewer sees a friend
- *   add/remove transactions in real time, and how they see others react /
- *   comment on those transactions live.
+ * - **Own mode** (`isOwn=true`): watches `dm_messages` for incoming DMs and
+ *   surfaces a sonner toast with a "DM 열기" action that deep-links into the
+ *   thread. We don't filter the postgres_changes channel: every authenticated
+ *   user is only a member of their own threads so RLS already restricts the
+ *   delivered events. Self-sent messages are filtered out client-side so the
+ *   owner doesn't get toasted for their own replies.
  *
- * - **Own mode** (`isOwn=true`): only watches incoming reactions/comments on
- *   the viewer's own transactions. Own `transactions` are not subscribed —
- *   own mutations already revalidate locally via the server action.
- *
- * The two interaction tables denormalize `transaction_owner_id` so we can
- * filter without a join (see migration 0034).
+ *   Own-mode does NOT subscribe to `transactions` — own mutations revalidate
+ *   locally via the server action, so a second channel would just produce
+ *   redundant refreshes.
  */
 type Props = {
-  /** The transaction-owner whose reactions/comments we're watching. */
+  /** The transaction-owner we're viewing. */
   ownerUserId: string;
-  /** True when ownerUserId === viewer. Skips the transactions subscription. */
+  /** True when ownerUserId === viewer. Toggles the own-mode subscription. */
   isOwn: boolean;
+  /** Display-name lookup, used to label own-mode toasts. Optional — falls
+   *  back to "친구" if the sender isn't in the map. */
+  nicknameById?: Map<string, string>;
 };
 
-export function FriendRealtimeWatcher({ ownerUserId, isOwn }: Props) {
+const TOAST_PREVIEW_LIMIT = 30;
+
+export function FriendRealtimeWatcher({
+  ownerUserId,
+  isOwn,
+  nicknameById,
+}: Props) {
   const router = useRouter();
 
   useEffect(() => {
@@ -39,7 +48,7 @@ export function FriendRealtimeWatcher({ ownerUserId, isOwn }: Props) {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
 
-    const schedule = () => {
+    const scheduleRefresh = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => router.refresh(), 300);
     };
@@ -52,51 +61,57 @@ export function FriendRealtimeWatcher({ ownerUserId, isOwn }: Props) {
       }
       if (cancelled) return;
 
-      const channelName = isOwn
-        ? `own-interactions:${ownerUserId}`
-        : `friend-tx:${ownerUserId}`;
-      let builder = supabase.channel(channelName);
-
-      if (!isOwn) {
-        builder = builder.on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "transactions",
-            filter: `user_id=eq.${ownerUserId}`,
-          },
-          schedule,
-        );
+      if (isOwn) {
+        channel = supabase
+          .channel(`own-dm:${ownerUserId}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "dm_messages",
+            },
+            (payload) => {
+              const row = payload.new as {
+                sender_id: string;
+                content: string;
+              } | null;
+              if (!row || row.sender_id === ownerUserId) return;
+              const nickname =
+                nicknameById?.get(row.sender_id) ?? "친구";
+              const trimmed = row.content.trim();
+              const preview =
+                trimmed.length > TOAST_PREVIEW_LIMIT
+                  ? `${trimmed.slice(0, TOAST_PREVIEW_LIMIT)}…`
+                  : trimmed;
+              toast(`${nickname}: ${preview}`, {
+                action: {
+                  label: "DM 열기",
+                  onClick: () => router.push(`/dm/${row.sender_id}`),
+                },
+              });
+            },
+          )
+          .subscribe();
+      } else {
+        channel = supabase
+          .channel(`friend-tx:${ownerUserId}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "transactions",
+              filter: `user_id=eq.${ownerUserId}`,
+            },
+            scheduleRefresh,
+          )
+          .subscribe((status) => {
+            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              console.warn("[realtime] subscribe status:", status);
+            }
+          });
       }
-
-      builder = builder
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "transaction_reactions",
-            filter: `transaction_owner_id=eq.${ownerUserId}`,
-          },
-          schedule,
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "transaction_comments",
-            filter: `transaction_owner_id=eq.${ownerUserId}`,
-          },
-          schedule,
-        );
-
-      channel = builder.subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn("[realtime] subscribe status:", status);
-        }
-      });
     })();
 
     return () => {
@@ -104,7 +119,7 @@ export function FriendRealtimeWatcher({ ownerUserId, isOwn }: Props) {
       if (timer) clearTimeout(timer);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [ownerUserId, isOwn, router]);
+  }, [ownerUserId, isOwn, nicknameById, router]);
 
   return null;
 }

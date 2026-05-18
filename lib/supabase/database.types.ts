@@ -284,67 +284,63 @@ export type Database = {
         };
         Relationships: [];
       };
-      transaction_reactions: {
-        Row: {
-          transaction_id: string;
-          user_id: string;
-          emoji: string;
-          transaction_owner_id: string;
-          created_at: string;
-        };
-        Insert: {
-          transaction_id: string;
-          user_id: string;
-          emoji: string;
-          transaction_owner_id?: string;
-          created_at?: string;
-        };
-        Update: {
-          transaction_id?: string;
-          user_id?: string;
-          emoji?: string;
-          transaction_owner_id?: string;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "transaction_reactions_transaction_id_fkey";
-            columns: ["transaction_id"];
-            isOneToOne: false;
-            referencedRelation: "transactions";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      transaction_comments: {
+      dm_threads: {
         Row: {
           id: string;
-          transaction_id: string;
-          author_id: string;
-          transaction_owner_id: string;
-          content: string;
+          user_a_id: string;
+          user_b_id: string;
           created_at: string;
         };
         Insert: {
           id?: string;
-          transaction_id: string;
-          author_id: string;
-          transaction_owner_id?: string;
-          content: string;
+          user_a_id: string;
+          user_b_id: string;
           created_at?: string;
         };
         Update: {
           id?: string;
-          transaction_id?: string;
-          author_id?: string;
-          transaction_owner_id?: string;
+          user_a_id?: string;
+          user_b_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      dm_messages: {
+        Row: {
+          id: string;
+          thread_id: string;
+          sender_id: string;
+          content: string;
+          quoted_transaction_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          thread_id: string;
+          sender_id: string;
+          content: string;
+          quoted_transaction_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          thread_id?: string;
+          sender_id?: string;
           content?: string;
+          quoted_transaction_id?: string | null;
           created_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "transaction_comments_transaction_id_fkey";
-            columns: ["transaction_id"];
+            foreignKeyName: "dm_messages_thread_id_fkey";
+            columns: ["thread_id"];
+            isOneToOne: false;
+            referencedRelation: "dm_threads";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dm_messages_quoted_transaction_id_fkey";
+            columns: ["quoted_transaction_id"];
             isOneToOne: false;
             referencedRelation: "transactions";
             referencedColumns: ["id"];
@@ -405,6 +401,10 @@ export type Database = {
       get_friend_fixed_total: {
         Args: { target: string };
         Returns: number;
+      };
+      get_or_create_dm_thread: {
+        Args: { target: string };
+        Returns: string;
       };
     };
     Enums: { [_ in never]: never };
