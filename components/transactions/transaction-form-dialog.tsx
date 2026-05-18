@@ -30,6 +30,7 @@ import {
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
+  DrawerNestedRoot,
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,13 @@ type TransactionFormDialogProps = {
   /** YYYY-MM-DD. Initial date for create mode; ignored in edit mode. */
   defaultDate?: string;
   onSaved?: () => void;
+  /**
+   * When true, render as a nested drawer (`DrawerNestedRoot`) so vaul scales
+   * the parent sheet and the iOS keyboard handler runs at this level too.
+   * Used when this dialog is opened from inside another open BottomSheet
+   * (e.g. the transaction interaction sheet's "수정" button).
+   */
+  nested?: boolean;
 };
 
 export function TransactionFormDialog({
@@ -77,9 +85,11 @@ export function TransactionFormDialog({
   initial,
   defaultDate,
   onSaved,
+  nested = false,
 }: TransactionFormDialogProps) {
+  const Root = nested ? DrawerNestedRoot : Drawer;
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
+    <Root open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
         <DrawerHeader className="px-0 pb-3 pt-2 text-left">
           <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em]">
@@ -105,7 +115,7 @@ export function TransactionFormDialog({
           }}
         />
       </DrawerContent>
-    </Drawer>
+    </Root>
   );
 }
 

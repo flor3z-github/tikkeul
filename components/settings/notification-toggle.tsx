@@ -5,8 +5,9 @@ import { toast } from "sonner";
 
 import {
   registerPushSubscriptionAction,
-  setFriendSpendingNotificationsAction,
   unregisterPushSubscriptionAction,
+  setFriendSpendingNotificationsAction,
+  setTransactionInteractionNotificationsAction,
 } from "@/app/settings/actions";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -19,7 +20,10 @@ import {
   unsubscribeDevice,
 } from "@/lib/push/client";
 
+export type NotificationToggleKind = "friend_spending" | "interaction";
+
 type Props = {
+  kind: NotificationToggleKind;
   initialEnabled: boolean;
   vapidPublicKey: string;
 };
@@ -33,11 +37,7 @@ type PushEnv = {
 
 const SERVER_ENV: PushEnv = { permission: "default", needsPwaInstall: false };
 
-// useSyncExternalStore requires getSnapshot to return a referentially stable
-// value when the underlying state has not changed. Cache the last snapshot
-// and only allocate a fresh object when one of the fields actually differs.
 let cachedSnapshot: PushEnv | null = null;
-
 const permissionListeners = new Set<() => void>();
 
 function notifyPushEnvChanged() {
@@ -79,9 +79,7 @@ function subscribeToPushEnv(callback: () => void): () => void {
         cleanupPermissionStatus = () => status.removeEventListener("change", onChange);
       })
       .catch(() => {
-        // Older Safari rejects the query — that's fine, we just lose the live
-        // sync. The manual notifyPushEnvChanged after requestPermission keeps
-        // the toggle in step with the user's response.
+        // Older Safari rejects the query — fall back to manual notify.
       });
   }
   return () => {
@@ -90,7 +88,39 @@ function subscribeToPushEnv(callback: () => void): () => void {
   };
 }
 
-export function FriendNotificationsToggle({ initialEnabled, vapidPublicKey }: Props) {
+const COPY: Record<
+  NotificationToggleKind,
+  { id: string; title: string; subtitle: string; onMsg: string; offMsg: string }
+> = {
+  friend_spending: {
+    id: "friend-notifications",
+    title: "친구 소비 알림",
+    subtitle: "친구가 소비를 추가하면 알림을 받아요. 이름만 보여요.",
+    onMsg: "친구 소비 알림을 켰어요.",
+    offMsg: "친구 소비 알림을 껐어요.",
+  },
+  interaction: {
+    id: "interaction-notifications",
+    title: "반응/댓글 알림",
+    subtitle:
+      "친구가 내 소비에 이모지로 반응하거나 댓글을 남기면 알림을 받아요.",
+    onMsg: "반응/댓글 알림을 켰어요.",
+    offMsg: "반응/댓글 알림을 껐어요.",
+  },
+};
+
+async function setFlag(kind: NotificationToggleKind, enabled: boolean) {
+  if (kind === "friend_spending") {
+    return setFriendSpendingNotificationsAction(enabled);
+  }
+  return setTransactionInteractionNotificationsAction(enabled);
+}
+
+export function NotificationToggle({
+  kind,
+  initialEnabled,
+  vapidPublicKey,
+}: Props) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [pending, startTransition] = useTransition();
 
@@ -100,6 +130,7 @@ export function FriendNotificationsToggle({ initialEnabled, vapidPublicKey }: Pr
     () => SERVER_ENV,
   );
   const { permission, needsPwaInstall } = env;
+  const copy = COPY[kind];
 
   const disabled =
     pending ||
@@ -133,13 +164,13 @@ export function FriendNotificationsToggle({ initialEnabled, vapidPublicKey }: Pr
         toast.error(registerResult.error);
         return;
       }
-      const toggleResult = await setFriendSpendingNotificationsAction(true);
+      const toggleResult = await setFlag(kind, true);
       if (!toggleResult.ok) {
         toast.error(toggleResult.error);
         return;
       }
       setEnabled(true);
-      toast.success("친구 소비 알림을 켰어요.");
+      toast.success(copy.onMsg);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "알림을 켜지 못했어요.";
@@ -149,24 +180,27 @@ export function FriendNotificationsToggle({ initialEnabled, vapidPublicKey }: Pr
 
   async function turnOff() {
     try {
-      const toggleResult = await setFriendSpendingNotificationsAction(false);
+      const toggleResult = await setFlag(kind, false);
       if (!toggleResult.ok) {
         toast.error(toggleResult.error);
         return;
       }
-      const removed = await unsubscribeDevice();
-      if (removed) {
-        await unregisterPushSubscriptionAction(removed.endpoint);
-      } else {
-        // Subscription may have already been revoked at the browser level.
-        // Best-effort cleanup of any stale row for the current endpoint.
-        const lingering = await getExistingSubscription();
-        if (lingering) {
-          await unregisterPushSubscriptionAction(lingering.endpoint);
+      // Only tear down the device subscription when neither flag is on. The
+      // server returns the freshly-read flag state so we don't race with the
+      // other toggle within the same session.
+      if (!toggleResult.anyEnabled) {
+        const removed = await unsubscribeDevice();
+        if (removed) {
+          await unregisterPushSubscriptionAction(removed.endpoint);
+        } else {
+          const lingering = await getExistingSubscription();
+          if (lingering) {
+            await unregisterPushSubscriptionAction(lingering.endpoint);
+          }
         }
       }
       setEnabled(false);
-      toast.success("친구 소비 알림을 껐어요.");
+      toast.success(copy.offMsg);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "알림을 끄지 못했어요.";
@@ -185,15 +219,13 @@ export function FriendNotificationsToggle({ initialEnabled, vapidPublicKey }: Pr
     <section className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <Label htmlFor="friend-notifications" className="text-sm font-semibold">
-            친구 소비 알림
+          <Label htmlFor={copy.id} className="text-sm font-semibold">
+            {copy.title}
           </Label>
-          <p className="text-xs text-muted-foreground">
-            친구가 소비를 추가하면 알림을 받아요. 이름만 보여요.
-          </p>
+          <p className="text-xs text-muted-foreground">{copy.subtitle}</p>
         </div>
         <Switch
-          id="friend-notifications"
+          id={copy.id}
           checked={enabled}
           onCheckedChange={handleChange}
           disabled={disabled}

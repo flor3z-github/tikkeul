@@ -9,6 +9,10 @@ import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
+type FlagResult =
+  | { ok: true; anyEnabled: boolean }
+  | { ok: false; error: string };
+
 export async function saveSettingsAction(
   _prev: ActionResult | null,
   formData: FormData,
@@ -158,30 +162,80 @@ export async function unregisterPushSubscriptionAction(
   return { ok: true };
 }
 
-// Flip the friend_spending_notifications flag. The flag is the source of
-// truth for "should the Edge Function send to this user"; subscriptions stay
-// in the table either way so that toggling back on doesn't require a fresh
-// permission prompt.
+// Flip the friend_spending_notifications flag and return whether ANY of the
+// notification flags remain on after the change. The caller uses that to
+// decide whether to keep the device push subscription alive.
 export async function setFriendSpendingNotificationsAction(
   enabled: boolean,
-): Promise<ActionResult> {
+): Promise<FlagResult> {
+  return updateNotificationFlag("friend_spending_notifications", enabled);
+}
+
+// Flip the transaction_interaction_notifications flag (reactions + comments
+// on my own transactions). Independent from friend_spending_notifications;
+// see migration 0035.
+export async function setTransactionInteractionNotificationsAction(
+  enabled: boolean,
+): Promise<FlagResult> {
+  return updateNotificationFlag(
+    "transaction_interaction_notifications",
+    enabled,
+  );
+}
+
+async function updateNotificationFlag(
+  column:
+    | "friend_spending_notifications"
+    | "transaction_interaction_notifications",
+  enabled: boolean,
+): Promise<FlagResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { error } = await supabase
-    .from("user_settings")
-    .upsert(
-      { user_id: user.id, friend_spending_notifications: enabled },
-      { onConflict: "user_id" },
-    );
+  // Branch by column so the upsert payload stays a known-shape literal —
+  // Supabase's hand-written types reject computed-key objects (the index
+  // signature widens to `never`).
+  const upsertPromise =
+    column === "friend_spending_notifications"
+      ? supabase
+          .from("user_settings")
+          .upsert(
+            { user_id: user.id, friend_spending_notifications: enabled },
+            { onConflict: "user_id" },
+          )
+      : supabase
+          .from("user_settings")
+          .upsert(
+            {
+              user_id: user.id,
+              transaction_interaction_notifications: enabled,
+            },
+            { onConflict: "user_id" },
+          );
 
-  if (error) {
-    return { ok: false, error: error.message };
+  const { error: upsertError } = await upsertPromise;
+  if (upsertError) {
+    return { ok: false, error: upsertError.message };
   }
 
+  const { data: row, error: readError } = await supabase
+    .from("user_settings")
+    .select(
+      "friend_spending_notifications, transaction_interaction_notifications",
+    )
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readError) {
+    return { ok: false, error: readError.message };
+  }
+
+  const anyEnabled =
+    Boolean(row?.friend_spending_notifications) ||
+    Boolean(row?.transaction_interaction_notifications);
+
   revalidatePath("/settings");
-  return { ok: true };
+  return { ok: true, anyEnabled };
 }

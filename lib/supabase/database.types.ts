@@ -29,6 +29,7 @@ export type Database = {
           cycle_mode: "calendar" | "income_day";
           cycle_start_day: number;
           friend_spending_notifications: boolean;
+          transaction_interaction_notifications: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -38,6 +39,7 @@ export type Database = {
           cycle_mode?: "calendar" | "income_day";
           cycle_start_day?: number;
           friend_spending_notifications?: boolean;
+          transaction_interaction_notifications?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -47,6 +49,7 @@ export type Database = {
           cycle_mode?: "calendar" | "income_day";
           cycle_start_day?: number;
           friend_spending_notifications?: boolean;
+          transaction_interaction_notifications?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -280,6 +283,73 @@ export type Database = {
           attempted_at?: string;
         };
         Relationships: [];
+      };
+      transaction_reactions: {
+        Row: {
+          transaction_id: string;
+          user_id: string;
+          emoji: string;
+          transaction_owner_id: string;
+          created_at: string;
+        };
+        Insert: {
+          transaction_id: string;
+          user_id: string;
+          emoji: string;
+          transaction_owner_id?: string;
+          created_at?: string;
+        };
+        Update: {
+          transaction_id?: string;
+          user_id?: string;
+          emoji?: string;
+          transaction_owner_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "transaction_reactions_transaction_id_fkey";
+            columns: ["transaction_id"];
+            isOneToOne: false;
+            referencedRelation: "transactions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      transaction_comments: {
+        Row: {
+          id: string;
+          transaction_id: string;
+          author_id: string;
+          transaction_owner_id: string;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          transaction_id: string;
+          author_id: string;
+          transaction_owner_id?: string;
+          content: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          transaction_id?: string;
+          author_id?: string;
+          transaction_owner_id?: string;
+          content?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "transaction_comments_transaction_id_fkey";
+            columns: ["transaction_id"];
+            isOneToOne: false;
+            referencedRelation: "transactions";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       push_subscriptions: {
         Row: {

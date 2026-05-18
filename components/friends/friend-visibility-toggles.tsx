@@ -25,7 +25,7 @@ const ROWS: { key: ToggleKey; label: string; helper?: string }[] = [
   {
     key: "show_spending_items",
     label: "소비 내역",
-    helper: "각 거래의 카테고리·금액·메모가 친구에게 보여요.",
+    helper: "각 소비의 카테고리·금액·메모가 친구에게 보여요.",
   },
   {
     key: "show_fixed_total",

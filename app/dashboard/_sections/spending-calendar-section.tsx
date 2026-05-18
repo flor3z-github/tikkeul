@@ -24,6 +24,8 @@ type SpendingCalendarSectionProps = {
    * items perm. Ignored in own mode. Defaults to true for backward compat.
    */
   showSpendingItems?: boolean;
+  /** display_name lookup for viewer + all visible friends, built at the page level. */
+  nicknameById: Map<string, string>;
 };
 
 export async function SpendingCalendarSection({
@@ -40,6 +42,7 @@ export async function SpendingCalendarSection({
   ownSettings,
   ownFixedExpense,
   showSpendingItems = true,
+  nicknameById,
 }: SpendingCalendarSectionProps) {
   const userId = targetUserId ?? viewerId;
   const isOwn = userId === viewerId;
@@ -94,7 +97,9 @@ export async function SpendingCalendarSection({
       transactions={monthlyResult.transactions}
       categories={categoriesResult.categories}
       availableBudget={availableBudget}
-      readOnly={!isOwn}
+      viewerId={viewerId}
+      isOwn={isOwn}
+      nicknameById={nicknameById}
     />
   );
 }

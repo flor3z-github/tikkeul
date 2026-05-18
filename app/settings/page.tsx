@@ -4,7 +4,7 @@ import { ChevronLeft } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
-import { FriendNotificationsToggle } from "@/components/settings/friend-notifications-toggle";
+import { NotificationToggle } from "@/components/settings/notification-toggle";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/login/actions";
@@ -19,7 +19,9 @@ export default async function SettingsPage() {
   const [settingsResult, profileResult] = await Promise.all([
     supabase
       .from("user_settings")
-      .select("monthly_income, cycle_mode, cycle_start_day, friend_spending_notifications")
+      .select(
+        "monthly_income, cycle_mode, cycle_start_day, friend_spending_notifications, transaction_interaction_notifications",
+      )
       .eq("user_id", userId)
       .maybeSingle(),
     supabase
@@ -77,9 +79,19 @@ export default async function SettingsPage() {
         initialCycleStartDay={Number(settingsResult.data?.cycle_start_day ?? 1)}
       />
 
-      <div className="mt-10 border-t border-border pt-6">
-        <FriendNotificationsToggle
-          initialEnabled={settingsResult.data?.friend_spending_notifications ?? false}
+      <div className="mt-10 space-y-8 border-t border-border pt-6">
+        <NotificationToggle
+          kind="friend_spending"
+          initialEnabled={
+            settingsResult.data?.friend_spending_notifications ?? false
+          }
+          vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
+        />
+        <NotificationToggle
+          kind="interaction"
+          initialEnabled={
+            settingsResult.data?.transaction_interaction_notifications ?? false
+          }
           vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
         />
       </div>

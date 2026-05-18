@@ -29,12 +29,16 @@ type CalendarDayPanelProps = {
   transactions: MonthlyTransaction[];
   categories: TransactionFormCategory[];
   availableBudget: number;
+  /** Current viewer's user_id — passed through to the interaction sheet. */
+  viewerId: string;
   /**
-   * When true, the panel is view-only: the floating add button is hidden and
-   * tapping a transaction does not open the edit dialog. Used in friend-view
-   * mode on the dashboard.
+   * True when the user is viewing their own dashboard. Controls whether the
+   * add-transaction FAB renders and is forwarded to the interaction sheet so
+   * the owner sees the "수정" button.
    */
-  readOnly?: boolean;
+  isOwn: boolean;
+  /** display_name lookup for the owner + all friends in scope. */
+  nicknameById: Map<string, string>;
 };
 
 export function CalendarDayPanel({
@@ -47,7 +51,9 @@ export function CalendarDayPanel({
   transactions,
   categories,
   availableBudget,
-  readOnly = false,
+  viewerId,
+  isOwn,
+  nicknameById,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
 
@@ -72,6 +78,8 @@ export function CalendarDayPanel({
           category_icon: tx.category_icon,
           spent_at: tx.spent_at,
           memo: tx.memo,
+          reactions: tx.reactions,
+          comments: tx.comments,
         })),
     [transactions, selectedDay],
   );
@@ -120,7 +128,9 @@ export function CalendarDayPanel({
                     <TransactionItem
                       transaction={transaction}
                       categories={categories}
-                      readOnly={readOnly}
+                      viewerId={viewerId}
+                      isOwn={isOwn}
+                      nicknameById={nicknameById}
                     />
                   </li>
                 ))}
@@ -130,12 +140,12 @@ export function CalendarDayPanel({
         </Card>
       </section>
 
-      {readOnly ? null : (
+      {isOwn ? (
         <AddTransactionButton
           categories={categories}
           defaultDate={selectedDay}
         />
-      )}
+      ) : null}
     </>
   );
 }
