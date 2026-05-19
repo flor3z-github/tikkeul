@@ -3,6 +3,7 @@ export type BudgetSummary = {
   fixedExpense: number;
   availableBudget: number;
   monthlyExpense: number;
+  totalSpent: number;
   spendingRate: number;
   remainingBudget: number;
 };
@@ -19,15 +20,17 @@ export function calculateBudgetSummary(input: {
   const monthlyExpense = Math.max(0, input.monthlyExpense ?? 0);
 
   const availableBudget = Math.max(0, monthlyIncome - fixedExpense);
-  const remainingBudget = availableBudget - monthlyExpense;
+  const totalSpent = fixedExpense + monthlyExpense;
+  const remainingBudget = monthlyIncome - totalSpent;
   const spendingRate =
-    availableBudget > 0 ? (monthlyExpense / availableBudget) * 100 : 0;
+    monthlyIncome > 0 ? (totalSpent / monthlyIncome) * 100 : 0;
 
   return {
     monthlyIncome,
     fixedExpense,
     availableBudget,
     monthlyExpense,
+    totalSpent,
     spendingRate,
     remainingBudget,
   };

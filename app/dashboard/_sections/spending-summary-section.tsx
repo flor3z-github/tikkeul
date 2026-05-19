@@ -22,6 +22,14 @@ type SpendingSummarySectionProps = {
    */
   showSpendingTotal?: boolean;
   showSpendingItems?: boolean;
+  /**
+   * Cycle bounds and mode for the pace line ("이번 달이 끝나기까지 · 남은 N일 ·
+   * 하루 X원"). Used only in own mode; friend mode never receives or shows
+   * pace info because it derives from `remainingBudget` (privacy).
+   */
+  cycleStart?: Date;
+  cycleEnd?: Date;
+  cycleMode?: "calendar" | "income_day";
 };
 
 export async function SpendingSummarySection({
@@ -34,6 +42,9 @@ export async function SpendingSummarySection({
   ownFixedExpense,
   showSpendingTotal = true,
   showSpendingItems = true,
+  cycleStart,
+  cycleEnd,
+  cycleMode,
 }: SpendingSummarySectionProps) {
   const userId = targetUserId ?? viewerId;
   const isOwn = userId === viewerId;
@@ -116,6 +127,34 @@ export async function SpendingSummarySection({
     );
   }
 
+  // Pace info: rendered only when the *currently selected* cycle is the one
+  // we're living in. Past/future cycles have no actionable pace.
+  let daysRemaining: number | null = null;
+  if (cycleStart && cycleEnd) {
+    const now = new Date();
+    const inCycle =
+      now.getTime() >= cycleStart.getTime() &&
+      now.getTime() < cycleEnd.getTime();
+    if (inCycle) {
+      const todayMid = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      ).getTime();
+      // `cycleEnd` is exclusive — last day of cycle is (cycleEnd − 1 day).
+      const lastDayDate = new Date(cycleEnd.getTime() - 86_400_000);
+      const lastDayMid = new Date(
+        lastDayDate.getFullYear(),
+        lastDayDate.getMonth(),
+        lastDayDate.getDate(),
+      ).getTime();
+      daysRemaining = Math.max(
+        0,
+        Math.round((lastDayMid - todayMid) / 86_400_000),
+      );
+    }
+  }
+
   return (
     <SpendingSummary
       monthlyIncome={ownSettings?.monthlyIncome ?? 0}
@@ -124,6 +163,8 @@ export async function SpendingSummarySection({
       hasSettings={ownSettings?.hasSettings ?? false}
       friendView={false}
       cycleLabel={cycleLabel}
+      daysRemainingInCycle={daysRemaining}
+      cycleMode={cycleMode}
     />
   );
 }

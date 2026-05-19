@@ -27,6 +27,17 @@ type SpendingSummaryProps = {
    * instead of snapping. Optional — friendView card also uses it.
    */
   cycleLabel?: string;
+  /**
+   * Days remaining in the selected cycle (last day − today). `null` means the
+   * selected cycle is past or future, so no pace line is rendered. `0` means
+   * today is the last day. Only used in own mode.
+   */
+  daysRemainingInCycle?: number | null;
+  /**
+   * Cycle mode controls the pace-line copy: "이번 달이 끝나기까지" for
+   * `calendar`, "다음 급여일까지" for `income_day`.
+   */
+  cycleMode?: "calendar" | "income_day";
 };
 
 const STATUS_COPY: Record<SpendingStatus, { tone: string; label: string }> = {
@@ -50,6 +61,8 @@ export function SpendingSummary({
   hasSettings,
   friendView = false,
   cycleLabel,
+  daysRemainingInCycle = null,
+  cycleMode,
 }: SpendingSummaryProps) {
   if (friendView) {
     // Friend mode: render only the total spending number. The surrounding
@@ -77,22 +90,11 @@ export function SpendingSummary({
   });
   const status = getSpendingStatus(summary.spendingRate);
   const rateRounded = Math.round(summary.spendingRate);
+  const isOver = summary.remainingBudget < 0;
 
   return (
     <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
-      <CardContent className="space-y-4 p-6">
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">
-            총 소비
-          </p>
-          <p
-            key={cycleLabel}
-            className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
-          >
-            {formatNumber(monthlyExpense)} 원
-          </p>
-        </div>
-
+      <CardContent className="space-y-4 px-6 py-4">
         {!hasSettings ? (
           <Link
             href="/settings"
@@ -100,12 +102,53 @@ export function SpendingSummary({
           >
             월 수입과 고정지출을 먼저 설정해주세요 →
           </Link>
-        ) : summary.availableBudget === 0 ? (
+        ) : summary.monthlyIncome === 0 ? (
           <p className="text-sm text-muted-foreground">
-            가용 예산이 0원이에요. 월 수입을 다시 확인해주세요.
+            월 수입이 0원이에요. 설정에서 다시 확인해주세요.
           </p>
         ) : (
           <>
+            <div
+              key={cycleLabel}
+              className="grid grid-cols-2 items-end gap-3 animate-in fade-in duration-200"
+            >
+              <div className="space-y-1">
+                <p className="text-[12px] text-muted-foreground">쓴 돈</p>
+                <p className="text-[32px] font-extrabold leading-none tracking-[-0.04em] tabular-nums">
+                  {formatNumber(summary.totalSpent)}
+                  <span className="ml-1 text-base font-semibold text-muted-foreground">
+                    원
+                  </span>
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p
+                  className={cn(
+                    "text-[12px]",
+                    isOver ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {isOver ? "초과" : "남은 돈"}
+                </p>
+                <p
+                  className={cn(
+                    "text-[22px] font-medium leading-none tabular-nums",
+                    isOver ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {formatNumber(Math.abs(summary.remainingBudget))}
+                  <span
+                    className={cn(
+                      "ml-1 text-sm font-medium",
+                      isOver ? "text-destructive/80" : "text-muted-foreground/80",
+                    )}
+                  >
+                    원
+                  </span>
+                </p>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <SpendingProgress
                 monthlyIncome={monthlyIncome}
@@ -113,72 +156,70 @@ export function SpendingSummary({
                 monthlyExpense={monthlyExpense}
                 status={status}
               />
-              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <span
-                    aria-hidden
-                    className="size-2 rounded-full bg-foreground/25"
-                  />
-                  고정지출
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span
-                    aria-hidden
-                    className={cn("size-2 rounded-full", STATUS_DOT[status])}
-                  />
-                  소비
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between text-sm">
-                <span className="text-muted-foreground">
-                  가용 예산{" "}
-                  <span className="font-medium text-foreground">
-                    {formatKRW(summary.availableBudget)}
-                  </span>{" "}
-                  중
-                </span>
+              <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="size-2 rounded-full bg-foreground/25"
+                    />
+                    고정 {formatKRW(fixedExpense)}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className={cn("size-2 rounded-full", STATUS_DOT[status])}
+                    />
+                    소비 {formatKRW(monthlyExpense)}
+                  </span>
+                </div>
                 <span
-                  className={`font-semibold tabular-nums ${STATUS_COPY[status].tone}`}
+                  className={cn(
+                    "font-semibold tabular-nums",
+                    STATUS_COPY[status].tone,
+                  )}
                 >
                   {rateRounded}% 사용
                 </span>
               </div>
-              {summary.remainingBudget >= 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {STATUS_COPY[status].label} · 남은 예산{" "}
-                  <span className="font-medium text-foreground">
-                    {formatKRW(summary.remainingBudget)}
-                  </span>
+              {status !== "normal" ? (
+                <p className={cn("text-xs font-medium", STATUS_COPY[status].tone)}>
+                  {STATUS_COPY[status].label}
                 </p>
-              ) : (
-                <p className="text-xs text-destructive">
-                  {STATUS_COPY[status].label} · 예산을{" "}
-                  <span className="font-semibold">
-                    {formatKRW(Math.abs(summary.remainingBudget))}
-                  </span>{" "}
-                  초과했어요
-                </p>
-              )}
+              ) : null}
             </div>
+
+            {daysRemainingInCycle != null &&
+            daysRemainingInCycle > 0 &&
+            summary.remainingBudget > 0 ? (
+              <div className="border-t border-dashed border-border pt-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {cycleMode === "income_day"
+                      ? "다음 급여일까지"
+                      : "이번 달이 끝나기까지"}
+                  </span>
+                  <span className="text-xs text-foreground">
+                    남은{" "}
+                    <span className="font-semibold text-primary tabular-nums">
+                      {daysRemainingInCycle}일
+                    </span>{" "}
+                    · 하루{" "}
+                    <span className="font-semibold tabular-nums">
+                      {formatNumber(
+                        Math.floor(
+                          summary.remainingBudget / daysRemainingInCycle,
+                        ),
+                      )}
+                      원
+                    </span>
+                  </span>
+                </div>
+              </div>
+            ) : null}
           </>
         )}
-
-        {hasSettings ? (
-          <dl className="space-y-1.5 border-t border-border pt-4 text-[12px]">
-            <SummaryRow label="월 수입" value={formatKRW(monthlyIncome)} />
-            <SummaryRow label="고정지출" value={formatKRW(fixedExpense)} />
-          </dl>
-        ) : null}
       </CardContent>
     </Card>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="truncate font-semibold tabular-nums">{value}</dd>
-    </div>
   );
 }

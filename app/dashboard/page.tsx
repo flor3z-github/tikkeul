@@ -292,6 +292,9 @@ export default async function DashboardPage({
               ownFixedExpense={ownFixedExpense}
               showSpendingTotal={perms.spendingTotal}
               showSpendingItems={perms.spendingItems}
+              cycleStart={cycleStart}
+              cycleEnd={cycleEnd}
+              cycleMode={cycleMode}
             />
           </Suspense>
 
