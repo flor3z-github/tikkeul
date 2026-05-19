@@ -204,6 +204,7 @@ export function CalendarDayPanel({
           category_id: tx.category_id,
           category_name: tx.category_name,
           category_icon: tx.category_icon,
+          category_color: tx.category_color,
           spent_at: tx.spent_at,
           memo: tx.memo,
           is_private: tx.is_private,

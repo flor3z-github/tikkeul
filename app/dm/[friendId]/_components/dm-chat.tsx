@@ -54,6 +54,7 @@ export type DmChatQuoteCard = {
   deleted: boolean;
   category_name: string | null;
   category_icon: string | null;
+  category_color: string | null;
 };
 
 export type DmChatMessage = {
@@ -564,7 +565,15 @@ export function DmChat({
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2 text-[12px]">
             <CategoryIcon
               slug={pendingQuote.category_icon}
-              className="size-3.5 text-muted-foreground"
+              className={cn(
+                "size-3.5",
+                !pendingQuote.category_color && "text-muted-foreground",
+              )}
+              style={
+                pendingQuote.category_color
+                  ? { color: pendingQuote.category_color }
+                  : undefined
+              }
             />
             <span className="min-w-0 flex-1 truncate text-muted-foreground">
               {pendingQuote.deleted
@@ -802,7 +811,15 @@ function QuoteCard({
     >
       <CategoryIcon
         slug={quote.category_icon}
-        className="size-3.5 text-muted-foreground"
+        className={cn(
+          "size-3.5",
+          !quote.category_color && "text-muted-foreground",
+        )}
+        style={
+          quote.category_color
+            ? { color: quote.category_color }
+            : undefined
+        }
       />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">

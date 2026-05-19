@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import {
   Car,
   Coffee,
@@ -36,10 +37,12 @@ const ICONS: Record<string, LucideIcon> = {
 export function CategoryIcon({
   slug,
   className,
+  style,
 }: {
   slug: string | null;
   className?: string;
+  style?: CSSProperties;
 }) {
   const Icon = (slug && ICONS[slug]) || HelpCircle;
-  return <Icon className={className} />;
+  return <Icon className={className} style={style} />;
 }

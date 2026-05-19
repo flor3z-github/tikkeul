@@ -9,6 +9,7 @@ export type MonthlyTransaction = {
   category_id: string | null;
   category_name: string | null;
   category_icon: string | null;
+  category_color: string | null;
   spent_at: string;
   memo: string | null;
   is_private: boolean;
@@ -30,7 +31,11 @@ type RawRow = {
   spent_at: string;
   memo: string | null;
   is_private: boolean | null;
-  categories: { name: string | null; icon: string | null } | null;
+  categories: {
+    name: string | null;
+    icon: string | null;
+    color: string | null;
+  } | null;
 };
 
 // React `cache()` dedups within a single request so multiple sections
@@ -50,7 +55,7 @@ export const getMonthlyTransactions = cache(
     const { data, error } = await supabase
       .from("transactions")
       .select(
-        "id, amount, category_id, spent_at, memo, is_private, categories ( name, icon )",
+        "id, amount, category_id, spent_at, memo, is_private, categories ( name, icon, color )",
       )
       .eq("user_id", userId)
       .is("deleted_at", null)
@@ -69,6 +74,7 @@ export const getMonthlyTransactions = cache(
       category_id: row.category_id,
       category_name: row.categories?.name ?? null,
       category_icon: row.categories?.icon ?? null,
+      category_color: row.categories?.color ?? null,
       spent_at: row.spent_at,
       memo: row.memo,
       is_private: row.is_private === true,

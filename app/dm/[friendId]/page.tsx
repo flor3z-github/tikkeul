@@ -110,7 +110,7 @@ export default async function DmThreadPage({
     const { data: txRows } = await supabase
       .from("transactions")
       .select(
-        "id, amount, spent_at, memo, deleted_at, categories ( name, icon )",
+        "id, amount, spent_at, memo, deleted_at, categories ( name, icon, color )",
       )
       .in("id", quotedTxIds);
     quoteById = new Map(
@@ -120,7 +120,11 @@ export default async function DmThreadPage({
         spent_at: string;
         memo: string | null;
         deleted_at: string | null;
-        categories: { name: string | null; icon: string | null } | null;
+        categories: {
+          name: string | null;
+          icon: string | null;
+          color: string | null;
+        } | null;
       }>).map((row) => [
         row.id,
         {
@@ -131,6 +135,7 @@ export default async function DmThreadPage({
           deleted: row.deleted_at !== null,
           category_name: row.categories?.name ?? null,
           category_icon: row.categories?.icon ?? null,
+          category_color: row.categories?.color ?? null,
         },
       ]),
     );
@@ -150,6 +155,7 @@ export default async function DmThreadPage({
           deleted: true,
           category_name: null,
           category_icon: null,
+          category_color: null,
         })
       : null,
   }));
@@ -168,7 +174,7 @@ export default async function DmThreadPage({
       const { data: txRow } = await supabase
         .from("transactions")
         .select(
-          "id, amount, spent_at, memo, deleted_at, user_id, categories ( name, icon )",
+          "id, amount, spent_at, memo, deleted_at, user_id, categories ( name, icon, color )",
         )
         .eq("id", sp.quote)
         .maybeSingle();
@@ -181,14 +187,31 @@ export default async function DmThreadPage({
           deleted: false,
           category_name: (
             txRow as unknown as {
-              categories: { name: string | null; icon: string | null } | null;
+              categories: {
+                name: string | null;
+                icon: string | null;
+                color: string | null;
+              } | null;
             }
           ).categories?.name ?? null,
           category_icon: (
             txRow as unknown as {
-              categories: { name: string | null; icon: string | null } | null;
+              categories: {
+                name: string | null;
+                icon: string | null;
+                color: string | null;
+              } | null;
             }
           ).categories?.icon ?? null,
+          category_color: (
+            txRow as unknown as {
+              categories: {
+                name: string | null;
+                icon: string | null;
+                color: string | null;
+              } | null;
+            }
+          ).categories?.color ?? null,
         };
       }
     }

@@ -26,6 +26,7 @@ export type TransactionListRow = {
   category_id: string | null;
   category_name: string | null;
   category_icon: string | null;
+  category_color: string | null;
   spent_at: string;
   memo: string | null;
   is_private: boolean;
@@ -377,11 +378,21 @@ function TransactionSummary({
 }) {
   return (
     <div className="flex w-full items-center gap-3">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-        <CategoryIcon
-          slug={transaction.category_icon}
-          className="size-5 text-muted-foreground"
-        />
+      <span
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-full",
+          !transaction.category_color && "bg-muted text-muted-foreground",
+        )}
+        style={
+          transaction.category_color
+            ? {
+                backgroundColor: `${transaction.category_color}26`,
+                color: transaction.category_color,
+              }
+            : undefined
+        }
+      >
+        <CategoryIcon slug={transaction.category_icon} className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 truncate text-[15px] font-medium">
