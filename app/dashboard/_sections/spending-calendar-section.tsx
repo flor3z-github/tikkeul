@@ -1,8 +1,8 @@
 import { CalendarDayPanel } from "@/components/dashboard/calendar-day-panel";
 import { getCategories } from "@/lib/queries/categories";
 import {
-  getLastEmojiByTransaction,
-  type LastEmojiByTransaction,
+  getViewerInteractionsByTransaction,
+  type ViewerInteractionsByTransaction,
 } from "@/lib/queries/interactions";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
 import type { CycleMode } from "@/lib/utils/calendar";
@@ -59,17 +59,18 @@ export async function SpendingCalendarSection({
   // user_settings + fixed_expenses are prefetched by the page (own mode only).
   // monthly transactions go through React `cache()` so this overlaps with the
   // summary section's call.
-  // Friend mode: also resolve the viewer's last emoji-only DM-reaction per
-  // friend transaction so the heart icon can render with the viewer's own
-  // previous reaction. Own mode skips this entirely (no DM thread, no
-  // reaction state to surface).
-  const [monthlyResult, categoriesResult, lastEmojiByTx] = await Promise.all([
+  // Friend mode: also resolve the viewer's most recent emoji reaction and
+  // most recent text comment per friend transaction, in a single batched
+  // read. Drives the heart icon and the read-only "last comment" trace next
+  // to the message icon. Own mode skips this entirely (no DM thread, no
+  // interaction state to surface).
+  const [monthlyResult, categoriesResult, viewerInteractions] = await Promise.all([
     getMonthlyTransactions(userId, startIso, endIso),
     getCategories(viewerId),
     !isOwn
-      ? getLastEmojiByTransaction(viewerId, userId)
+      ? getViewerInteractionsByTransaction(viewerId, userId)
       : Promise.resolve(
-          new Map() as LastEmojiByTransaction,
+          new Map() as ViewerInteractionsByTransaction,
         ),
   ]);
 
@@ -95,12 +96,13 @@ export async function SpendingCalendarSection({
   const fixedExpense = isOwn ? (ownFixedExpense ?? 0) : 0;
   const availableBudget = Math.max(0, monthlyIncome - fixedExpense);
 
-  // Map<txId, emoji> isn't directly serializable through a Server → Client
-  // boundary (Map → not preserved by Next's RSC serialization in all build
-  // modes), so flatten to a plain object.
-  const lastEmojiByTxObj: Record<string, string> = {};
-  for (const [txId, emoji] of lastEmojiByTx) {
-    lastEmojiByTxObj[txId] = emoji;
+  // Map isn't directly preserved across the Server → Client boundary in all
+  // Next build modes, so flatten to plain objects keyed by txId.
+  const lastEmojiByTx: Record<string, string> = {};
+  const lastCommentByTx: Record<string, string> = {};
+  for (const [txId, entry] of viewerInteractions) {
+    if (entry.lastEmoji) lastEmojiByTx[txId] = entry.lastEmoji;
+    if (entry.lastComment) lastCommentByTx[txId] = entry.lastComment;
   }
 
   return (
@@ -117,7 +119,8 @@ export async function SpendingCalendarSection({
       availableBudget={availableBudget}
       isOwn={isOwn}
       ownerUserId={userId}
-      lastEmojiByTx={lastEmojiByTxObj}
+      lastEmojiByTx={lastEmojiByTx}
+      lastCommentByTx={lastCommentByTx}
     />
   );
 }

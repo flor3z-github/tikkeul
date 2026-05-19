@@ -5,22 +5,31 @@ import { createClient } from "@/lib/supabase/server";
 // to decide which DM messages render as "reactions" rather than text.
 const EMOJI_ONLY = /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+$/u;
 
-export type LastEmojiByTransaction = Map<string, string>;
+export type ViewerInteraction = {
+  /** Viewer's most recent emoji-only reaction on this transaction, if any. */
+  lastEmoji: string | null;
+  /** Viewer's most recent text comment on this transaction, if any. The full
+   *  raw content is returned — the caller is responsible for any truncation. */
+  lastComment: string | null;
+};
 
-// Returns, for each of the friend's transactions, the most recent emoji-only
-// DM message the viewer has sent that quotes that transaction. The result
-// drives the heart-icon state in the friend-mode transaction list: when the
-// map has an entry for a transaction, that emoji is rendered in place of the
-// empty heart so the viewer sees their own last reaction.
+export type ViewerInteractionsByTransaction = Map<string, ViewerInteraction>;
+
+// Returns, for each of the friend's transactions that the viewer has
+// interacted with, the viewer's most recent emoji-only reaction and most
+// recent text comment. Driven by a single batched read of the viewer→owner
+// DM thread's quoted messages, then grouped + classified in JS — no SQL-side
+// regex on content.
 //
-// We do this with a single batched read of the viewer→owner DM thread's
-// quoted messages and group them in JS. There is no SQL-side emoji predicate
-// (regex on content) — that's filtered in JS to keep the query plan trivial.
-export async function getLastEmojiByTransaction(
+// Result drives both the heart-icon state (lastEmoji) and the read-only
+// "last comment" trace next to the message icon in the friend-mode
+// transaction list. Comments themselves are never editable from the
+// dashboard; the trace is purely informational.
+export async function getViewerInteractionsByTransaction(
   viewerId: string,
   ownerId: string,
-): Promise<LastEmojiByTransaction> {
-  const result: LastEmojiByTransaction = new Map();
+): Promise<ViewerInteractionsByTransaction> {
+  const result: ViewerInteractionsByTransaction = new Map();
   if (!viewerId || !ownerId || viewerId === ownerId) return result;
 
   const supabase = await createClient();
@@ -32,24 +41,33 @@ export async function getLastEmojiByTransaction(
     .eq("sender_id", viewerId)
     .not("quoted_transaction_id", "is", null)
     .order("created_at", { ascending: false })
-    // Hard cap so an active thread doesn't pull thousands of comments just to
-    // resolve the heart icon. The most-recent N covers the dashboard window
-    // since the friend list is per-cycle (≤ ~100 transactions).
+    // Hard cap so an active thread doesn't pull thousands of rows just to
+    // populate per-transaction state. Newest-first ordering means we naturally
+    // see the latest emoji/comment per tx first.
     .limit(500);
 
   if (error || !data) return result;
 
-  // First match wins per transaction id because we already sorted desc.
   for (const row of data as Array<{
     content: string;
     quoted_transaction_id: string | null;
   }>) {
     const txId = row.quoted_transaction_id;
-    if (!txId || result.has(txId)) continue;
+    if (!txId) continue;
     const trimmed = row.content.trim();
     if (trimmed.length === 0) continue;
-    if (!EMOJI_ONLY.test(trimmed)) continue;
-    result.set(txId, trimmed);
+    const isEmoji = EMOJI_ONLY.test(trimmed);
+
+    let entry = result.get(txId);
+    if (!entry) {
+      entry = { lastEmoji: null, lastComment: null };
+      result.set(txId, entry);
+    }
+    if (isEmoji) {
+      if (!entry.lastEmoji) entry.lastEmoji = trimmed;
+    } else {
+      if (!entry.lastComment) entry.lastComment = trimmed;
+    }
   }
   return result;
 }

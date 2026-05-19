@@ -45,6 +45,9 @@ type TransactionItemProps = {
   /** Friend mode: viewer's last emoji-only DM reaction on this transaction.
    *  Renders in place of the empty heart so the viewer sees their own state. */
   lastEmoji?: string | null;
+  /** Friend mode: viewer's most recent text comment. Read-only trace beside
+   *  the message icon so the viewer can recall what they wrote. */
+  lastComment?: string | null;
   /** Friend mode parent-managed exclusive state. */
   isActive?: boolean;
   activeMode?: InteractionMode | null;
@@ -63,6 +66,7 @@ export function TransactionItem({
   isOwn,
   ownerUserId,
   lastEmoji,
+  lastComment,
   isActive,
   activeMode,
   commentDraft,
@@ -78,6 +82,7 @@ export function TransactionItem({
     <FriendRow
       transaction={transaction}
       lastEmoji={lastEmoji ?? null}
+      lastComment={lastComment ?? null}
       ownerUserId={ownerUserId}
       isActive={isActive ?? false}
       activeMode={activeMode ?? null}
@@ -124,6 +129,7 @@ function OwnRow({
 type FriendRowProps = {
   transaction: TransactionListRow;
   lastEmoji: string | null;
+  lastComment: string | null;
   ownerUserId: string;
   isActive: boolean;
   activeMode: InteractionMode | null;
@@ -136,6 +142,7 @@ type FriendRowProps = {
 function FriendRow({
   transaction,
   lastEmoji,
+  lastComment,
   ownerUserId,
   isActive,
   activeMode,
@@ -235,18 +242,31 @@ function FriendRow({
         </button>
         <button
           type="button"
-          aria-label="댓글 달기"
+          aria-label={
+            lastComment ? `댓글: ${lastComment}` : "댓글 달기"
+          }
           aria-pressed={isActive && activeMode === "comment"}
           onClick={(event) => {
             event.stopPropagation();
             onSelectMode?.(transaction.id, "comment");
           }}
           className={cn(
-            "inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-card hover:text-foreground",
+            "inline-flex h-8 min-w-0 max-w-[60%] items-center gap-1.5 rounded-full px-2 text-muted-foreground transition-colors hover:bg-card hover:text-foreground",
             isActive && activeMode === "comment" && "bg-card text-foreground",
           )}
         >
-          <MessageCircle className="size-4" aria-hidden />
+          <MessageCircle className="size-4 shrink-0" aria-hidden />
+          {lastComment ? (
+            <>
+              <span
+                aria-hidden
+                className="text-[12px] text-muted-foreground/60"
+              >
+                ·
+              </span>
+              <span className="truncate text-[12px]">{lastComment}</span>
+            </>
+          ) : null}
         </button>
       </div>
 

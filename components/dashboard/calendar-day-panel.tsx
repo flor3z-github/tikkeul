@@ -51,6 +51,10 @@ type CalendarDayPanelProps = {
   ownerUserId: string;
   /** Friend mode only: viewer's last emoji-only reaction per transaction id. */
   lastEmojiByTx?: Record<string, string>;
+  /** Friend mode only: viewer's most recent text comment per transaction id.
+   *  Surfaces as a read-only trace next to the message icon — never editable
+   *  from the row itself; the DM page is the source of truth. */
+  lastCommentByTx?: Record<string, string>;
 };
 
 export function CalendarDayPanel({
@@ -66,6 +70,7 @@ export function CalendarDayPanel({
   isOwn,
   ownerUserId,
   lastEmojiByTx,
+  lastCommentByTx,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
 
@@ -224,6 +229,7 @@ export function CalendarDayPanel({
                       isOwn={isOwn}
                       ownerUserId={ownerUserId}
                       lastEmoji={lastEmojiByTx?.[transaction.id] ?? null}
+                      lastComment={lastCommentByTx?.[transaction.id] ?? null}
                       isActive={activeRowId === transaction.id}
                       activeMode={
                         activeRowId === transaction.id ? activeMode : null
