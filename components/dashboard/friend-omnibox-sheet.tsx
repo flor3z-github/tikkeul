@@ -12,7 +12,6 @@ import {
   ArrowLeftCircle,
   Check,
   Loader2,
-  MessageCircle,
   Plus,
   Search,
   Settings2,
@@ -190,13 +189,6 @@ export function FriendOmniboxSheet({
                 disabled={isPending}
                 onSelect={() => navigate(f.userId)}
                 onOpenVisibility={() => setVisibilityTarget(f)}
-                onOpenDm={() => {
-                  if (isPending) return;
-                  setPendingTarget(f.userId);
-                  startTransition(() => {
-                    router.push(`/dm/${f.userId}`);
-                  });
-                }}
               />
             ))
           )}
@@ -287,7 +279,6 @@ function FriendRow({
   disabled,
   onSelect,
   onOpenVisibility,
-  onOpenDm,
 }: {
   friend: FriendOption;
   selected: boolean;
@@ -295,7 +286,6 @@ function FriendRow({
   disabled: boolean;
   onSelect: () => void;
   onOpenVisibility: () => void;
-  onOpenDm: () => void;
 }) {
   return (
     <li className="flex items-stretch gap-1">
@@ -321,18 +311,6 @@ function FriendRow({
         ) : selected ? (
           <Check className="size-4 text-muted-foreground" aria-hidden />
         ) : null}
-      </button>
-      <button
-        type="button"
-        onClick={onOpenDm}
-        disabled={disabled}
-        className={cn(
-          "inline-flex items-center justify-center rounded-2xl px-3 text-muted-foreground hover:bg-muted",
-          disabled && "opacity-50",
-        )}
-        aria-label={`${friend.nickname}님과 DM`}
-      >
-        <MessageCircle className="size-4" />
       </button>
       <button
         type="button"
