@@ -209,7 +209,7 @@ export default async function DmThreadPage({
   }
 
   return (
-    <AppShell>
+    <AppShell withFixedComposer>
       <DmHeader nickname={friendNickname} />
 
       <DmChat

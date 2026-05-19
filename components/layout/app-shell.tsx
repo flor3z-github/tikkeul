@@ -15,6 +15,13 @@ type AppShellProps = {
    * floating add-transaction FAB. Use on pages that mount AddTransactionButton.
    */
   withFab?: boolean;
+  /**
+   * Set on pages that mount their own fixed bottom composer (e.g. the DM
+   * chat input). Such pages reserve the input height inside their own
+   * scroll container, so AppShell skips its default pb-28 gap to avoid
+   * stacking a redundant ~112px of empty space below the last message.
+   */
+  withFixedComposer?: boolean;
 };
 
 export function AppShell({
@@ -22,16 +29,20 @@ export function AppShell({
   className,
   withBottomNav = false,
   withFab = false,
+  withFixedComposer = false,
 }: AppShellProps) {
   // Bottom-fixed UI eats vertical space:
   // - BottomTabNav: 76px + safe-area
   // - FAB: 56px tall, sits 16px above the nav (per add-transaction-button.tsx)
+  // - FixedComposer: page owns its own padding; AppShell stays out of the way.
   // The content needs to scroll past whichever extends higher, plus a small gap.
   const padBottom = withFab
     ? "pb-[calc(76px+env(safe-area-inset-bottom)+16px+56px+16px)]"
     : withBottomNav
       ? "pb-[calc(76px+env(safe-area-inset-bottom)+24px)]"
-      : "pb-28";
+      : withFixedComposer
+        ? "pb-0"
+        : "pb-28";
 
   return (
     <>
