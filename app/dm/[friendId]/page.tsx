@@ -57,6 +57,13 @@ export default async function DmThreadPage({
     );
   }
 
+  // Mark the caller-side of the thread as read at page enter. Messages that
+  // arrive while the user is actively viewing the chat will stay "unread"
+  // in the schema until the user re-enters; that's an acceptable v1 gap —
+  // the dashboard dot still updates live via the realtime watcher and the
+  // /dm index re-renders.
+  await supabase.rpc("mark_dm_thread_read", { p_thread_id: threadId });
+
   // Pull friend nickname for the header.
   const { data: profile } = await supabase
     .from("profiles")

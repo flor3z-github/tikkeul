@@ -17,7 +17,9 @@ import { createClient } from "@/lib/supabase/client";
  *   thread. We don't filter the postgres_changes channel: every authenticated
  *   user is only a member of their own threads so RLS already restricts the
  *   delivered events. Self-sent messages are filtered out client-side so the
- *   owner doesn't get toasted for their own replies.
+ *   owner doesn't get toasted for their own replies. Same handler also kicks
+ *   a debounced `router.refresh()` so the header MessageCircle unread dot
+ *   stays in sync without waiting for a manual reload.
  *
  *   Own-mode does NOT subscribe to `transactions` — own mutations revalidate
  *   locally via the server action, so a second channel would just produce
@@ -90,6 +92,10 @@ export function FriendRealtimeWatcher({
                   onClick: () => router.push(`/dm/${row.sender_id}`),
                 },
               });
+              // Bump the unread dot on the header MessageCircle by
+              // re-rendering the dashboard. Debounced so a burst of incoming
+              // messages collapses into one refresh.
+              scheduleRefresh();
             },
           )
           .subscribe();

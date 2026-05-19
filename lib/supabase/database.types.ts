@@ -412,6 +412,23 @@ export type Database = {
         Args: { target: string };
         Returns: string;
       };
+      mark_dm_thread_read: {
+        Args: { p_thread_id: string };
+        Returns: undefined;
+      };
+      get_my_dm_index: {
+        Args: Record<string, never>;
+        Returns: {
+          friend_id: string;
+          nickname: string;
+          thread_id: string | null;
+          last_message_id: string | null;
+          last_message_content: string | null;
+          last_message_sender_id: string | null;
+          last_message_at: string | null;
+          unread: number;
+        }[];
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Settings } from "lucide-react";
+import { MessageCircle, Settings } from "lucide-react";
 
 import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-watcher";
 import { DashboardFriendHeader } from "@/components/dashboard/dashboard-friend-header";
@@ -126,35 +126,45 @@ export default async function DashboardPage({
   // viewingUserId. All independent — fired in parallel. Friend-only queries
   // are stubbed in own mode so the array shape stays stable.
   const profileTargets = Array.from(new Set([viewerId, ...friendIds]));
-  const [profileRowsRes, friendCycleRes, permsRowRes, ownFixedRes] =
-    await Promise.all([
-      profileTargets.length > 0
-        ? supabase
-            .from("profiles")
-            .select("id, display_name")
-            .in("id", profileTargets)
-        : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
-      !isOwn
-        ? supabase.rpc("get_user_cycle", { target: viewingUserId })
-        : Promise.resolve({ data: null }),
-      !isOwn
-        ? supabase
-            .from("friendships")
-            .select(
-              "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
-            )
-            .eq("owner_id", viewingUserId)
-            .eq("viewer_id", viewerId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      isOwn
-        ? supabase
-            .from("fixed_expenses")
-            .select("amount")
-            .eq("user_id", viewerId)
-            .eq("is_active", true)
-        : Promise.resolve({ data: [] as { amount: number }[] }),
-    ]);
+  const [
+    profileRowsRes,
+    friendCycleRes,
+    permsRowRes,
+    ownFixedRes,
+    dmIndexRes,
+  ] = await Promise.all([
+    profileTargets.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, display_name")
+          .in("id", profileTargets)
+      : Promise.resolve({
+          data: [] as { id: string; display_name: string | null }[],
+        }),
+    !isOwn
+      ? supabase.rpc("get_user_cycle", { target: viewingUserId })
+      : Promise.resolve({ data: null }),
+    !isOwn
+      ? supabase
+          .from("friendships")
+          .select(
+            "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+          )
+          .eq("owner_id", viewingUserId)
+          .eq("viewer_id", viewerId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    isOwn
+      ? supabase
+          .from("fixed_expenses")
+          .select("amount")
+          .eq("user_id", viewerId)
+          .eq("is_active", true)
+      : Promise.resolve({ data: [] as { amount: number }[] }),
+    isOwn
+      ? supabase.rpc("get_my_dm_index")
+      : Promise.resolve({ data: null }),
+  ]);
 
   // Resolve cycle: own → from user_settings; friend → from get_user_cycle.
   let cycle: CycleSettings = DEFAULT_CYCLE;
@@ -223,6 +233,16 @@ export default async function DashboardPage({
     0,
   );
 
+  // Sum unread DMs across the caller's threads. Only computed in own mode
+  // (friend mode passes the stubbed null through); the badge is hidden in
+  // friend mode anyway because the MessageCircle Link itself is gated on
+  // `isOwn` in the header below.
+  const totalUnreadDms = isOwn
+    ? (
+        (dmIndexRes?.data ?? []) as Array<{ unread: number | string | null }>
+      ).reduce((sum, row) => sum + Number(row.unread ?? 0), 0)
+    : 0;
+
   // Friend-mode visibility perms. In own mode the owner has full visibility.
   // Friend mode fails closed: missing row or nullish columns => visibility off.
   const permsRow = permsRowRes.data;
@@ -262,6 +282,30 @@ export default async function DashboardPage({
               viewingNickname={viewingNickname}
               initialActiveCode={initialActiveCode}
             />
+            {isOwn ? (
+              <Link
+                href="/dm"
+                prefetch
+                aria-label={
+                  totalUnreadDms > 0
+                    ? `메시지 (읽지 않은 메시지 ${totalUnreadDms}개)`
+                    : "메시지"
+                }
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "icon" }),
+                  "relative rounded-full text-muted-foreground",
+                )}
+              >
+                <MessageCircle className="size-5" />
+                {totalUnreadDms > 0 ? (
+                  <span
+                    aria-hidden
+                    className="absolute right-1.5 top-1.5 size-2 rounded-full bg-destructive ring-2 ring-background"
+                  />
+                ) : null}
+                <LinkPending />
+              </Link>
+            ) : null}
             <Link
               href="/settings"
               prefetch
