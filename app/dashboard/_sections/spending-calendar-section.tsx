@@ -31,6 +31,9 @@ type SpendingCalendarSectionProps = {
    * items perm. Ignored in own mode. Defaults to true for backward compat.
    */
   showSpendingItems?: boolean;
+  /** Push-notification deep link target. Forwarded straight to the day
+   *  panel which handles scroll-and-pulse on mount. */
+  focusTxId?: string | null;
 };
 
 export async function SpendingCalendarSection({
@@ -47,6 +50,7 @@ export async function SpendingCalendarSection({
   ownSettings,
   ownFixedExpense,
   showSpendingItems = true,
+  focusTxId,
 }: SpendingCalendarSectionProps) {
   const userId = targetUserId ?? viewerId;
   const isOwn = userId === viewerId;
@@ -174,6 +178,7 @@ export async function SpendingCalendarSection({
       lastCommentByTx={lastCommentByTx}
       lastCommentMessageIdByTx={lastCommentMessageIdByTx}
       fixedExpensesByDay={fixedExpensesByDay}
+      focusTxId={focusTxId ?? null}
     />
   );
 }

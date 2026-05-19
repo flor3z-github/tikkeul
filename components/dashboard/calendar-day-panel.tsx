@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -69,6 +70,11 @@ type CalendarDayPanelProps = {
   /** Own-mode only: fixed expenses scheduled to fire on each YYYY-MM-DD in
    *  the visible cycle. Drives the calendar marker + the per-day section. */
   fixedExpensesByDay?: Record<string, CalendarFixedExpenseItem[]>;
+  /** Friend-mode only: transaction id forwarded from a push notification's
+   *  `?focus=<id>` param. When set, the panel scrolls the matching row into
+   *  view on mount and plays a brief pulse so the viewer can locate the
+   *  transaction the notification was announcing. */
+  focusTxId?: string | null;
 };
 
 export function CalendarDayPanel({
@@ -87,6 +93,7 @@ export function CalendarDayPanel({
   lastCommentByTx,
   lastCommentMessageIdByTx,
   fixedExpensesByDay,
+  focusTxId,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
 
@@ -99,6 +106,11 @@ export function CalendarDayPanel({
   const [commentDraft, setCommentDraft] = useState("");
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const listContainerRef = useRef<HTMLDivElement | null>(null);
+  // Guards the focus-on-mount effect so React 19 StrictMode's double-invoke
+  // (and any future re-render that doesn't change focusTxId) can't trigger
+  // the pulse animation twice. Keyed by the id we already handled, not a
+  // boolean, so a different focus id later in the session still runs.
+  const handledFocusRef = useRef<string | null>(null);
 
   const hasDraft = commentDraft.trim().length > 0;
 
@@ -202,6 +214,40 @@ export function CalendarDayPanel({
   const dayTotal = dayRows.reduce((sum, row) => sum + Number(row.amount), 0);
   const label = formatKoreanLongDate(selectedDay);
 
+  // Push-notification deep link: scroll the focused transaction row into view
+  // and play a brief pulse so the viewer can spot it. Runs once per distinct
+  // focusTxId per mount. The Edge function already encodes the tx's day into
+  // the URL's `?day=` param, so by the time we render the row should be on
+  // the currently selected day. If it isn't (tx was deleted, hidden by
+  // privacy, or the day fell outside the resolved cycle), we toast — silent
+  // failure would strand the viewer on the dashboard with no signal as to
+  // why the notification didn't land anywhere specific.
+  useEffect(() => {
+    if (!focusTxId) return;
+    if (handledFocusRef.current === focusTxId) return;
+    handledFocusRef.current = focusTxId;
+
+    // Defer the DOM lookup to the next frame so any in-progress commit has
+    // landed before we query for the row.
+    const raf = requestAnimationFrame(() => {
+      const container = listContainerRef.current;
+      const node = container?.querySelector<HTMLLIElement>(
+        `li[data-tx-id="${focusTxId}"]`,
+      );
+      if (!node) {
+        toast.error("해당 소비내역을 찾을 수 없어요");
+        return;
+      }
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+      node.classList.add("focus-pulse");
+      // Match the keyframes duration (2.4s) so the class is gone before any
+      // later focus could try to re-apply it.
+      window.setTimeout(() => node.classList.remove("focus-pulse"), 2500);
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [focusTxId]);
+
   const fixedExpensesForDay = fixedExpensesByDay?.[selectedDay] ?? [];
   // Set of every day in the cycle that has at least one scheduled fixed
   // expense. Used to render a small dot under those day cells.
@@ -293,7 +339,7 @@ export function CalendarDayPanel({
             ) : (
               <ul className="space-y-0.5">
                 {dayRows.map((transaction) => (
-                  <li key={transaction.id}>
+                  <li key={transaction.id} data-tx-id={transaction.id}>
                     <TransactionItem
                       transaction={transaction}
                       categories={categories}

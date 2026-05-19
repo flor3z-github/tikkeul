@@ -36,6 +36,7 @@ type DashboardSearchParams = Promise<{
   ym?: string;
   day?: string;
   viewing?: string;
+  focus?: string;
 }>;
 
 export default async function DashboardPage({
@@ -112,6 +113,14 @@ export default async function DashboardPage({
       ? requestedViewing
       : viewerId;
   const isOwn = viewingUserId === viewerId;
+
+  // ?focus=<txId> is set by the friend-spending push notification. Validate
+  // the shape only; the day panel itself decides whether the row actually
+  // exists in the resolved cycle (and toasts on miss). Only honored in
+  // friend mode — focusing your own dashboard via a notification is not a
+  // flow this app produces.
+  const focusTxId =
+    !isOwn && sp.focus && UUID_RE.test(sp.focus) ? sp.focus : null;
 
   // Round 2: queries that need either round-1 results or the resolved
   // viewingUserId. All independent — fired in parallel. Friend-only queries
@@ -358,6 +367,7 @@ export default async function DashboardPage({
                       cycleLabel={cycleLabel}
                       targetUserId={viewingUserId}
                       showSpendingItems={perms.spendingItems}
+                      focusTxId={focusTxId}
                     />
                   </Suspense>
                 </section>

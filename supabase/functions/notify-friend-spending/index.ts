@@ -136,13 +136,25 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
   const nickname = (senderProfile?.display_name ?? "").trim() || "친구";
 
+  // Slice the YYYY-MM-DD and YYYY-MM out of spent_at so a tap on the
+  // notification lands the recipient on the exact day cell + scrolls to the
+  // transaction row. Safe against time zones because spent_at is a plain
+  // date-ish value the client wrote (no offset gymnastics on this side).
+  const spentAt = payload.record.spent_at ?? "";
+  const dayIso = spentAt.slice(0, 10);
+  const ymIso = spentAt.slice(0, 7);
+  const focusParams = new URLSearchParams({ viewing: senderId });
+  if (/^\d{4}-\d{2}$/.test(ymIso)) focusParams.set("ym", ymIso);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dayIso)) focusParams.set("day", dayIso);
+  if (payload.record.id) focusParams.set("focus", payload.record.id);
+
   // iOS Safari Web Push always appends a "from <manifest.name>" line, so
   // keeping title="티끌" produced visible duplication. Put the sender's
   // nickname in the title slot to use that prominent first line meaningfully.
   const body = JSON.stringify({
     title: nickname,
     body: "소비를 추가했어요",
-    url: `/dashboard?viewing=${senderId}`,
+    url: `/dashboard?${focusParams.toString()}`,
     tag: `friend-spend-${senderId}`,
   });
 

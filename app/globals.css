@@ -205,7 +205,26 @@
   }
 }
 
+/* Focus pulse: a soft primary-tinted background that fades in and out twice,
+   used to highlight the transaction the user just navigated to from a push
+   notification. Keep the peak tint subtle — the row already lives inside a
+   card, and an aggressive flash reads as an error, not a focus cue. */
+@keyframes focus-pulse {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  20%,
+  60% {
+    background-color: color-mix(in oklab, var(--primary) 16%, transparent);
+  }
+}
+
 @layer utilities {
+  .focus-pulse {
+    animation: focus-pulse 2.4s ease-out 1;
+    border-radius: 1rem;
+  }
   .skeleton {
     position: relative;
     overflow: hidden;
