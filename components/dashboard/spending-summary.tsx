@@ -114,7 +114,7 @@ export function SpendingSummary({
             >
               <div className="space-y-1">
                 <p className="text-[12px] text-muted-foreground">쓴 돈</p>
-                <p className="text-[32px] font-extrabold leading-none tracking-[-0.04em] tabular-nums">
+                <p className="text-[clamp(22px,7.5vw,32px)] font-extrabold leading-none tracking-[-0.04em] tabular-nums whitespace-nowrap">
                   {formatNumber(summary.totalSpent)}
                   <span className="ml-1 text-base font-semibold text-muted-foreground">
                     원
