@@ -63,6 +63,9 @@ type CalendarDayPanelProps = {
    *  Surfaces as a read-only trace next to the message icon — never editable
    *  from the row itself; the DM page is the source of truth. */
   lastCommentByTx?: Record<string, string>;
+  /** Friend mode only: dm_messages.id corresponding to each lastComment. Lets
+   *  the comment trace deep-link straight to that message in the DM thread. */
+  lastCommentMessageIdByTx?: Record<string, string>;
   /** Own-mode only: fixed expenses scheduled to fire on each YYYY-MM-DD in
    *  the visible cycle. Drives the calendar marker + the per-day section. */
   fixedExpensesByDay?: Record<string, CalendarFixedExpenseItem[]>;
@@ -82,6 +85,7 @@ export function CalendarDayPanel({
   ownerUserId,
   lastEmojiByTx,
   lastCommentByTx,
+  lastCommentMessageIdByTx,
   fixedExpensesByDay,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
@@ -297,6 +301,9 @@ export function CalendarDayPanel({
                       ownerUserId={ownerUserId}
                       lastEmoji={lastEmojiByTx?.[transaction.id] ?? null}
                       lastComment={lastCommentByTx?.[transaction.id] ?? null}
+                      lastCommentMessageId={
+                        lastCommentMessageIdByTx?.[transaction.id] ?? null
+                      }
                       isActive={activeRowId === transaction.id}
                       activeMode={
                         activeRowId === transaction.id ? activeMode : null

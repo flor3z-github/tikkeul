@@ -129,9 +129,12 @@ export async function SpendingCalendarSection({
   // Next build modes, so flatten to plain objects keyed by txId.
   const lastEmojiByTx: Record<string, string> = {};
   const lastCommentByTx: Record<string, string> = {};
+  const lastCommentMessageIdByTx: Record<string, string> = {};
   for (const [txId, entry] of viewerInteractions) {
     if (entry.lastEmoji) lastEmojiByTx[txId] = entry.lastEmoji;
     if (entry.lastComment) lastCommentByTx[txId] = entry.lastComment;
+    if (entry.lastCommentMessageId)
+      lastCommentMessageIdByTx[txId] = entry.lastCommentMessageId;
   }
 
   // Resolve each fixed expense's payment_day → concrete dates within the
@@ -169,6 +172,7 @@ export async function SpendingCalendarSection({
       ownerUserId={userId}
       lastEmojiByTx={lastEmojiByTx}
       lastCommentByTx={lastCommentByTx}
+      lastCommentMessageIdByTx={lastCommentMessageIdByTx}
       fixedExpensesByDay={fixedExpensesByDay}
     />
   );

@@ -80,7 +80,13 @@ type Props = {
   friendNickname: string;
   initialMessages: DmChatMessage[];
   prefilledQuote: DmChatQuoteCard | null;
+  /** dm_messages.id to scroll to + briefly highlight on mount. Used by the
+   *  dashboard comment-trace deep link. When null, the chat behaves normally
+   *  and anchors at the bottom. */
+  targetMessageId: string | null;
 };
+
+const HIGHLIGHT_MS = 1500;
 
 function buildRenderItems(
   messages: DmChatMessage[],
@@ -145,6 +151,7 @@ export function DmChat({
   friendNickname,
   initialMessages,
   prefilledQuote,
+  targetMessageId,
 }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
@@ -155,6 +162,11 @@ export function DmChat({
   const [deletePending, startDeleteTransition] = useTransition();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [composerHeight, setComposerHeight] = useState(COMPOSER_FALLBACK_HEIGHT);
+  // While true, suppress every auto-scroll-to-bottom path (composer resize,
+  // initialMessages refresh) so the user stays parked on the deep-linked
+  // message instead of getting yanked to the latest row. Flipped off when the
+  // highlight flash ends.
+  const parkedAtTargetRef = useRef(false);
   // Optimistic outbox: messages the viewer just sent that haven't been
   // confirmed by a router.refresh() / realtime arrival yet. Each carries a
   // client-generated UUID that the server insert reuses as the row id, so
@@ -200,7 +212,10 @@ export function DmChat({
             // When the composer grows/shrinks (quote card add/remove,
             // textarea wrap), re-anchor the list to the bottom so the
             // latest message stays in view instead of being pushed off.
-            if (next !== prev) scrollToEnd();
+            // Skip while parked at a deep-link target — otherwise the
+            // composer's initial measure right after mount would yank the
+            // user away from the highlighted message.
+            if (next !== prev && !parkedAtTargetRef.current) scrollToEnd();
             return next;
           });
         }
@@ -357,17 +372,58 @@ export function DmChat({
   // and then jumping. useLayoutEffect is synchronous w.r.t. paint. We scroll
   // window to document bottom (not into the ref) for the same reason as
   // scrollToEnd above.
+  //
+  // When `targetMessageId` is supplied (dashboard comment-trace deep link),
+  // try to scroll that message into view instead. If it isn't in the loaded
+  // batch (older than the 200-msg window) we fall back to the bottom anchor
+  // and surface a toast so the deep link doesn't fail silently.
   useLayoutEffect(() => {
+    if (targetMessageId) {
+      const el = document.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(targetMessageId)}"]`,
+      );
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "auto" });
+        // Apply the highlight directly via classList rather than via React
+        // state to avoid setState-in-effect (react-hooks/set-state-in-effect).
+        // The class strings are listed below as static literals so Tailwind's
+        // content scanner still picks them up at build time.
+        // Tailwind: ring-2 ring-primary/50 ring-offset-2 ring-offset-background rounded-2xl
+        const HIGHLIGHT_CLASSES = [
+          "ring-2",
+          "ring-primary/50",
+          "ring-offset-2",
+          "ring-offset-background",
+          "rounded-2xl",
+        ];
+        el.classList.add(...HIGHLIGHT_CLASSES);
+        parkedAtTargetRef.current = true;
+        // Brief highlight flash; afterwards let normal auto-scroll resume so
+        // realtime arrivals / composer resizes re-anchor at the bottom again.
+        const timer = setTimeout(() => {
+          parkedAtTargetRef.current = false;
+          el.classList.remove(...HIGHLIGHT_CLASSES);
+        }, HIGHLIGHT_MS);
+        return () => {
+          clearTimeout(timer);
+          el.classList.remove(...HIGHLIGHT_CLASSES);
+          parkedAtTargetRef.current = false;
+        };
+      }
+      toast.error("메시지를 찾을 수 없어요.");
+    }
     const target =
       document.scrollingElement?.scrollHeight ??
       document.documentElement.scrollHeight;
     window.scrollTo({ top: target, behavior: "auto" });
-  }, []);
+  }, [targetMessageId]);
 
   // Auto-scroll to the latest message whenever the list grows. We do this on
   // initialMessages identity changes (router.refresh swaps the array) rather
   // than tracking length so a reload after delete also re-anchors at the end.
+  // Skip while parked at a deep-link target so the user isn't yanked away.
   useEffect(() => {
+    if (parkedAtTargetRef.current) return;
     scrollToEnd();
   }, [initialMessages]);
 
@@ -675,8 +731,9 @@ function MessageRow({
 
   return (
     <div
+      data-message-id={message.id}
       className={cn(
-        "flex w-full items-end gap-1.5",
+        "flex w-full items-end gap-1.5 scroll-mt-20 transition-shadow duration-300",
         isMe ? "justify-end" : "justify-start",
       )}
     >

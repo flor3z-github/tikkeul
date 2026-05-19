@@ -11,6 +11,9 @@ export type ViewerInteraction = {
   /** Viewer's most recent text comment on this transaction, if any. The full
    *  raw content is returned — the caller is responsible for any truncation. */
   lastComment: string | null;
+  /** dm_messages.id of the message that produced lastComment. Used to deep-link
+   *  the dashboard "comment trace" tap into the DM thread at that message. */
+  lastCommentMessageId: string | null;
 };
 
 export type ViewerInteractionsByTransaction = Map<string, ViewerInteraction>;
@@ -37,7 +40,7 @@ export async function getViewerInteractionsByTransaction(
   // returns an empty array rather than leaking another pair's data.
   const { data, error } = await supabase
     .from("dm_messages")
-    .select("content, quoted_transaction_id, created_at")
+    .select("id, content, quoted_transaction_id, created_at")
     .eq("sender_id", viewerId)
     .not("quoted_transaction_id", "is", null)
     .order("created_at", { ascending: false })
@@ -49,6 +52,7 @@ export async function getViewerInteractionsByTransaction(
   if (error || !data) return result;
 
   for (const row of data as Array<{
+    id: string;
     content: string;
     quoted_transaction_id: string | null;
   }>) {
@@ -60,13 +64,20 @@ export async function getViewerInteractionsByTransaction(
 
     let entry = result.get(txId);
     if (!entry) {
-      entry = { lastEmoji: null, lastComment: null };
+      entry = {
+        lastEmoji: null,
+        lastComment: null,
+        lastCommentMessageId: null,
+      };
       result.set(txId, entry);
     }
     if (isEmoji) {
       if (!entry.lastEmoji) entry.lastEmoji = trimmed;
     } else {
-      if (!entry.lastComment) entry.lastComment = trimmed;
+      if (!entry.lastComment) {
+        entry.lastComment = trimmed;
+        entry.lastCommentMessageId = row.id;
+      }
     }
   }
   return result;

@@ -49,6 +49,11 @@ type TransactionItemProps = {
   /** Friend mode: viewer's most recent text comment. Read-only trace beside
    *  the message icon so the viewer can recall what they wrote. */
   lastComment?: string | null;
+  /** Friend mode: dm_messages.id for the message that produced lastComment.
+   *  Tapping the trace navigates to /dm/<owner>?message=<id>. When this is set
+   *  the row is treated as "comment locked" — the inline comment form does not
+   *  render, so the DM thread stays the single source of truth. */
+  lastCommentMessageId?: string | null;
   /** Friend mode parent-managed exclusive state. */
   isActive?: boolean;
   activeMode?: InteractionMode | null;
@@ -68,6 +73,7 @@ export function TransactionItem({
   ownerUserId,
   lastEmoji,
   lastComment,
+  lastCommentMessageId,
   isActive,
   activeMode,
   commentDraft,
@@ -84,6 +90,7 @@ export function TransactionItem({
       transaction={transaction}
       lastEmoji={lastEmoji ?? null}
       lastComment={lastComment ?? null}
+      lastCommentMessageId={lastCommentMessageId ?? null}
       ownerUserId={ownerUserId}
       isActive={isActive ?? false}
       activeMode={activeMode ?? null}
@@ -131,6 +138,7 @@ type FriendRowProps = {
   transaction: TransactionListRow;
   lastEmoji: string | null;
   lastComment: string | null;
+  lastCommentMessageId: string | null;
   ownerUserId: string;
   isActive: boolean;
   activeMode: InteractionMode | null;
@@ -144,6 +152,7 @@ function FriendRow({
   transaction,
   lastEmoji,
   lastComment,
+  lastCommentMessageId,
   ownerUserId,
   isActive,
   activeMode,
@@ -156,9 +165,16 @@ function FriendRow({
   const [reactionPending, startReactionTransition] = useTransition();
   const [commentPending, startCommentTransition] = useTransition();
 
+  // A row is "comment-locked" once the viewer has sent a text comment on it —
+  // the message-icon turns into a deep link to that DM message and the inline
+  // comment form is suppressed (the DM thread is the only place to edit).
+  // In that state, tapping the row body falls back to opening the emoji panel
+  // because the comment surface no longer accepts input.
+  const hasComment = Boolean(lastComment && lastCommentMessageId);
+
   function handleRowClick() {
     if (!isActive) {
-      onSelectMode?.(transaction.id, "comment");
+      onSelectMode?.(transaction.id, hasComment ? "emoji" : "comment");
     }
   }
 
@@ -198,6 +214,9 @@ function FriendRow({
       toast.success("댓글을 DM으로 보냈어요.");
       onCommentDraftChange?.("");
       onCommitClose?.();
+      // Refresh the server tree so the message icon flips from input-toggle
+      // to a deep-link anchor on the next render — the comment is now locked.
+      router.refresh();
     });
   }
 
@@ -241,34 +260,36 @@ function FriendRow({
             <Heart className="size-4" aria-hidden />
           )}
         </button>
-        <button
-          type="button"
-          aria-label={
-            lastComment ? `댓글: ${lastComment}` : "댓글 달기"
-          }
-          aria-pressed={isActive && activeMode === "comment"}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelectMode?.(transaction.id, "comment");
-          }}
-          className={cn(
-            "inline-flex h-8 min-w-0 max-w-[60%] items-center gap-1.5 rounded-full px-2 text-muted-foreground transition-colors hover:bg-card hover:text-foreground",
-            isActive && activeMode === "comment" && "bg-card text-foreground",
-          )}
-        >
-          <MessageCircle className="size-4 shrink-0" aria-hidden />
-          {lastComment ? (
-            <>
-              <span
-                aria-hidden
-                className="text-[12px] text-muted-foreground/60"
-              >
-                ·
-              </span>
-              <span className="truncate text-[12px]">{lastComment}</span>
-            </>
-          ) : null}
-        </button>
+        {hasComment ? (
+          <a
+            href={`/dm/${ownerUserId}?message=${lastCommentMessageId}`}
+            aria-label={`댓글: ${lastComment} — DM에서 보기`}
+            onClick={(event) => event.stopPropagation()}
+            className="inline-flex h-8 min-w-0 max-w-[60%] items-center gap-1.5 rounded-full px-2 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+          >
+            <MessageCircle className="size-4 shrink-0" aria-hidden />
+            <span aria-hidden className="text-[12px] text-muted-foreground/60">
+              ·
+            </span>
+            <span className="truncate text-[12px]">{lastComment}</span>
+          </a>
+        ) : (
+          <button
+            type="button"
+            aria-label="댓글 달기"
+            aria-pressed={isActive && activeMode === "comment"}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectMode?.(transaction.id, "comment");
+            }}
+            className={cn(
+              "inline-flex h-8 min-w-0 max-w-[60%] items-center gap-1.5 rounded-full px-2 text-muted-foreground transition-colors hover:bg-card hover:text-foreground",
+              isActive && activeMode === "comment" && "bg-card text-foreground",
+            )}
+          >
+            <MessageCircle className="size-4 shrink-0" aria-hidden />
+          </button>
+        )}
       </div>
 
       {isActive && activeMode === "emoji" ? (
@@ -305,7 +326,7 @@ function FriendRow({
         </div>
       ) : null}
 
-      {isActive && activeMode === "comment" ? (
+      {isActive && activeMode === "comment" && !hasComment ? (
         <form
           onSubmit={handleCommentSubmit}
           onClick={(event) => event.stopPropagation()}

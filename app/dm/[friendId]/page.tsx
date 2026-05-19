@@ -9,7 +9,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Params = Promise<{ friendId: string }>;
-type SearchParams = Promise<{ quote?: string }>;
+type SearchParams = Promise<{ quote?: string; message?: string }>;
 
 export default async function DmThreadPage({
   params,
@@ -187,6 +187,13 @@ export default async function DmThreadPage({
     }
   }
 
+  // ?message=<uuid> — dashboard comment-trace deep link. The client validates
+  // existence against the loaded message batch and falls back to the bottom
+  // anchor + toast when it can't find the row (e.g. older than the 200-msg
+  // window). We still validate the UUID shape here to keep junk out of the DOM.
+  const targetMessageId =
+    sp?.message && UUID_RE.test(sp.message) ? sp.message : null;
+
   return (
     <AppShell withFixedComposer>
       <DmChat
@@ -196,6 +203,7 @@ export default async function DmThreadPage({
         friendNickname={friendNickname}
         initialMessages={messages}
         prefilledQuote={prefilledQuote}
+        targetMessageId={targetMessageId}
       />
     </AppShell>
   );
