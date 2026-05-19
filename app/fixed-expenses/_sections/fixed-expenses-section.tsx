@@ -17,7 +17,7 @@ export async function FixedExpensesSection() {
     supabase
       .from("fixed_expenses")
       .select(
-        "id, subscription_plan_id, name, plan_name, amount, category, is_active",
+        "id, subscription_plan_id, name, plan_name, amount, category, is_active, payment_day",
       )
       .eq("user_id", userId)
       .order("amount", { ascending: false })
@@ -60,6 +60,7 @@ export async function FixedExpensesSection() {
     amount: Number(row.amount),
     category: row.category,
     is_active: row.is_active,
+    payment_day: row.payment_day ?? null,
   }));
 
   const plans: SubscriptionPlan[] = (plansResult.data ?? []).map((row) => ({

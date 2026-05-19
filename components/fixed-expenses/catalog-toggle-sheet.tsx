@@ -8,6 +8,7 @@ import { BottomSheet, useStableNonNull } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
+import { PaymentDaySelect } from "./payment-day-select";
 import { SplitChips } from "./split-chips";
 import { planLabel, type SubscriptionPlan } from "./types";
 
@@ -55,6 +56,7 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
   const [amountText, setAmountText] = useState(() =>
     formatNumber(plan.default_amount),
   );
+  const [paymentDay, setPaymentDay] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const canSubmit = amountValue > 0 && !pending;
@@ -67,6 +69,7 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
       const result = await activateCatalogPlanAction({
         planId: plan.id,
         amount: amountValue,
+        payment_day: paymentDay,
       });
       if (result.ok) {
         toast.success("추가됐어요.");
@@ -93,6 +96,20 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
           기본 금액은 {formatNumber(plan.default_amount)}원이에요. 함께 쓰는
           사람이 있으면 위에서 나눠주세요.
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="catalog-payment-day"
+          className="block text-sm font-medium text-muted-foreground"
+        >
+          결제일 <span className="text-muted-foreground/70">(선택)</span>
+        </label>
+        <PaymentDaySelect
+          id="catalog-payment-day"
+          value={paymentDay}
+          onChange={setPaymentDay}
+        />
       </div>
 
       <Button

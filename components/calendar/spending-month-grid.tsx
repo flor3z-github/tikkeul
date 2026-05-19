@@ -16,6 +16,9 @@ type SpendingMonthGridProps = {
   selectedDay: string;
   dailyTotals: Record<string, number>;
   availableBudget: number;
+  /** Own-mode: set of YYYY-MM-DD with at least one scheduled fixed expense.
+   *  Drives a small marker under the day number. */
+  fixedExpenseDays?: Set<string>;
   onSelectDay: (iso: string) => void;
 };
 
@@ -64,6 +67,7 @@ export function SpendingMonthGrid({
   selectedDay,
   dailyTotals,
   availableBudget,
+  fixedExpenseDays,
   onSelectDay,
 }: SpendingMonthGridProps) {
   const cells: NormalizedCell[] =
@@ -104,6 +108,7 @@ export function SpendingMonthGrid({
           const amount = dailyTotals[cell.iso] ?? 0;
           const state = classifyDailyAmount(amount, availableBudget);
           const isSelected = cell.inCycle && cell.iso === selectedDay;
+          const hasFixedExpense = fixedExpenseDays?.has(cell.iso) === true;
           return (
             <DayCell
               key={`${cell.iso}-${i}`}
@@ -113,12 +118,13 @@ export function SpendingMonthGrid({
               inMonth={cell.inCycle}
               isToday={cell.isToday}
               isSelected={isSelected}
+              hasFixedExpense={hasFixedExpense}
               onClick={() => {
                 if (!cell.inCycle) return;
                 if (cell.iso === selectedDay) return;
                 onSelectDay(cell.iso);
               }}
-              ariaLabel={`${cell.date.getMonth() + 1}월 ${cell.date.getDate()}일${amount > 0 ? `, 소비 ${amount.toLocaleString()}원` : ""}`}
+              ariaLabel={`${cell.date.getMonth() + 1}월 ${cell.date.getDate()}일${amount > 0 ? `, 소비 ${amount.toLocaleString()}원` : ""}${hasFixedExpense ? ", 고정지출 예정" : ""}`}
             />
           );
         })}

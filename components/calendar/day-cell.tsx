@@ -11,6 +11,8 @@ type DayCellProps = {
   inMonth: boolean;
   isToday: boolean;
   isSelected: boolean;
+  /** True when at least one fixed expense is scheduled to fire on this day. */
+  hasFixedExpense?: boolean;
   onClick: () => void;
   ariaLabel: string;
 };
@@ -29,6 +31,7 @@ export function DayCell({
   inMonth,
   isToday,
   isSelected,
+  hasFixedExpense = false,
   onClick,
   ariaLabel,
 }: DayCellProps) {
@@ -87,6 +90,15 @@ export function DayCell({
           >
             {formatNumber(amount)}
           </span>
+        ) : null}
+        {hasFixedExpense ? (
+          <span
+            aria-hidden
+            className={cn(
+              "mt-auto size-1 rounded-full",
+              isSelected ? "bg-primary-foreground/85" : "bg-muted-foreground/60",
+            )}
+          />
         ) : null}
       </span>
     </button>

@@ -98,6 +98,7 @@ export type Database = {
           amount: number;
           category: string | null;
           is_active: boolean;
+          payment_day: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -110,6 +111,7 @@ export type Database = {
           amount: number;
           category?: string | null;
           is_active?: boolean;
+          payment_day?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -122,6 +124,7 @@ export type Database = {
           amount?: number;
           category?: string | null;
           is_active?: boolean;
+          payment_day?: number | null;
           created_at?: string;
           updated_at?: string;
         };

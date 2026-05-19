@@ -18,6 +18,8 @@ export type FixedExpenseRow = {
   amount: number;
   category: string | null;
   is_active: boolean;
+  /** Monthly payment day. NULL = unset, 0 = end of month, 1..31 = that day. */
+  payment_day: number | null;
 };
 
 export function planLabel(plan: SubscriptionPlan): string {

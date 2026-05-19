@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { isValidPaymentDay } from "@/lib/utils/payment-day";
 
 export type FixedExpenseActionResult =
   | { ok: true }
@@ -27,6 +28,16 @@ function validateName(name: string): FixedExpenseActionResult | null {
   }
   if (name.length > 40) {
     return { ok: false, error: "이름은 40자 이내로 입력해주세요." };
+  }
+  return null;
+}
+
+function validatePaymentDay(
+  value: number | null | undefined,
+): FixedExpenseActionResult | null {
+  if (value === null || value === undefined) return null;
+  if (!isValidPaymentDay(value)) {
+    return { ok: false, error: "결제일은 1일부터 31일 사이 또는 말일로 선택해주세요." };
   }
   return null;
 }
@@ -55,11 +66,16 @@ async function requireUser() {
 export async function activateCatalogPlanAction(input: {
   planId: string;
   amount: number;
+  payment_day?: number | null;
 }): Promise<FixedExpenseActionResult> {
   const { supabase, user } = await requireUser();
 
   const amountError = validateAmount(input.amount);
   if (amountError) return amountError;
+
+  const paymentDayError = validatePaymentDay(input.payment_day);
+  if (paymentDayError) return paymentDayError;
+  const payment_day = input.payment_day ?? null;
 
   // Look up the catalog row to copy name/category at the time of activation.
   const { data: plan, error: planError } = await supabase
@@ -95,6 +111,7 @@ export async function activateCatalogPlanAction(input: {
         amount,
         name,
         category: plan.category,
+        payment_day,
       })
       .eq("id", existing.id)
       .eq("user_id", user.id);
@@ -108,6 +125,7 @@ export async function activateCatalogPlanAction(input: {
       amount,
       category: plan.category,
       is_active: true,
+      payment_day,
     });
     if (error) return { ok: false, error: error.message };
   }
@@ -122,19 +140,30 @@ export async function updateFixedExpenseAction(input: {
   amount: number;
   name?: string;
   plan_name?: string | null;
+  payment_day?: number | null;
 }): Promise<FixedExpenseActionResult> {
   const { supabase, user } = await requireUser();
 
   const amountError = validateAmount(input.amount);
   if (amountError) return amountError;
 
+  if (input.payment_day !== undefined) {
+    const paymentDayError = validatePaymentDay(input.payment_day);
+    if (paymentDayError) return paymentDayError;
+  }
+
   const patch: {
     amount: number;
     name?: string;
     plan_name?: string | null;
+    payment_day?: number | null;
   } = {
     amount: Math.round(input.amount),
   };
+
+  if (input.payment_day !== undefined) {
+    patch.payment_day = input.payment_day;
+  }
 
   if (typeof input.name === "string") {
     const normalized = normalizeName(input.name);
@@ -213,6 +242,7 @@ export async function addManualFixedExpenseAction(input: {
   amount: number;
   category?: string | null;
   plan_name?: string | null;
+  payment_day?: number | null;
 }): Promise<FixedExpenseActionResult> {
   const { supabase, user } = await requireUser();
 
@@ -222,6 +252,10 @@ export async function addManualFixedExpenseAction(input: {
 
   const amountError = validateAmount(input.amount);
   if (amountError) return amountError;
+
+  const paymentDayError = validatePaymentDay(input.payment_day);
+  if (paymentDayError) return paymentDayError;
+  const payment_day = input.payment_day ?? null;
 
   const planNameRaw =
     typeof input.plan_name === "string" ? normalizeName(input.plan_name) : "";
@@ -239,6 +273,7 @@ export async function addManualFixedExpenseAction(input: {
     amount: Math.round(input.amount),
     category: input.category ?? null,
     is_active: true,
+    payment_day,
   });
 
   if (error) return { ok: false, error: error.message };

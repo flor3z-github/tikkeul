@@ -22,6 +22,7 @@ import { BottomSheet, useStableNonNull } from "@/components/ui/bottom-sheet";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
+import { PaymentDaySelect } from "./payment-day-select";
 import { SplitChips } from "./split-chips";
 import type { FixedExpenseRow, SubscriptionPlan } from "./types";
 
@@ -85,6 +86,7 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   const [name, setName] = useState(item.name);
   const [planName, setPlanName] = useState(item.plan_name ?? "");
   const [amountText, setAmountText] = useState(formatNumber(item.amount));
+  const [paymentDay, setPaymentDay] = useState<number | null>(item.payment_day);
   const [savePending, startSaveTransition] = useTransition();
   const [actionPending, startActionTransition] = useTransition();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -94,10 +96,12 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   const trimmedPlanName = planName.trim();
   const planNameChanged =
     !isCatalog && trimmedPlanName !== (item.plan_name ?? "");
+  const paymentDayChanged = paymentDay !== item.payment_day;
   const dirty =
     amountValue !== item.amount ||
     (isCatalog ? false : trimmedName !== item.name) ||
-    planNameChanged;
+    planNameChanged ||
+    paymentDayChanged;
   const canSave =
     amountValue > 0 && trimmedName.length > 0 && dirty && !savePending;
 
@@ -117,6 +121,7 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
               name: trimmedName,
               plan_name: trimmedPlanName.length > 0 ? trimmedPlanName : null,
             }),
+        ...(paymentDayChanged ? { payment_day: paymentDay } : {}),
       });
       if (result.ok) {
         toast.success("수정됐어요.");
@@ -200,6 +205,20 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
             </p>
           </>
         ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="active-item-payment-day"
+          className="block text-sm font-medium text-muted-foreground"
+        >
+          결제일 <span className="text-muted-foreground/70">(선택)</span>
+        </label>
+        <PaymentDaySelect
+          id="active-item-payment-day"
+          value={paymentDay}
+          onChange={setPaymentDay}
+        />
       </div>
 
       <div className="grid grid-cols-4 gap-2">

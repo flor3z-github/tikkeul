@@ -8,6 +8,7 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { parseAmountInput } from "@/lib/utils/money";
 import { AmountInput } from "./amount-input";
+import { PaymentDaySelect } from "./payment-day-select";
 
 type ManualAddSheetProps = {
   open: boolean;
@@ -35,6 +36,7 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
   const [name, setName] = useState("");
   const [planName, setPlanName] = useState("");
   const [amountText, setAmountText] = useState("");
+  const [paymentDay, setPaymentDay] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const trimmedName = name.trim();
@@ -49,6 +51,7 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
         name: trimmedName,
         plan_name: trimmedPlanName.length > 0 ? trimmedPlanName : null,
         amount: amountValue,
+        payment_day: paymentDay,
       });
       if (result.ok) {
         toast.success("추가됐어요.");
@@ -104,6 +107,20 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
           매달 결제 금액
         </label>
         <AmountInput value={amountText} onChange={setAmountText} />
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="manual-payment-day"
+          className="block text-sm font-medium text-muted-foreground"
+        >
+          결제일 <span className="text-muted-foreground/70">(선택)</span>
+        </label>
+        <PaymentDaySelect
+          id="manual-payment-day"
+          value={paymentDay}
+          onChange={setPaymentDay}
+        />
       </div>
 
       <Button

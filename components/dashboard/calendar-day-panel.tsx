@@ -33,6 +33,14 @@ import { formatKRW } from "@/lib/utils/money";
 
 export type InteractionMode = "emoji" | "comment";
 
+export type CalendarFixedExpenseItem = {
+  id: string;
+  name: string;
+  plan_name: string | null;
+  amount: number;
+  payment_day: number | null;
+};
+
 type CalendarDayPanelProps = {
   ym: string;
   initialDay: string;
@@ -55,6 +63,9 @@ type CalendarDayPanelProps = {
    *  Surfaces as a read-only trace next to the message icon — never editable
    *  from the row itself; the DM page is the source of truth. */
   lastCommentByTx?: Record<string, string>;
+  /** Own-mode only: fixed expenses scheduled to fire on each YYYY-MM-DD in
+   *  the visible cycle. Drives the calendar marker + the per-day section. */
+  fixedExpensesByDay?: Record<string, CalendarFixedExpenseItem[]>;
 };
 
 export function CalendarDayPanel({
@@ -71,6 +82,7 @@ export function CalendarDayPanel({
   ownerUserId,
   lastEmojiByTx,
   lastCommentByTx,
+  fixedExpensesByDay,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
 
@@ -186,6 +198,18 @@ export function CalendarDayPanel({
   const dayTotal = dayRows.reduce((sum, row) => sum + Number(row.amount), 0);
   const label = formatKoreanLongDate(selectedDay);
 
+  const fixedExpensesForDay = fixedExpensesByDay?.[selectedDay] ?? [];
+  // Set of every day in the cycle that has at least one scheduled fixed
+  // expense. Used to render a small dot under those day cells.
+  const fixedExpenseDays = useMemo(() => {
+    const set = new Set<string>();
+    if (!fixedExpensesByDay) return set;
+    for (const [iso, list] of Object.entries(fixedExpensesByDay)) {
+      if (list.length > 0) set.add(iso);
+    }
+    return set;
+  }, [fixedExpensesByDay]);
+
   return (
     <>
       <div className="mt-3 space-y-1.5 rounded-3xl border border-black/[0.08] bg-card p-3 dark:border-white/[0.10]">
@@ -198,9 +222,51 @@ export function CalendarDayPanel({
           selectedDay={selectedDay}
           dailyTotals={dailyTotals}
           availableBudget={availableBudget}
+          fixedExpenseDays={fixedExpenseDays}
           onSelectDay={handleSelectDay}
         />
       </div>
+
+      {fixedExpensesForDay.length > 0 ? (
+        <section className="mt-6 space-y-3">
+          <div className="flex items-baseline justify-between px-1">
+            <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
+              이 날 빠지는 고정지출
+            </h2>
+            <span className="text-[13px] font-semibold tabular-nums text-muted-foreground">
+              {formatKRW(
+                fixedExpensesForDay.reduce((sum, it) => sum + it.amount, 0),
+              )}
+            </span>
+          </div>
+          <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
+            <CardContent className="p-2">
+              <ul className="space-y-0.5">
+                {fixedExpensesForDay.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-2xl px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[15px] font-medium leading-tight">
+                        {item.name}
+                      </p>
+                      {item.plan_name ? (
+                        <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
+                          {item.plan_name}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span className="shrink-0 text-[15px] font-semibold tabular-nums text-muted-foreground">
+                      {formatKRW(item.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
 
       <section className="mt-6 space-y-3">
         <div className="flex items-baseline justify-between px-1">

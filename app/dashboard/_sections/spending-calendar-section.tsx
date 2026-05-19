@@ -5,7 +5,10 @@ import {
   type ViewerInteractionsByTransaction,
 } from "@/lib/queries/interactions";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
+import { createClient } from "@/lib/supabase/server";
 import type { CycleMode } from "@/lib/utils/calendar";
+import { expandFixedExpensesByDay } from "@/lib/utils/payment-day";
+import type { CalendarFixedExpenseItem } from "@/components/dashboard/calendar-day-panel";
 
 type SpendingCalendarSectionProps = {
   /** Viewer id resolved by the page from JWT claims — no auth call here. */
@@ -64,7 +67,17 @@ export async function SpendingCalendarSection({
   // read. Drives the heart icon and the read-only "last comment" trace next
   // to the message icon. Own mode skips this entirely (no DM thread, no
   // interaction state to surface).
-  const [monthlyResult, categoriesResult, viewerInteractions] = await Promise.all([
+  // Own-mode-only: pull active fixed_expenses with a payment_day so we can
+  // surface "scheduled to come out on day X" markers on the calendar. Friend
+  // mode is intentionally excluded for now — privacy of friend's payment
+  // schedule has not been spec'd in DESIGN.md.
+  const supabase = await createClient();
+  const [
+    monthlyResult,
+    categoriesResult,
+    viewerInteractions,
+    fixedExpensesRes,
+  ] = await Promise.all([
     getMonthlyTransactions(userId, startIso, endIso),
     getCategories(viewerId),
     !isOwn
@@ -72,6 +85,22 @@ export async function SpendingCalendarSection({
       : Promise.resolve(
           new Map() as ViewerInteractionsByTransaction,
         ),
+    isOwn
+      ? supabase
+          .from("fixed_expenses")
+          .select("id, name, plan_name, amount, payment_day")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .not("payment_day", "is", null)
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            name: string;
+            plan_name: string | null;
+            amount: number;
+            payment_day: number | null;
+          }>,
+        }),
   ]);
 
   if (!monthlyResult.ok) {
@@ -105,6 +134,25 @@ export async function SpendingCalendarSection({
     if (entry.lastComment) lastCommentByTx[txId] = entry.lastComment;
   }
 
+  // Resolve each fixed expense's payment_day → concrete dates within the
+  // visible cycle. Income_day cycles span two months, so payment_day=20 may
+  // fire twice (e.g. for a cycle 5/15–6/14, day 20 fires on 5/20 only because
+  // 6/20 falls outside; but 5/20 is captured by walking every cycle day).
+  const fixedExpenseItems: CalendarFixedExpenseItem[] = (
+    fixedExpensesRes.data ?? []
+  ).map((row) => ({
+    id: row.id,
+    name: row.name,
+    plan_name: row.plan_name,
+    amount: Number(row.amount),
+    payment_day: row.payment_day,
+  }));
+  const fixedExpensesByDay = expandFixedExpensesByDay(
+    cycleStart,
+    cycleEnd,
+    fixedExpenseItems,
+  );
+
   return (
     <CalendarDayPanel
       key={`${ym}-${cycleMode}`}
@@ -121,6 +169,7 @@ export async function SpendingCalendarSection({
       ownerUserId={userId}
       lastEmojiByTx={lastEmojiByTx}
       lastCommentByTx={lastCommentByTx}
+      fixedExpensesByDay={fixedExpensesByDay}
     />
   );
 }

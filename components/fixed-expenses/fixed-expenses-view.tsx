@@ -6,6 +6,10 @@ import { Check, Plus, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
+import {
+  comparePaymentDayUpcoming,
+  formatPaymentDay,
+} from "@/lib/utils/payment-day";
 import { ActiveItemSheet } from "./active-item-sheet";
 import { CatalogToggleSheet } from "./catalog-toggle-sheet";
 import { ManualAddSheet } from "./manual-add-sheet";
@@ -101,10 +105,17 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
 
   // "사용 중" stays pinned above the search bar and is NOT affected by the
   // search/filter — those controls only narrow the catalog grid below.
-  const activeItems = useMemo(
-    () => items.filter((it) => it.is_active),
-    [items],
-  );
+  // Sort by upcoming payment date (soonest first); items without a payment_day
+  // fall back to amount-desc order (the server-side order).
+  const activeItems = useMemo(() => {
+    const today = new Date();
+    const active = items.filter((it) => it.is_active);
+    return [...active].sort((a, b) => {
+      const cmp = comparePaymentDayUpcoming(today, a.payment_day, b.payment_day);
+      if (cmp !== 0) return cmp;
+      return b.amount - a.amount;
+    });
+  }, [items]);
   const total = activeItems.reduce((sum, it) => sum + it.amount, 0);
 
   // Catalog filtering: search box + category chip.
@@ -228,6 +239,7 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                     : null;
                   const showDefault =
                     plan != null && plan.default_amount !== item.amount;
+                  const paymentDayLabel = formatPaymentDay(item.payment_day);
                   return (
                     <li key={item.id}>
                       <button
@@ -236,9 +248,16 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                         className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted active:bg-muted"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[15px] font-medium leading-tight">
-                            {plan ? plan.service_name : item.name}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="truncate text-[15px] font-medium leading-tight">
+                              {plan ? plan.service_name : item.name}
+                            </p>
+                            {paymentDayLabel ? (
+                              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
+                                {paymentDayLabel}
+                              </span>
+                            ) : null}
+                          </div>
                           {(plan?.plan_name ?? item.plan_name) ? (
                             <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
                               {plan?.plan_name ?? item.plan_name}
