@@ -1,20 +1,39 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, X } from "lucide-react";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { CategoryIcon } from "@/lib/utils/category-icon";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { formatRelativeKoreanDate } from "@/lib/utils/date";
+import {
+  formatChatDateSeparator,
+  formatChatTime,
+  toISODate,
+} from "@/lib/utils/date";
 import { formatKRW } from "@/lib/utils/money";
 
 import { deleteMessageAction, sendMessageAction } from "../actions";
 
 const MESSAGE_MAX_LENGTH = 500;
+// Same-sender messages sent within this many milliseconds of each other are
+// rendered as a single visual group (shared time stamp, tight vertical spacing,
+// nickname only on the first row). One minute matches KakaoTalk's default.
+const GROUP_GAP_MS = 60_000;
+const LONG_PRESS_MS = 500;
 
 export type DmChatQuoteCard = {
   id: string;
@@ -34,6 +53,15 @@ export type DmChatMessage = {
   quote: DmChatQuoteCard | null;
 };
 
+type MessageGroup = {
+  kind: "group";
+  senderId: string;
+  isMe: boolean;
+  messages: DmChatMessage[];
+};
+type DateSeparator = { kind: "date"; key: string; label: string };
+type RenderItem = MessageGroup | DateSeparator;
+
 type Props = {
   threadId: string;
   viewerId: string;
@@ -42,6 +70,63 @@ type Props = {
   initialMessages: DmChatMessage[];
   prefilledQuote: DmChatQuoteCard | null;
 };
+
+function buildRenderItems(
+  messages: DmChatMessage[],
+  viewerId: string,
+): RenderItem[] {
+  const items: RenderItem[] = [];
+  let currentGroup: MessageGroup | null = null;
+  let lastDateKey: string | null = null;
+
+  const flushGroup = () => {
+    if (currentGroup) {
+      items.push(currentGroup);
+      currentGroup = null;
+    }
+  };
+
+  for (const message of messages) {
+    const messageDate = new Date(message.createdAt);
+    const dateKey = toISODate(messageDate);
+
+    if (dateKey !== lastDateKey) {
+      flushGroup();
+      items.push({
+        kind: "date",
+        key: dateKey,
+        label: formatChatDateSeparator(messageDate),
+      });
+      lastDateKey = dateKey;
+    }
+
+    const continuesGroup =
+      currentGroup !== null &&
+      currentGroup.senderId === message.senderId &&
+      // Quoted messages start their own group so the quote card always sits at
+      // the visual top of the bubble cluster instead of being orphaned.
+      message.quote === null &&
+      messageDate.getTime() -
+        new Date(
+          currentGroup.messages[currentGroup.messages.length - 1].createdAt,
+        ).getTime() <=
+        GROUP_GAP_MS;
+
+    if (continuesGroup && currentGroup) {
+      currentGroup.messages.push(message);
+    } else {
+      flushGroup();
+      currentGroup = {
+        kind: "group",
+        senderId: message.senderId,
+        isMe: message.senderId === viewerId,
+        messages: [message],
+      };
+    }
+  }
+  flushGroup();
+  return items;
+}
 
 export function DmChat({
   threadId,
@@ -56,8 +141,14 @@ export function DmChat({
     prefilledQuote,
   );
   const [sendPending, startSendTransition] = useTransition();
-  const [, startDeleteTransition] = useTransition();
+  const [deletePending, startDeleteTransition] = useTransition();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const listEndRef = useRef<HTMLDivElement | null>(null);
+
+  const renderItems = useMemo(
+    () => buildRenderItems(initialMessages, viewerId),
+    [initialMessages, viewerId],
+  );
 
   // Realtime subscription: any insert/update/delete on this thread triggers
   // a debounced server-component refresh. RLS already restricts the channel
@@ -136,29 +227,48 @@ export function DmChat({
     });
   }
 
-  function handleDelete(messageId: string) {
+  function handleConfirmDelete() {
+    const id = confirmDeleteId;
+    if (!id) return;
     startDeleteTransition(async () => {
-      const result = await deleteMessageAction(messageId);
-      if (!result.ok) toast.error(result.error);
+      const result = await deleteMessageAction(id);
+      if (!result.ok) {
+        toast.error(result.error);
+      }
+      setConfirmDeleteId(null);
     });
   }
 
   return (
-    <div className="flex flex-col gap-3 pb-[calc(env(safe-area-inset-bottom)+104px)]">
-      {initialMessages.length === 0 ? (
+    <div className="flex flex-col gap-1.5 pb-[calc(env(safe-area-inset-bottom)+84px)]">
+      {renderItems.length === 0 ? (
         <p className="rounded-2xl bg-muted/50 px-4 py-6 text-center text-[13px] text-muted-foreground">
           {friendNickname}님과의 첫 메시지를 남겨보세요.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {initialMessages.map((message) => (
-            <MessageRow
-              key={message.id}
-              message={message}
-              isMe={message.senderId === viewerId}
-              onDelete={handleDelete}
-            />
-          ))}
+        <ul className="flex flex-col gap-3">
+          {renderItems.map((item) => {
+            if (item.kind === "date") {
+              return (
+                <li
+                  key={`date-${item.key}`}
+                  className="my-2 flex items-center justify-center"
+                >
+                  <span className="rounded-full bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+                    {item.label}
+                  </span>
+                </li>
+              );
+            }
+            return (
+              <MessageGroupView
+                key={`group-${item.messages[0].id}`}
+                group={item}
+                friendNickname={friendNickname}
+                onRequestDelete={(id) => setConfirmDeleteId(id)}
+              />
+            );
+          })}
         </ul>
       )}
       <div ref={listEndRef} />
@@ -208,17 +318,104 @@ export function DmChat({
           </Button>
         </div>
       </form>
+
+      <AlertDialog
+        open={confirmDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletePending) setConfirmDeleteId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>이 메시지를 삭제할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              삭제한 메시지는 상대방의 대화창에서도 즉시 사라져요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletePending}>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                handleConfirmDelete();
+              }}
+              disabled={deletePending}
+              className={cn(
+                buttonVariants({ variant: "destructive" }),
+                "h-12 w-full rounded-full text-[15px] font-semibold",
+              )}
+            >
+              {deletePending ? "삭제 중…" : "삭제"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+type MessageGroupViewProps = {
+  group: MessageGroup;
+  friendNickname: string;
+  onRequestDelete: (messageId: string) => void;
+};
+
+function MessageGroupView({
+  group,
+  friendNickname,
+  onRequestDelete,
+}: MessageGroupViewProps) {
+  const lastMessage = group.messages[group.messages.length - 1];
+  const timeLabel = formatChatTime(new Date(lastMessage.createdAt));
+
+  return (
+    <li
+      className={cn(
+        "flex flex-col",
+        group.isMe ? "items-end" : "items-start",
+        // Each message group gets its own gap-0.5 stack; gap-3 between groups
+        // comes from the parent <ul>.
+        "gap-0.5",
+      )}
+    >
+      {!group.isMe ? (
+        <p className="mb-1 px-1 text-[12px] font-medium text-muted-foreground">
+          {friendNickname}
+        </p>
+      ) : null}
+
+      {group.messages.map((message, idx) => {
+        const isLast = idx === group.messages.length - 1;
+        return (
+          <MessageRow
+            key={message.id}
+            message={message}
+            isMe={group.isMe}
+            timeLabel={isLast ? timeLabel : null}
+            canDelete={group.isMe}
+            onRequestDelete={onRequestDelete}
+          />
+        );
+      })}
+    </li>
   );
 }
 
 type MessageRowProps = {
   message: DmChatMessage;
   isMe: boolean;
-  onDelete: (messageId: string) => void;
+  timeLabel: string | null;
+  canDelete: boolean;
+  onRequestDelete: (messageId: string) => void;
 };
 
-function MessageRow({ message, isMe, onDelete }: MessageRowProps) {
+function MessageRow({
+  message,
+  isMe,
+  timeLabel,
+  canDelete,
+  onRequestDelete,
+}: MessageRowProps) {
   // Emoji-only messages render as a chunky standalone bubble so reactions
   // sent via the transaction sheet read as reactions, not text. The regex
   // accepts pictographic code points plus the variation selectors and
@@ -229,47 +426,79 @@ function MessageRow({ message, isMe, onDelete }: MessageRowProps) {
     trimmedContent.length > 0 &&
     /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+$/u.test(trimmedContent);
 
+  // Long-press handler. We use a single ref-stored timer that both touch and
+  // mouse events drive — releasing/moving cancels the pending fire. We do NOT
+  // suppress the synthetic click after a successful long-press because the
+  // bubble has no click action; messages only ever react to long-press.
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
+  const startPress = () => {
+    if (!canDelete) return;
+    cancelPress();
+    pressTimer.current = setTimeout(() => {
+      pressTimer.current = null;
+      onRequestDelete(message.id);
+    }, LONG_PRESS_MS);
+  };
+
   return (
-    <li
+    <div
       className={cn(
-        "flex flex-col gap-1",
-        isMe ? "items-end" : "items-start",
+        "flex w-full items-end gap-1.5",
+        isMe ? "justify-end" : "justify-start",
       )}
     >
-      {message.quote ? <QuoteCard quote={message.quote} mine={isMe} /> : null}
-      <div
-        className={cn(
-          "flex max-w-[78%] flex-col gap-1 rounded-2xl px-3.5 py-2.5 text-[14px] leading-snug",
-          isMe
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-foreground",
-          isReactionStyle && "px-3 py-2 text-[24px]",
-        )}
-      >
-        <p className="whitespace-pre-wrap break-words">{message.content}</p>
-      </div>
-      <div
-        className={cn(
-          "flex items-center gap-2 text-[11px] text-muted-foreground",
-          isMe ? "justify-end" : "justify-start",
-        )}
-      >
-        <span className="tabular-nums">
-          {formatRelativeKoreanDate(new Date(message.createdAt))}
+      {isMe && timeLabel ? (
+        <span className="mb-0.5 text-[10px] tabular-nums text-muted-foreground">
+          {timeLabel}
         </span>
-        {isMe ? (
-          <button
-            type="button"
-            aria-label="메시지 삭제"
-            onClick={() => onDelete(message.id)}
-            className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 hover:bg-muted"
-          >
-            <Trash2 className="size-3" />
-            삭제
-          </button>
-        ) : null}
+      ) : null}
+
+      <div
+        className={cn(
+          "flex max-w-[78%] flex-col gap-1",
+          isMe ? "items-end" : "items-start",
+        )}
+      >
+        {message.quote ? <QuoteCard quote={message.quote} mine={isMe} /> : null}
+        <div
+          onTouchStart={startPress}
+          onTouchEnd={cancelPress}
+          onTouchCancel={cancelPress}
+          onTouchMove={cancelPress}
+          onMouseDown={startPress}
+          onMouseUp={cancelPress}
+          onMouseLeave={cancelPress}
+          onContextMenu={(event) => {
+            // Suppress the native context menu on long-press (mobile Safari
+            // fires this after ~300ms of touch-hold) so our 500ms timer is
+            // what gates the AlertDialog.
+            if (canDelete) event.preventDefault();
+          }}
+          className={cn(
+            "select-none rounded-2xl px-3.5 py-2 text-[14px] leading-snug",
+            isMe
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-foreground",
+            isReactionStyle && "bg-transparent px-1 py-0 text-[34px]",
+          )}
+          style={{ WebkitUserSelect: "none" }}
+        >
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        </div>
       </div>
-    </li>
+
+      {!isMe && timeLabel ? (
+        <span className="mb-0.5 text-[10px] tabular-nums text-muted-foreground">
+          {timeLabel}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -283,7 +512,7 @@ function QuoteCard({
   return (
     <div
       className={cn(
-        "flex max-w-[78%] items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-[12px]",
+        "flex max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-[12px]",
         mine ? "self-end" : "self-start",
       )}
     >

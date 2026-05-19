@@ -74,3 +74,23 @@ export function formatKoreanMonth(input: string | Date): string {
   return koreanMonthFormatter.format(date);
 }
 
+const CHAT_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+export function formatChatDateSeparator(input: string | Date): string {
+  const date = typeof input === "string" ? new Date(input) : input;
+  if (Number.isNaN(date.getTime())) return "";
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const w = CHAT_WEEKDAYS[date.getDay()];
+  return `${y}년 ${m}월 ${d}일 (${w})`;
+}
+
+export function formatChatTime(input: string | Date): string {
+  const date = typeof input === "string" ? new Date(input) : input;
+  if (Number.isNaN(date.getTime())) return "";
+  const h = String(date.getHours()).padStart(2, "0");
+  const m = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
