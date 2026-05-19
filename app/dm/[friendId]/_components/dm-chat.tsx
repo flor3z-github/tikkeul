@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { toast } from "sonner";
@@ -150,6 +157,23 @@ export function DmChat({
   const listEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
 
+  // Scroll the window to the document bottom on the next frame so layout
+  // (composer height, new message DOM) has settled. We deliberately do NOT
+  // use scrollIntoView on listEndRef: the ref sits inside a wrapper whose
+  // paddingBottom reserves space for the fixed composer, and scrollIntoView
+  // aligns the ref's bottom — not the document bottom — with the viewport
+  // bottom, which hides the last composerHeight px of messages behind the
+  // composer. Scrolling to scrollHeight parks the padding under the composer
+  // so the latest message sits flush above it.
+  const scrollToEnd = (behavior: ScrollBehavior = "auto") => {
+    requestAnimationFrame(() => {
+      const target =
+        document.scrollingElement?.scrollHeight ??
+        document.documentElement.scrollHeight;
+      window.scrollTo({ top: target, behavior });
+    });
+  };
+
   // The composer is position: fixed — its height changes when a quote card
   // appears/disappears or the textarea grows. We mirror that height (border-
   // box, so padding + safe-area are included) onto the message list's bottom
@@ -163,7 +187,16 @@ export function DmChat({
         const height = box
           ? box.blockSize
           : (entry.target as HTMLElement).offsetHeight;
-        if (height > 0) setComposerHeight(Math.ceil(height));
+        if (height > 0) {
+          setComposerHeight((prev) => {
+            const next = Math.ceil(height);
+            // When the composer grows/shrinks (quote card add/remove,
+            // textarea wrap), re-anchor the list to the bottom so the
+            // latest message stays in view instead of being pushed off.
+            if (next !== prev) scrollToEnd();
+            return next;
+          });
+        }
       }
     });
     ro.observe(el);
@@ -218,11 +251,24 @@ export function DmChat({
     };
   }, [threadId, router]);
 
+  // Anchor at the bottom on initial mount before the browser paints, so the
+  // user enters the thread at the latest message instead of seeing the top
+  // and then jumping. useLayoutEffect is synchronous w.r.t. paint. We scroll
+  // window to document bottom (not into the ref) for the same reason as
+  // scrollToEnd above.
+  useLayoutEffect(() => {
+    const target =
+      document.scrollingElement?.scrollHeight ??
+      document.documentElement.scrollHeight;
+    window.scrollTo({ top: target, behavior: "auto" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-scroll to the latest message whenever the list grows. We do this on
   // initialMessages identity changes (router.refresh swaps the array) rather
   // than tracking length so a reload after delete also re-anchors at the end.
   useEffect(() => {
-    listEndRef.current?.scrollIntoView({ block: "end" });
+    scrollToEnd();
   }, [initialMessages]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -236,6 +282,9 @@ export function DmChat({
     // restore via toast — the cleared draft is the price of UX snappiness.
     setDraft("");
     setPendingQuote(null);
+    // Anchor to the bottom right away so the user lands at the end of the
+    // thread before the realtime refresh (~300ms) brings the new message in.
+    scrollToEnd();
 
     startSendTransition(async () => {
       const result = await sendMessageAction(
@@ -248,7 +297,11 @@ export function DmChat({
         // Roll the draft back so the user can retry without retyping.
         setDraft(trimmed);
         setPendingQuote(quoteToSend);
+        return;
       }
+      // Belt-and-suspenders: re-anchor after the server confirms in case the
+      // realtime refresh hasn't fired yet (it will scroll again on arrival).
+      scrollToEnd();
     });
   }
 
