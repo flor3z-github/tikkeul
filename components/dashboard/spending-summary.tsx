@@ -112,16 +112,16 @@ export function SpendingSummary({
               key={cycleLabel}
               className="grid grid-cols-2 items-end gap-3 animate-in fade-in duration-200"
             >
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1">
                 <p className="text-[12px] text-muted-foreground">쓴 돈</p>
-                <p className="text-[clamp(22px,7.5vw,32px)] font-extrabold leading-none tracking-[-0.04em] tabular-nums whitespace-nowrap">
+                <p className="text-[clamp(20px,6vw,32px)] font-extrabold leading-none tracking-[-0.04em] tabular-nums whitespace-nowrap">
                   {formatNumber(summary.totalSpent)}
                   <span className="ml-1 text-base font-semibold text-muted-foreground">
                     원
                   </span>
                 </p>
               </div>
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1 text-right">
                 <p
                   className={cn(
                     "text-[12px]",
@@ -132,7 +132,7 @@ export function SpendingSummary({
                 </p>
                 <p
                   className={cn(
-                    "text-[22px] font-medium leading-none tabular-nums",
+                    "text-[clamp(16px,4.5vw,22px)] font-medium leading-none tabular-nums whitespace-nowrap",
                     isOver ? "text-destructive" : "text-muted-foreground",
                   )}
                 >
