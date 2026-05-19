@@ -34,6 +34,9 @@ const MESSAGE_MAX_LENGTH = 500;
 // nickname only on the first row). One minute matches KakaoTalk's default.
 const GROUP_GAP_MS = 60_000;
 const LONG_PRESS_MS = 500;
+// Fallback bottom padding before the form has measured itself (~ form height
+// with no pending-quote card). Real value comes from a ResizeObserver below.
+const COMPOSER_FALLBACK_HEIGHT = 84;
 
 export type DmChatQuoteCard = {
   id: string;
@@ -143,7 +146,29 @@ export function DmChat({
   const [sendPending, startSendTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [composerHeight, setComposerHeight] = useState(COMPOSER_FALLBACK_HEIGHT);
   const listEndRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLFormElement | null>(null);
+
+  // The composer is position: fixed — its height changes when a quote card
+  // appears/disappears or the textarea grows. We mirror that height (border-
+  // box, so padding + safe-area are included) onto the message list's bottom
+  // padding so the latest message never disappears behind the composer.
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const box = entry.borderBoxSize?.[0];
+        const height = box
+          ? box.blockSize
+          : (entry.target as HTMLElement).offsetHeight;
+        if (height > 0) setComposerHeight(Math.ceil(height));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const renderItems = useMemo(
     () => buildRenderItems(initialMessages, viewerId),
@@ -240,7 +265,14 @@ export function DmChat({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 pb-[calc(env(safe-area-inset-bottom)+84px)]">
+    <div
+      className="flex flex-col gap-1.5"
+      style={{
+        // composerHeight is the form's border-box height which already
+        // includes its safe-area-inset-bottom padding — don't add it again.
+        paddingBottom: `${composerHeight}px`,
+      }}
+    >
       {renderItems.length === 0 ? (
         <p className="rounded-2xl bg-muted/50 px-4 py-6 text-center text-[13px] text-muted-foreground">
           {friendNickname}님과의 첫 메시지를 남겨보세요.
@@ -274,6 +306,7 @@ export function DmChat({
       <div ref={listEndRef} />
 
       <form
+        ref={composerRef}
         onSubmit={handleSubmit}
         className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md border-t border-border bg-background/95 px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-3 backdrop-blur"
       >
