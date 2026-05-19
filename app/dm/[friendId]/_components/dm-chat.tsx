@@ -150,10 +150,15 @@ export function DmChat({
   const [pendingQuote, setPendingQuote] = useState<DmChatQuoteCard | null>(
     prefilledQuote,
   );
-  const [sendPending, startSendTransition] = useTransition();
+  const [, startSendTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [composerHeight, setComposerHeight] = useState(COMPOSER_FALLBACK_HEIGHT);
+  // Optimistic outbox: messages the viewer just sent that haven't been
+  // confirmed by a router.refresh() / realtime arrival yet. Each carries a
+  // client-generated UUID that the server insert reuses as the row id, so
+  // the realtime echo lands with the same id and we can dedupe by id.
+  const [pendingMessages, setPendingMessages] = useState<DmChatMessage[]>([]);
   const listEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
 
@@ -203,9 +208,38 @@ export function DmChat({
     return () => ro.disconnect();
   }, []);
 
+  // Merge server messages with the optimistic outbox. We always append
+  // pending messages at the end because they are by definition newer than
+  // anything the server has shipped to this client. Entries whose id has
+  // already arrived via initialMessages are dropped so we don't double-render.
+  const mergedMessages = useMemo(() => {
+    if (pendingMessages.length === 0) return initialMessages;
+    const serverIds = new Set(initialMessages.map((m) => m.id));
+    const liveOptimistic = pendingMessages.filter((m) => !serverIds.has(m.id));
+    if (liveOptimistic.length === 0) return initialMessages;
+    return [...initialMessages, ...liveOptimistic];
+  }, [initialMessages, pendingMessages]);
+
+  // Prune optimistic entries that have been confirmed by the server. This
+  // runs whenever initialMessages identity changes (router.refresh), which
+  // is the moment the realtime echo for our own insert lands. setState in
+  // an effect triggers a follow-up render; that's accepted here because the
+  // server array is the source of truth and we only want one of the two
+  // copies to render.
+  useEffect(() => {
+    if (pendingMessages.length === 0) return;
+    const serverIds = new Set(initialMessages.map((m) => m.id));
+    if (pendingMessages.some((m) => serverIds.has(m.id))) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPendingMessages((prev) =>
+        prev.filter((m) => !serverIds.has(m.id)),
+      );
+    }
+  }, [initialMessages, pendingMessages]);
+
   const renderItems = useMemo(
-    () => buildRenderItems(initialMessages, viewerId),
-    [initialMessages, viewerId],
+    () => buildRenderItems(mergedMessages, viewerId),
+    [mergedMessages, viewerId],
   );
 
   // Realtime subscription: any insert/update/delete on this thread triggers
@@ -261,7 +295,6 @@ export function DmChat({
       document.scrollingElement?.scrollHeight ??
       document.documentElement.scrollHeight;
     window.scrollTo({ top: target, behavior: "auto" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-scroll to the latest message whenever the list grows. We do this on
@@ -274,16 +307,30 @@ export function DmChat({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = draft.trim();
-    if (trimmed.length === 0 || sendPending) return;
+    if (trimmed.length === 0) return;
 
     const quoteToSend = pendingQuote;
-    // Optimistic-ish: clear the composer immediately so the user sees the
-    // form reset even while the server round-trip is in flight. On error we
-    // restore via toast — the cleared draft is the price of UX snappiness.
+    // Mint a client-side UUID and render the message instantly as part of
+    // the merged list. The server action below reuses the same id, so the
+    // realtime echo will dedupe against this entry rather than producing a
+    // brief duplicate.
+    const clientMessageId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const optimistic: DmChatMessage = {
+      id: clientMessageId,
+      senderId: viewerId,
+      content: trimmed,
+      createdAt: new Date().toISOString(),
+      quote: quoteToSend,
+    };
+
     setDraft("");
     setPendingQuote(null);
-    // Anchor to the bottom right away so the user lands at the end of the
-    // thread before the realtime refresh (~300ms) brings the new message in.
+    setPendingMessages((prev) => [...prev, optimistic]);
+    // Anchor to the bottom right away so the new optimistic row is visible
+    // above the composer immediately, not after the realtime refresh.
     scrollToEnd();
 
     startSendTransition(async () => {
@@ -291,10 +338,15 @@ export function DmChat({
         threadId,
         trimmed,
         quoteToSend?.id ?? null,
+        clientMessageId,
       );
       if (!result.ok) {
         toast.error(result.error);
-        // Roll the draft back so the user can retry without retyping.
+        // Remove the optimistic row and roll the composer back so the user
+        // can retry without retyping.
+        setPendingMessages((prev) =>
+          prev.filter((m) => m.id !== clientMessageId),
+        );
         setDraft(trimmed);
         setPendingQuote(quoteToSend);
         return;
@@ -397,10 +449,10 @@ export function DmChat({
           />
           <Button
             type="submit"
-            disabled={draft.trim().length === 0 || sendPending}
+            disabled={draft.trim().length === 0}
             className="h-12 rounded-full px-4 text-[14px] font-semibold"
           >
-            {sendPending ? "전송 중…" : "전송"}
+            전송
           </Button>
         </div>
       </form>

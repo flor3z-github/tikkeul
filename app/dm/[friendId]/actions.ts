@@ -17,10 +17,15 @@ const UUID_RE =
 // only path that can create a thread. RLS additionally gates the insert: the
 // caller must be a thread member, and any quoted_transaction_id must point at
 // a live transaction the caller can SELECT.
+//
+// The caller provides a client-generated UUID as `messageId` so the optimistic
+// row rendered in the client can be deduped against the realtime arrival by
+// matching ids. If omitted, the DB default generates one.
 export async function sendMessageAction(
   threadId: string,
   content: string,
   quotedTransactionId: string | null,
+  messageId: string | null = null,
 ): Promise<DmActionResult> {
   const supabase = await createClient();
   const {
@@ -36,6 +41,9 @@ export async function sendMessageAction(
     !UUID_RE.test(quotedTransactionId)
   ) {
     return { ok: false, error: "잘못된 인용이에요." };
+  }
+  if (messageId !== null && !UUID_RE.test(messageId)) {
+    return { ok: false, error: "잘못된 메시지 ID예요." };
   }
 
   const trimmed = content.trim();
@@ -62,12 +70,21 @@ export async function sendMessageAction(
   const friendId =
     thread.user_a_id === user.id ? thread.user_b_id : thread.user_a_id;
 
-  const { error } = await supabase.from("dm_messages").insert({
+  const insertRow: {
+    thread_id: string;
+    sender_id: string;
+    content: string;
+    quoted_transaction_id: string | null;
+    id?: string;
+  } = {
     thread_id: threadId,
     sender_id: user.id,
     content: trimmed,
     quoted_transaction_id: quotedTransactionId,
-  });
+  };
+  if (messageId) insertRow.id = messageId;
+
+  const { error } = await supabase.from("dm_messages").insert(insertRow);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/dm/${friendId}`);
