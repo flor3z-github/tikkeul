@@ -10,8 +10,6 @@ import { createClient } from "@/lib/supabase/server";
 import { formatRelativeKoreanDate } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 
-export const dynamic = "force-dynamic";
-
 type DmIndexRow = {
   friend_id: string;
   nickname: string;
