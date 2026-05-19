@@ -1,23 +1,35 @@
 import {
-  Bus,
+  Car,
   Coffee,
-  Heart,
+  Film,
+  Gift,
+  HeartHandshake,
+  HeartPulse,
   HelpCircle,
   Home,
+  Plane,
   Repeat,
   ShoppingBag,
   Utensils,
+  Wine,
   type LucideIcon,
 } from "lucide-react";
 
 const ICONS: Record<string, LucideIcon> = {
   utensils: Utensils,
   coffee: Coffee,
-  bus: Bus,
+  wine: Wine,
   "shopping-bag": ShoppingBag,
+  car: Car,
+  // Legacy slug retained so historical rows (icon='bus') still render.
+  bus: Car,
   repeat: Repeat,
   home: Home,
-  "heart-pulse": Heart,
+  "heart-pulse": HeartPulse,
+  "heart-handshake": HeartHandshake,
+  film: Film,
+  plane: Plane,
+  gift: Gift,
   "more-horizontal": HelpCircle,
 };
 

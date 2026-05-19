@@ -3,7 +3,20 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { TransactionFormCategory } from "@/components/transactions/transaction-form-dialog";
 
-const CATEGORY_ORDER = ["식비", "카페", "교통", "쇼핑", "생활", "의료", "기타"];
+const CATEGORY_ORDER = [
+  "식비",
+  "카페/간식",
+  "술/유흥",
+  "쇼핑",
+  "교통/자동차",
+  "주거/통신",
+  "의료/건강",
+  "문화/여가",
+  "여행/숙박",
+  "경조/선물",
+  "데이트",
+  "기타",
+];
 const HIDDEN_CATEGORIES = new Set(["구독"]);
 
 function categoryRank(name: string): number {
