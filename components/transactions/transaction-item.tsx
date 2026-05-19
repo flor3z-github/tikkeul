@@ -252,9 +252,6 @@ function FriendRow({
 
       {isActive && activeMode === "emoji" ? (
         <div className="px-3 pb-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
-          <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
-            빠른 반응 — DM으로 전송
-          </p>
           <div className="flex flex-wrap items-center gap-1.5">
             {EMOJI_CHOICES.map((emoji) => {
               const isCurrent = lastEmoji === emoji;
@@ -284,11 +281,6 @@ function FriendRow({
               );
             })}
           </div>
-          {lastEmoji ? (
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              현재 반응 {lastEmoji} · 같은 이모지를 다시 누르면 취소돼요.
-            </p>
-          ) : null}
         </div>
       ) : null}
 
