@@ -1,10 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { SpendingMonthGrid } from "@/components/calendar/spending-month-grid";
 import { MonthSwitcher } from "@/app/dashboard/_components/month-switcher";
+import { buttonVariants } from "@/components/ui/button";
 import {
   TransactionItem,
   type TransactionListRow,
@@ -12,12 +23,15 @@ import {
 import { AddTransactionButton } from "@/components/transactions/add-transaction-button";
 import type { TransactionFormCategory } from "@/components/transactions/transaction-form-dialog";
 import type { MonthlyTransaction } from "@/lib/queries/transactions";
+import { cn } from "@/lib/utils";
 import {
   type CycleMode,
   formatKoreanLongDate,
 } from "@/lib/utils/calendar";
 import { toISODate } from "@/lib/utils/date";
 import { formatKRW } from "@/lib/utils/money";
+
+export type InteractionMode = "emoji" | "comment";
 
 type CalendarDayPanelProps = {
   ym: string;
@@ -29,16 +43,14 @@ type CalendarDayPanelProps = {
   transactions: MonthlyTransaction[];
   categories: TransactionFormCategory[];
   availableBudget: number;
-  /**
-   * True when the user is viewing their own dashboard. Controls whether the
-   * add-transaction FAB renders and is forwarded to the interaction sheet so
-   * the owner sees the "수정" button.
-   */
+  /** True when the viewer is looking at their own dashboard. */
   isOwn: boolean;
   /** Transaction owner's user_id — same as the viewer in own mode, the friend's
-   *  user_id in friend mode. Forwarded to TransactionItem so [답장] in the
-   *  interaction sheet can route to /dm/<ownerUserId>. */
+   *  user_id in friend mode. Forwarded to TransactionItem so the "전체 대화"
+   *  link routes to /dm/<ownerUserId>. */
   ownerUserId: string;
+  /** Friend mode only: viewer's last emoji-only reaction per transaction id. */
+  lastEmojiByTx?: Record<string, string>;
 };
 
 export function CalendarDayPanel({
@@ -53,8 +65,92 @@ export function CalendarDayPanel({
   availableBudget,
   isOwn,
   ownerUserId,
+  lastEmojiByTx,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
+
+  // Friend-mode interaction state — exclusive (only one row open at a time).
+  // The parent owns the draft so we can decide whether outside-click should
+  // close immediately or open the "discard draft" confirm without resorting
+  // to effect-driven setState (banned by react-hooks/set-state-in-effect).
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  const [activeMode, setActiveMode] = useState<InteractionMode | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const hasDraft = commentDraft.trim().length > 0;
+
+  const commitClose = useCallback(() => {
+    setActiveRowId(null);
+    setActiveMode(null);
+    setCommentDraft("");
+    setConfirmDiscardOpen(false);
+  }, []);
+
+  const requestClose = useCallback(() => {
+    if (activeMode === "comment" && hasDraft) {
+      setConfirmDiscardOpen(true);
+      return;
+    }
+    commitClose();
+  }, [activeMode, hasDraft, commitClose]);
+
+  const handleSelectDay = useCallback(
+    (day: string) => {
+      setSelectedDay(day);
+      // Day change unmounts the active row — collapse state inline so we
+      // never call setState from inside a useEffect.
+      setActiveRowId(null);
+      setActiveMode(null);
+      setCommentDraft("");
+      setConfirmDiscardOpen(false);
+    },
+    [],
+  );
+
+  const handleSelectMode = useCallback(
+    (rowId: string, mode: InteractionMode) => {
+      if (activeRowId === rowId) {
+        if (activeMode === mode) {
+          // Same icon re-tap — toggle close (with draft confirm).
+          requestClose();
+          return;
+        }
+        // Different icon on the same row — switch mode silently. Discard any
+        // in-progress draft because we're leaving the comment textarea.
+        setActiveMode(mode);
+        setCommentDraft("");
+        return;
+      }
+      // Different row — replace state. We do not warn about losing the
+      // previous row's draft because the user explicitly tapped a new row,
+      // which is its own intent signal.
+      setActiveRowId(rowId);
+      setActiveMode(mode);
+      setCommentDraft("");
+    },
+    [activeRowId, activeMode, requestClose],
+  );
+
+  // Outside-click closes the active panel. Listener is attached only while a
+  // row is open. setState happens inside the event handler (not the effect
+  // body), so this satisfies react-hooks/set-state-in-effect.
+  useEffect(() => {
+    if (activeRowId === null) return;
+    function handlePointerDown(event: PointerEvent) {
+      const container = listContainerRef.current;
+      if (!container) return;
+      if (event.target instanceof Node && container.contains(event.target)) {
+        return;
+      }
+      requestClose();
+    }
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [activeRowId, requestClose]);
 
   const dailyTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -96,7 +192,7 @@ export function CalendarDayPanel({
           selectedDay={selectedDay}
           dailyTotals={dailyTotals}
           availableBudget={availableBudget}
-          onSelectDay={setSelectedDay}
+          onSelectDay={handleSelectDay}
         />
       </div>
 
@@ -113,7 +209,7 @@ export function CalendarDayPanel({
         </div>
 
         <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
-          <CardContent className="p-2">
+          <CardContent className="p-2" ref={listContainerRef}>
             {dayRows.length === 0 ? (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                 이 날 기록된 소비가 없어요.
@@ -127,6 +223,17 @@ export function CalendarDayPanel({
                       categories={categories}
                       isOwn={isOwn}
                       ownerUserId={ownerUserId}
+                      lastEmoji={lastEmojiByTx?.[transaction.id] ?? null}
+                      isActive={activeRowId === transaction.id}
+                      activeMode={
+                        activeRowId === transaction.id ? activeMode : null
+                      }
+                      commentDraft={
+                        activeRowId === transaction.id ? commentDraft : ""
+                      }
+                      onCommentDraftChange={setCommentDraft}
+                      onSelectMode={handleSelectMode}
+                      onCommitClose={commitClose}
                     />
                   </li>
                 ))}
@@ -142,6 +249,39 @@ export function CalendarDayPanel({
           defaultDate={selectedDay}
         />
       ) : null}
+
+      <AlertDialog
+        open={confirmDiscardOpen}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDiscardOpen(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>작성 중인 댓글을 지울까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              지우면 입력한 내용은 사라져요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmDiscardOpen(false)}>
+              계속 작성
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                commitClose();
+              }}
+              className={cn(
+                buttonVariants({ variant: "destructive" }),
+                "h-10 rounded-full px-4 text-[14px] font-semibold",
+              )}
+            >
+              지우기
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
