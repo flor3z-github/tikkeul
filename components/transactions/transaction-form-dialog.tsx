@@ -33,6 +33,7 @@ import {
   DrawerNestedRoot,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
@@ -57,6 +58,7 @@ export type TransactionFormInitial = {
   category_id: string | null;
   spent_at: string;
   memo: string | null;
+  is_private: boolean;
 };
 
 const MEMO_MAX_LENGTH = 100;
@@ -166,6 +168,9 @@ function TransactionFormBody({
     return pickCreateDefaultDate(defaultDate);
   });
   const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
+  const [isPrivate, setIsPrivate] = useState<boolean>(
+    () => initial?.is_private === true,
+  );
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -285,6 +290,7 @@ function TransactionFormBody({
         categoryId,
         spentAt: toISODate(spentDate),
         memo: memoText,
+        isPrivate,
       });
       if (result.ok) {
         toast.success(mode === "edit" ? "수정됐어요." : "추가됐어요.");
@@ -469,6 +475,25 @@ function TransactionFormBody({
             />
           </PopoverContent>
         </Popover>
+      </div>
+
+      <div className="space-y-2 overflow-hidden">
+        <label
+          htmlFor="transaction-is-public"
+          className="flex items-center justify-between gap-3 text-sm font-medium text-muted-foreground"
+        >
+          <span>공개</span>
+          <Switch
+            id="transaction-is-public"
+            checked={!isPrivate}
+            onCheckedChange={(checked) => setIsPrivate(!checked)}
+          />
+        </label>
+        <p className="text-xs text-muted-foreground/80">
+          {isPrivate
+            ? "친구에게 비공개예요. 합계에서도 빠져요."
+            : "친구가 이 소비를 볼 수 있어요."}
+        </p>
       </div>
 
       {mode === "edit" && initial ? (

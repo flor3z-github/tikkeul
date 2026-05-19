@@ -178,6 +178,7 @@ export function CalendarDayPanel({
           category_icon: tx.category_icon,
           spent_at: tx.spent_at,
           memo: tx.memo,
+          is_private: tx.is_private,
         })),
     [transactions, selectedDay],
   );

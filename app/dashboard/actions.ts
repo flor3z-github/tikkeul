@@ -16,6 +16,7 @@ type SubmitInput = {
   categoryId: string | null;
   spentAt: string; // ISO date or ISO datetime
   memo?: string | null;
+  isPrivate?: boolean;
 };
 
 const MEMO_MAX_LENGTH = 100;
@@ -73,6 +74,8 @@ export async function submitTransactionAction(
     return { ok: false, error: `메모는 ${MEMO_MAX_LENGTH}자까지 입력할 수 있어요.` };
   }
 
+  const isPrivate = input.isPrivate === true;
+
   if (input.id) {
     const { error } = await supabase
       .from("transactions")
@@ -81,6 +84,7 @@ export async function submitTransactionAction(
         category_id: input.categoryId,
         spent_at: spentAt,
         memo,
+        is_private: isPrivate,
       })
       .eq("id", input.id)
       .eq("user_id", user.id);
@@ -95,6 +99,7 @@ export async function submitTransactionAction(
       category_id: input.categoryId,
       spent_at: spentAt,
       memo,
+      is_private: isPrivate,
     });
     if (error) return { ok: false, error: error.message };
   }

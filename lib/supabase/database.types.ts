@@ -170,6 +170,7 @@ export type Database = {
           category_id: string | null;
           spent_at: string;
           memo: string | null;
+          is_private: boolean;
           deleted_at: string | null;
           created_at: string;
           updated_at: string;
@@ -181,6 +182,7 @@ export type Database = {
           category_id?: string | null;
           spent_at: string;
           memo?: string | null;
+          is_private?: boolean;
           deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -192,6 +194,7 @@ export type Database = {
           category_id?: string | null;
           spent_at?: string;
           memo?: string | null;
+          is_private?: boolean;
           deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;

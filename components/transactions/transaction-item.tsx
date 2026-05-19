@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Heart, MessageCircle, Send } from "lucide-react";
+import { Heart, Lock, MessageCircle, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -28,6 +28,7 @@ export type TransactionListRow = {
   category_icon: string | null;
   spent_at: string;
   memo: string | null;
+  is_private: boolean;
 };
 
 // Curated quick-reaction set — matches the legacy interaction sheet so
@@ -362,8 +363,16 @@ function TransactionSummary({
         />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-medium">
-          {transaction.category_name ?? "기타"}
+        <p className="flex items-center gap-1.5 truncate text-[15px] font-medium">
+          <span className="truncate">
+            {transaction.category_name ?? "기타"}
+          </span>
+          {transaction.is_private ? (
+            <Lock
+              className="size-3 shrink-0 text-muted-foreground"
+              aria-label="비공개"
+            />
+          ) : null}
         </p>
         {transaction.memo ? (
           <p className="truncate text-[12px] text-muted-foreground">
@@ -385,5 +394,6 @@ function toFormInitial(tx: TransactionListRow): TransactionFormInitial {
     category_id: tx.category_id,
     spent_at: tx.spent_at,
     memo: tx.memo,
+    is_private: tx.is_private,
   };
 }

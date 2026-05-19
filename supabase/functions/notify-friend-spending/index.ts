@@ -33,6 +33,7 @@ type TransactionRow = {
   category_id: string | null;
   spent_at: string;
   memo: string | null;
+  is_private: boolean | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -79,10 +80,12 @@ Deno.serve(async (req: Request) => {
   }
 
   // Guard: only INSERT, only transactions, only live rows. A soft-delete or
-  // update event must never trigger a notification.
+  // update event must never trigger a notification. Private transactions are
+  // hidden from friends end-to-end — also skip the push.
   if (payload.type !== "INSERT") return ok("skip non-insert");
   if (payload.table !== "transactions") return ok("skip non-transactions");
   if (payload.record?.deleted_at) return ok("skip soft-deleted");
+  if (payload.record?.is_private === true) return ok("skip private");
 
   const senderId = payload.record.user_id;
   if (!senderId) return ok("skip no user_id");
