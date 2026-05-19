@@ -88,6 +88,14 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     (async () => {
+      // Dismiss every other Tikkeul notification still in the tray so a
+      // single click clears the entire batch instead of leaving the rest
+      // sitting in the OS notification center. getNotifications() returns
+      // only this origin's notifications, and the just-clicked one is
+      // already closed above so it won't appear in the list.
+      const others = await self.registration.getNotifications();
+      for (const n of others) n.close();
+
       const allClients = await self.clients.matchAll({
         type: "window",
         includeUncontrolled: true,
