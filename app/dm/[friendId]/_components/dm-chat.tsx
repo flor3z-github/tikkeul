@@ -8,8 +8,9 @@ import {
   useState,
   useTransition,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { ChevronLeft, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -161,6 +162,7 @@ export function DmChat({
   const [pendingMessages, setPendingMessages] = useState<DmChatMessage[]>([]);
   const listEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
 
   // Scroll the window to the document bottom on the next frame so layout
   // (composer height, new message DOM) has settled. We deliberately do NOT
@@ -206,6 +208,71 @@ export function DmChat({
     });
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+
+  // iOS soft-keyboard handling. Two iOS Safari quirks combine to break the
+  // DM chat layout:
+  //   1) When the keyboard opens, visualViewport shrinks but the layout
+  //      viewport stays the same. A `position: fixed; bottom: 0` composer
+  //      ends up *behind* the keyboard.
+  //   2) When the textarea gets focus, iOS scrolls the layout viewport so
+  //      the input is centered in the visualViewport. `vv.offsetTop` becomes
+  //      positive. A `sticky; top: 0` header anchored to layout-viewport
+  //      coordinates slides *above* the visible area — the user sees only
+  //      messages clipped by the iOS status bar (or nothing at all).
+  // Mirror DrawerContent's pattern: anchor the header's top to the
+  // visualViewport top (`vv.offsetTop`) and the composer's bottom to the
+  // visualViewport bottom (`innerHeight - vv.offsetTop - vv.height`). Reset
+  // both when the keyboard is dismissed so the safe-area rules in CSS take
+  // back over.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    function applyKeyboardInset() {
+      const headerEl = headerRef.current;
+      const composerEl = composerRef.current;
+      // Treat any meaningful shrink as a keyboard event. Mobile Safari's URL
+      // bar can also shrink visualViewport by ~50–80px during ordinary
+      // scroll; ignore anything below 100px so we don't reposition for that.
+      const keyboardHeight = window.innerHeight - vv!.height;
+      const open = keyboardHeight > 100;
+      if (open) {
+        if (headerEl) headerEl.style.top = `${vv!.offsetTop}px`;
+        if (composerEl) {
+          const bottomInset = Math.max(
+            0,
+            window.innerHeight - vv!.offsetTop - vv!.height,
+          );
+          composerEl.style.bottom = `${bottomInset}px`;
+        }
+      } else {
+        if (headerEl) headerEl.style.top = "";
+        if (composerEl) composerEl.style.bottom = "";
+      }
+    }
+
+    vv.addEventListener("resize", applyKeyboardInset);
+    // iOS scrolls the visualViewport (not just resizes it) when the textarea
+    // is focused — without the scroll listener the header doesn't follow.
+    vv.addEventListener("scroll", applyKeyboardInset);
+    applyKeyboardInset();
+    // Re-measure across focus changes — iOS sometimes fires the keyboard
+    // resize before the layout has reflowed.
+    const onFocus = () => {
+      requestAnimationFrame(applyKeyboardInset);
+      setTimeout(applyKeyboardInset, 100);
+      setTimeout(applyKeyboardInset, 300);
+    };
+    window.addEventListener("focusin", onFocus);
+    window.addEventListener("focusout", onFocus);
+    return () => {
+      vv.removeEventListener("resize", applyKeyboardInset);
+      vv.removeEventListener("scroll", applyKeyboardInset);
+      window.removeEventListener("focusin", onFocus);
+      window.removeEventListener("focusout", onFocus);
+    };
   }, []);
 
   // Merge server messages with the optimistic outbox. We always append
@@ -378,6 +445,28 @@ export function DmChat({
         paddingBottom: `${composerHeight}px`,
       }}
     >
+      {/* Sticky header lives inside the chat client so the visualViewport
+          effect above can pin it to the visualViewport top when the iOS
+          keyboard opens. Otherwise iOS scrolls the layout viewport for
+          textarea focus and the layout-top-0 header slides above the
+          visible area. */}
+      <div
+        ref={headerRef}
+        className="sticky top-0 z-20 -mx-5 mb-2 flex items-center gap-2 border-b border-border/40 bg-background/95 px-3 py-2 backdrop-blur"
+      >
+        <Link
+          href="/dashboard"
+          aria-label="대시보드로 돌아가기"
+          className="-ml-1 inline-flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted"
+        >
+          <ChevronLeft className="size-5" />
+        </Link>
+        <h1 className="flex-1 truncate text-center text-[15px] font-semibold tracking-tight">
+          {friendNickname}
+        </h1>
+        <div className="size-9 shrink-0" aria-hidden />
+      </div>
+
       {renderItems.length === 0 ? (
         <p className="rounded-2xl bg-muted/50 px-4 py-6 text-center text-[13px] text-muted-foreground">
           {friendNickname}님과의 첫 메시지를 남겨보세요.

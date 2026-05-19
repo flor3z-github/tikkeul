@@ -1,30 +1,9 @@
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { DmChat, type DmChatMessage, type DmChatQuoteCard } from "./_components/dm-chat";
 import { createClient } from "@/lib/supabase/server";
-
-function DmHeader({ nickname }: { nickname: string }) {
-  return (
-    <div className="sticky top-0 z-20 -mx-5 mb-2 flex items-center gap-2 border-b border-border/40 bg-background/95 px-3 py-2 backdrop-blur">
-      <Link
-        href="/dashboard"
-        aria-label="대시보드로 돌아가기"
-        className="-ml-1 inline-flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted"
-      >
-        <ChevronLeft className="size-5" />
-      </Link>
-      <h1 className="flex-1 truncate text-center text-[15px] font-semibold tracking-tight">
-        {nickname}
-      </h1>
-      {/* Spacer to keep the title visually centered against the back button. */}
-      <div className="size-9 shrink-0" aria-hidden />
-    </div>
-  );
-}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -210,8 +189,6 @@ export default async function DmThreadPage({
 
   return (
     <AppShell withFixedComposer>
-      <DmHeader nickname={friendNickname} />
-
       <DmChat
         threadId={threadId}
         viewerId={user.id}
