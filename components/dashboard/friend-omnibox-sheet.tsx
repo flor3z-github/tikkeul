@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useDeferredValue,
@@ -15,6 +16,7 @@ import {
   Plus,
   Search,
   Settings2,
+  Users,
 } from "lucide-react";
 
 import {
@@ -205,6 +207,17 @@ export function FriendOmniboxSheet({
           <Plus className="size-4" />
           친구 추가
         </button>
+
+        {/* Group management entry point. Navigates away (no nested sheet)
+            because /friends/groups is a full page, not a list overlay. */}
+        <Link
+          href="/friends/groups"
+          onClick={() => onOpenChange(false)}
+          className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-muted text-[14px] font-medium text-foreground hover:bg-secondary"
+        >
+          <Users className="size-4" aria-hidden />
+          그룹 관리
+        </Link>
       </div>
 
       <AddFriendSheet
