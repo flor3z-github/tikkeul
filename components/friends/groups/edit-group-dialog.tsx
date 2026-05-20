@@ -2,9 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  deleteGroupAction,
+  previewDeleteGroupAction,
   renameGroupAction,
   setGroupMembershipAction,
 } from "@/app/friends/actions";
@@ -13,11 +16,22 @@ import type {
   GroupsPageGroup,
 } from "@/app/friends/groups/page";
 import { FriendMultiPicker } from "@/components/friends/groups/friend-multi-picker";
-import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { BottomSheet, useStableNonNull } from "@/components/ui/bottom-sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GROUP_NAME_MAX_LENGTH } from "@/lib/utils/group";
+import { cn } from "@/lib/utils";
 
 type Props = {
   /** Open when non-null; null closes the drawer. */
@@ -44,6 +58,14 @@ export function EditGroupDialog({ target, onClose, friends }: Props) {
     stableTarget?.currentMemberIds ?? [],
   );
   const [isPending, startTransition] = useTransition();
+
+  // Delete flow state. orphanCount=null means the preview hasn't loaded yet
+  // (or the dialog hasn't been opened). isDeleting governs the AlertDialog
+  // action button; isPreviewing governs the destructive button in the form.
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [orphanCount, setOrphanCount] = useState<number | null>(null);
+  const [isPreviewing, startPreviewTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
 
   // React-recommended "adjusting state when a prop changes" pattern (see
   // bottom-sheet's useStableNonNull). When a fresh target arrives, reseed
@@ -179,9 +201,90 @@ export function EditGroupDialog({ target, onClose, friends }: Props) {
         <Button type="submit" disabled={!canSubmit} className="h-12 text-[15px]">
           {isPending ? "저장 중…" : "저장"}
         </Button>
+
+        {/* Delete affordance — hidden for the seed group. RLS also blocks
+            seed deletion (slug is null required), but hiding the button
+            keeps the UI honest. */}
+        {!stableTarget.isSeed ? (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={isPending || isPreviewing || isDeleting}
+            onClick={openDeleteConfirm}
+            className="mt-2 h-11 text-[14px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="size-4" aria-hidden />
+            {isPreviewing ? "확인 중…" : "그룹 삭제"}
+          </Button>
+        ) : null}
       </form>
+
+      <AlertDialog
+        open={confirmDeleteOpen}
+        onOpenChange={(next) => {
+          if (!isDeleting) setConfirmDeleteOpen(next);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>이 그룹을 삭제할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {orphanCount && orphanCount > 0
+                ? `이 그룹에만 공개된 거래 ${orphanCount}건이 비공개로 전환돼요. 다른 그룹과 함께 공개된 거래는 그대로 유지돼요.`
+                : "삭제해도 다른 그룹·거래에는 영향이 없어요."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                handleDelete();
+              }}
+              disabled={isDeleting}
+              className={cn(
+                buttonVariants({ variant: "destructive" }),
+                "h-12 w-full rounded-full text-[15px] font-semibold",
+              )}
+            >
+              {isDeleting ? "삭제 중…" : "삭제"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </BottomSheet>
   );
+
+  function openDeleteConfirm() {
+    if (!stableTarget) return;
+    const groupId = stableTarget.id;
+    // Preview first so we can include the orphan count in the confirm copy.
+    // Surface the dialog regardless of preview success — if the preview
+    // errors we still want to let the user proceed and surface the failure
+    // there rather than swallowing the intent.
+    startPreviewTransition(async () => {
+      const result = await previewDeleteGroupAction(groupId);
+      setOrphanCount(result.ok ? result.orphanCount : 0);
+      setConfirmDeleteOpen(true);
+    });
+  }
+
+  function handleDelete() {
+    if (!stableTarget) return;
+    const groupId = stableTarget.id;
+    startDeleteTransition(async () => {
+      const result = await deleteGroupAction(groupId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("그룹을 삭제했어요.");
+      setConfirmDeleteOpen(false);
+      setOrphanCount(null);
+      router.refresh();
+      handleOpenChange(false);
+    });
+  }
 }
 
 function sameSet(a: string[], b: string[]): boolean {
