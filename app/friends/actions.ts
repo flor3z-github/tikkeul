@@ -10,6 +10,7 @@ import {
   isValidFriendCodeFormat,
   normalizeFriendCodeInput,
 } from "@/lib/utils/friend-code";
+import { isValidGroupName, normalizeGroupName } from "@/lib/utils/group";
 
 type CreateResult =
   | { ok: true; code: string; expiresAt: string }
@@ -267,6 +268,311 @@ export async function setCloseFriendAction(
   }
 
   revalidatePath("/friends");
+  revalidatePath(`/friends/${friendUserId}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Friend groups (Phase 2)
+// ---------------------------------------------------------------------------
+// Schema lives in 0042; 0044 adds guard triggers (slug immutability, 10-group
+// cap, cascade-delete → private). RLS already enforces (a) only the owner can
+// touch friend_groups, (b) friend_group_members inserts require an existing
+// friendship, (c) seed deletion is blocked by `slug is null` in the delete
+// policy. So these actions are mostly thin validators + revalidate calls; the
+// DB carries the real invariants.
+
+type CreateGroupResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+type PreviewDeleteResult =
+  | { ok: true; orphanCount: number }
+  | { ok: false; error: string };
+
+const GROUP_MEMBER_HARD_CAP = 200;
+
+export async function createGroupAction(
+  name: string,
+  memberIds: string[],
+): Promise<CreateGroupResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!isValidGroupName(name)) {
+    return { ok: false, error: "그룹 이름이 올바르지 않아요." };
+  }
+  const normalizedName = normalizeGroupName(name);
+
+  // memberIds may legitimately be empty (create the group, add members
+  // later). De-duplicate and validate UUID shape; the RLS INSERT policy on
+  // friend_group_members re-checks friendship server-side.
+  const uniqueMemberIds = Array.from(new Set(memberIds));
+  if (uniqueMemberIds.length > GROUP_MEMBER_HARD_CAP) {
+    return { ok: false, error: "한 번에 추가할 수 있는 멤버 수를 초과했어요." };
+  }
+  for (const id of uniqueMemberIds) {
+    if (!UUID_RE.test(id) || id === user.id) {
+      return { ok: false, error: "잘못된 친구 정보가 포함되어 있어요." };
+    }
+  }
+
+  // Insert the group first so we have its id. user-defined groups always
+  // have slug = null; the seed (slug = 'close') is created only by the
+  // handle_new_user trigger.
+  const { data: groupRow, error: insertGroupError } = await supabase
+    .from("friend_groups")
+    .insert({ owner_id: user.id, name: normalizedName, slug: null })
+    .select("id")
+    .single();
+
+  if (insertGroupError || !groupRow) {
+    // 23505 = unique_violation on (owner_id, name)
+    const pgCode = (insertGroupError as { code?: string } | null)?.code;
+    if (pgCode === "23505") {
+      return { ok: false, error: "같은 이름의 그룹이 이미 있어요." };
+    }
+    // Trigger raises check_violation (errcode 23514) on >10 groups. Surface
+    // a friendly message rather than the raw SQL exception.
+    if (pgCode === "23514") {
+      return { ok: false, error: "그룹은 최대 10개까지 만들 수 있어요." };
+    }
+    return {
+      ok: false,
+      error: insertGroupError?.message ?? "그룹을 만들지 못했어요.",
+    };
+  }
+
+  if (uniqueMemberIds.length > 0) {
+    const rows = uniqueMemberIds.map((memberId) => ({
+      group_id: groupRow.id as string,
+      member_user_id: memberId,
+    }));
+    // No ON CONFLICT here — duplicates were already de-duplicated above, and
+    // the (group_id, member_user_id) PK collision on a fresh insert can only
+    // happen via concurrent calls (rare and benign — just return an error).
+    const { error: memberError } = await supabase
+      .from("friend_group_members")
+      .insert(rows);
+    if (memberError) {
+      // Roll back the group: the RLS DELETE policy allows owner+slug-null,
+      // which matches what we just inserted, so this always succeeds when
+      // the original INSERT did.
+      await supabase
+        .from("friend_groups")
+        .delete()
+        .eq("id", groupRow.id)
+        .eq("owner_id", user.id);
+      return { ok: false, error: memberError.message };
+    }
+  }
+
+  revalidatePath("/friends");
+  revalidatePath("/friends/groups");
+  revalidatePath("/dashboard");
+  return { ok: true, id: groupRow.id as string };
+}
+
+export async function renameGroupAction(
+  groupId: string,
+  name: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!UUID_RE.test(groupId)) {
+    return { ok: false, error: "잘못된 요청이에요." };
+  }
+  if (!isValidGroupName(name)) {
+    return { ok: false, error: "그룹 이름이 올바르지 않아요." };
+  }
+  const normalizedName = normalizeGroupName(name);
+
+  // RLS update policy (`auth.uid() = owner_id`) fences the row to the owner.
+  // The 0044 slug-immutability trigger blocks any accidental slug change.
+  const { data, error } = await supabase
+    .from("friend_groups")
+    .update({ name: normalizedName })
+    .eq("id", groupId)
+    .eq("owner_id", user.id)
+    .select("id");
+
+  if (error) {
+    const pgCode = (error as { code?: string }).code;
+    if (pgCode === "23505") {
+      return { ok: false, error: "같은 이름의 그룹이 이미 있어요." };
+    }
+    return { ok: false, error: error.message };
+  }
+  if (!data || data.length === 0) {
+    return { ok: false, error: "그룹을 찾지 못했어요." };
+  }
+
+  revalidatePath("/friends");
+  revalidatePath("/friends/groups");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function previewDeleteGroupAction(
+  groupId: string,
+): Promise<PreviewDeleteResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!UUID_RE.test(groupId)) {
+    return { ok: false, error: "잘못된 요청이에요." };
+  }
+
+  // Confirm ownership before counting — RLS would empty the count anyway,
+  // but returning 0 instead of an error is misleading.
+  const { data: group, error: groupError } = await supabase
+    .from("friend_groups")
+    .select("id, slug")
+    .eq("id", groupId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (groupError) return { ok: false, error: groupError.message };
+  if (!group) return { ok: false, error: "그룹을 찾지 못했어요." };
+
+  // Orphan = a transaction that lists this group AND no other group. After
+  // delete, its visibility flips from 'groups' to 'private' (0044 trigger).
+  // We need a count of distinct transaction_ids whose only group link is
+  // this one. PostgREST can't express "single membership" cleanly, so use
+  // the RPC-style approach: pull tx ids in this group, then count those
+  // whose total group count is 1.
+  //
+  // Two-step query keeps things simple. The set size is bounded by the
+  // group's footprint and stays small in practice.
+  const { data: linkedRows, error: linkedError } = await supabase
+    .from("transaction_visibility_groups")
+    .select("transaction_id")
+    .eq("group_id", groupId);
+  if (linkedError) return { ok: false, error: linkedError.message };
+  const linkedTxIds = (linkedRows ?? []).map(
+    (r) => r.transaction_id as string,
+  );
+  if (linkedTxIds.length === 0) {
+    return { ok: true, orphanCount: 0 };
+  }
+
+  // For each linked tx, count its total group links. orphan = links === 1.
+  const { data: allLinks, error: allLinksError } = await supabase
+    .from("transaction_visibility_groups")
+    .select("transaction_id")
+    .in("transaction_id", linkedTxIds);
+  if (allLinksError) return { ok: false, error: allLinksError.message };
+
+  const linkCountByTx = new Map<string, number>();
+  for (const row of allLinks ?? []) {
+    const txId = row.transaction_id as string;
+    linkCountByTx.set(txId, (linkCountByTx.get(txId) ?? 0) + 1);
+  }
+  let orphanCount = 0;
+  for (const txId of linkedTxIds) {
+    if ((linkCountByTx.get(txId) ?? 0) === 1) orphanCount += 1;
+  }
+
+  return { ok: true, orphanCount };
+}
+
+export async function deleteGroupAction(
+  groupId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!UUID_RE.test(groupId)) {
+    return { ok: false, error: "잘못된 요청이에요." };
+  }
+
+  // RLS delete policy enforces `auth.uid() = owner_id and slug is null`, so
+  // the seed group can never be deleted through this path. The 0044 cascade
+  // trigger flips orphaned transactions to 'private'.
+  const { data, error } = await supabase
+    .from("friend_groups")
+    .delete()
+    .eq("id", groupId)
+    .eq("owner_id", user.id)
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) {
+    // Either the group doesn't exist, isn't owned by us, or is the seed
+    // (slug='close'). Surface a generic message — the client doesn't need
+    // to distinguish.
+    return { ok: false, error: "그룹을 삭제하지 못했어요." };
+  }
+
+  revalidatePath("/friends");
+  revalidatePath("/friends/groups");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function setGroupMembershipAction(
+  groupId: string,
+  friendUserId: string,
+  isMember: boolean,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!UUID_RE.test(groupId)) {
+    return { ok: false, error: "잘못된 요청이에요." };
+  }
+  if (!friendUserId || !UUID_RE.test(friendUserId) || friendUserId === user.id) {
+    return { ok: false, error: "잘못된 요청이에요." };
+  }
+
+  // Confirm group ownership before mutating — RLS would block the write
+  // anyway, but returning a clear error is friendlier than a silent no-op.
+  const { data: group, error: groupError } = await supabase
+    .from("friend_groups")
+    .select("id")
+    .eq("id", groupId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (groupError) return { ok: false, error: groupError.message };
+  if (!group) return { ok: false, error: "그룹을 찾지 못했어요." };
+
+  if (isMember) {
+    // ignoreDuplicates: see notes on setCloseFriendAction — the RLS table
+    // has no UPDATE policy, so we must use INSERT … ON CONFLICT DO NOTHING.
+    const { error } = await supabase
+      .from("friend_group_members")
+      .upsert(
+        { group_id: groupId, member_user_id: friendUserId },
+        { onConflict: "group_id,member_user_id", ignoreDuplicates: true },
+      );
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("friend_group_members")
+      .delete()
+      .eq("group_id", groupId)
+      .eq("member_user_id", friendUserId);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/friends");
+  revalidatePath("/friends/groups");
   revalidatePath(`/friends/${friendUserId}`);
   revalidatePath("/dashboard");
   return { ok: true };
