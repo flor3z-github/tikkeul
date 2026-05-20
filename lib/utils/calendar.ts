@@ -322,7 +322,21 @@ export function buildCycleMatrix(
     0,
     0,
   );
-  while (cursor.getTime() < cycleEnd.getTime()) {
+  // cycleEnd may have crossed an RSC boundary from a server in a different
+  // timezone (UTC on Vercel) into a client in KST, so its raw timestamp can
+  // disagree with `cursor` (always built in the client's local tz) by the
+  // tz offset. Rebuild the upper bound from the local-tz Y/M/D so the
+  // comparison stays in a single tz.
+  const endLocal = new Date(
+    cycleEnd.getFullYear(),
+    cycleEnd.getMonth(),
+    cycleEnd.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  while (cursor.getTime() < endLocal.getTime()) {
     const iso = toISODate(cursor);
     cells.push({
       kind: "day",

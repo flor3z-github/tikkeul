@@ -100,8 +100,9 @@ function toIsoLocalDate(date: Date): string {
 }
 
 /**
- * Build a map of `YYYY-MM-DD → items` for every day in `[cycleStart, cycleEnd]`
- * (inclusive) where the item's `payment_day` resolves to that date.
+ * Build a map of `YYYY-MM-DD → items` for every day in `[cycleStart, cycleEnd)`
+ * (cycleEnd exclusive, matching resolveDashboardParams) where the item's
+ * `payment_day` resolves to that date.
  *
  * The cycle range may span two months (income_day mode), so we iterate days
  * and ask each item whether it matches. Items without a `payment_day` are
@@ -111,7 +112,7 @@ export function expandFixedExpensesByDay<
   T extends { payment_day: number | null },
 >(cycleStart: Date, cycleEnd: Date, items: T[]): Record<string, T[]> {
   const result: Record<string, T[]> = {};
-  if (cycleStart > cycleEnd) return result;
+  if (cycleStart >= cycleEnd) return result;
   const cursor = new Date(
     cycleStart.getFullYear(),
     cycleStart.getMonth(),
@@ -122,7 +123,7 @@ export function expandFixedExpensesByDay<
     cycleEnd.getMonth(),
     cycleEnd.getDate(),
   );
-  while (cursor <= end) {
+  while (cursor < end) {
     const iso = toIsoLocalDate(cursor);
     for (const item of items) {
       if (paymentDayMatchesDate(item.payment_day, cursor)) {
