@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CalendarIcon, Trash2, Undo2, X } from "lucide-react";
+import { CalendarIcon, ChevronRight, Trash2, Undo2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -33,10 +33,11 @@ import {
   DrawerNestedRoot,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
+import type { TransactionVisibility } from "@/lib/queries/transactions";
 
 const QUICK_AMOUNTS: { value: number; label: string }[] = [
   { value: 1_000, label: "1천" },
@@ -58,8 +59,20 @@ export type TransactionFormInitial = {
   category_id: string | null;
   spent_at: string;
   memo: string | null;
-  is_private: boolean;
+  visibility: TransactionVisibility;
+  visible_group_ids: string[];
 };
+
+export type TransactionFormCloseGroup = {
+  id: string;
+  members: { id: string; nickname: string }[];
+};
+
+// Selector state. 'close' is the phase-1 alias for visibility='groups' bound
+// to the single seeded close-friends group. Phase 2 will replace this with a
+// multi-group picker that sets visibility='groups' with an arbitrary group
+// list, but the wire shape (visibility + group_ids) is already in place.
+type VisibilityChoice = "all" | "close" | "private";
 
 const MEMO_MAX_LENGTH = 100;
 
@@ -70,6 +83,9 @@ type TransactionFormDialogProps = {
   initial?: TransactionFormInitial | null;
   /** YYYY-MM-DD. Initial date for create mode; ignored in edit mode. */
   defaultDate?: string;
+  /** The viewer's "친한 친구" group + its current members. When null/empty,
+   *  the "친한 친구만" option is shown but disabled with a helper. */
+  closeGroup?: TransactionFormCloseGroup | null;
   onSaved?: () => void;
   /**
    * When true, render as a nested drawer (`DrawerNestedRoot`) so vaul scales
@@ -86,6 +102,7 @@ export function TransactionFormDialog({
   categories,
   initial,
   defaultDate,
+  closeGroup,
   onSaved,
   nested = false,
 }: TransactionFormDialogProps) {
@@ -111,6 +128,7 @@ export function TransactionFormDialog({
           initial={initial ?? null}
           categories={categories}
           defaultDate={defaultDate}
+          closeGroup={closeGroup ?? null}
           onSaved={() => {
             onOpenChange(false);
             onSaved?.();
@@ -125,6 +143,7 @@ type FormBodyProps = {
   initial: TransactionFormInitial | null;
   categories: TransactionFormCategory[];
   defaultDate?: string;
+  closeGroup: TransactionFormCloseGroup | null;
   onSaved: () => void;
 };
 
@@ -149,10 +168,30 @@ function pickCreateDefaultDate(defaultDate: string | undefined): Date {
   return fromDefault;
 }
 
+function deriveInitialVisibilityChoice(
+  initial: TransactionFormInitial | null,
+  closeGroup: TransactionFormCloseGroup | null,
+): VisibilityChoice {
+  if (!initial) return "all";
+  if (initial.visibility === "private") return "private";
+  if (
+    initial.visibility === "groups" &&
+    closeGroup &&
+    initial.visible_group_ids.includes(closeGroup.id)
+  ) {
+    return "close";
+  }
+  // visibility='groups' with no recognized link in phase 1 → fall back to
+  // 'all' so the user sees a coherent state. Saving will overwrite the row's
+  // group linkage.
+  return "all";
+}
+
 function TransactionFormBody({
   initial,
   categories,
   defaultDate,
+  closeGroup,
   onSaved,
 }: FormBodyProps) {
   const mode = initial ? "edit" : "create";
@@ -168,9 +207,10 @@ function TransactionFormBody({
     return pickCreateDefaultDate(defaultDate);
   });
   const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
-  const [isPrivate, setIsPrivate] = useState<boolean>(
-    () => initial?.is_private === true,
+  const [visibilityChoice, setVisibilityChoice] = useState<VisibilityChoice>(
+    () => deriveInitialVisibilityChoice(initial, closeGroup),
   );
+  const [closePreviewOpen, setClosePreviewOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -183,6 +223,9 @@ function TransactionFormBody({
   const busy = pending || deletePending;
   const canSubmit = amountValue > 0 && categoryId !== null && !busy;
   const amountInputRef = useRef<HTMLInputElement>(null);
+
+  const closeMemberCount = closeGroup?.members.length ?? 0;
+  const closeOptionDisabled = !closeGroup || closeMemberCount === 0;
 
   // Mirror the fixed-expenses catalog filter UX: single-row horizontal scroll
   // for category chips, with edge fades that only appear when there's more to
@@ -279,9 +322,26 @@ function TransactionFormBody({
     setQuickHistory([]);
   }
 
+  function handleSelectVisibility(next: VisibilityChoice) {
+    if (next === "close" && closeOptionDisabled) return;
+    setVisibilityChoice(next);
+  }
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
+
+    if (visibilityChoice === "close" && !closeGroup) {
+      toast.error("친한 친구 그룹을 찾지 못했어요.");
+      return;
+    }
+
+    const visibility: TransactionVisibility =
+      visibilityChoice === "close"
+        ? "groups"
+        : (visibilityChoice as TransactionVisibility);
+    const groupIds =
+      visibilityChoice === "close" && closeGroup ? [closeGroup.id] : null;
 
     startTransition(async () => {
       const result = await submitTransactionAction({
@@ -290,7 +350,8 @@ function TransactionFormBody({
         categoryId,
         spentAt: toISODate(spentDate),
         memo: memoText,
-        isPrivate,
+        visibility,
+        groupIds,
       });
       if (result.ok) {
         toast.success(mode === "edit" ? "수정됐어요." : "추가됐어요.");
@@ -477,24 +538,13 @@ function TransactionFormBody({
         </Popover>
       </div>
 
-      <div className="space-y-2 overflow-hidden">
-        <label
-          htmlFor="transaction-is-public"
-          className="flex items-center justify-between gap-3 text-sm font-medium text-muted-foreground"
-        >
-          <span>공개</span>
-          <Switch
-            id="transaction-is-public"
-            checked={!isPrivate}
-            onCheckedChange={(checked) => setIsPrivate(!checked)}
-          />
-        </label>
-        <p className="text-xs text-muted-foreground/80">
-          {isPrivate
-            ? "친구에게 비공개예요. 합계에서도 빠져요."
-            : "친구가 이 소비를 볼 수 있어요."}
-        </p>
-      </div>
+      <VisibilitySelector
+        value={visibilityChoice}
+        onChange={handleSelectVisibility}
+        closeMemberCount={closeMemberCount}
+        closeOptionDisabled={closeOptionDisabled}
+        onOpenClosePreview={() => setClosePreviewOpen(true)}
+      />
 
       {mode === "edit" && initial ? (
         <>
@@ -565,6 +615,208 @@ function TransactionFormBody({
           </AlertDialog>
         </>
       ) : null}
+
+      {closeGroup ? (
+        <CloseGroupPreviewDrawer
+          open={closePreviewOpen}
+          onOpenChange={setClosePreviewOpen}
+          members={closeGroup.members}
+        />
+      ) : null}
     </form>
+  );
+}
+
+type VisibilitySelectorProps = {
+  value: VisibilityChoice;
+  onChange: (next: VisibilityChoice) => void;
+  closeMemberCount: number;
+  closeOptionDisabled: boolean;
+  onOpenClosePreview: () => void;
+};
+
+function VisibilitySelector({
+  value,
+  onChange,
+  closeMemberCount,
+  closeOptionDisabled,
+  onOpenClosePreview,
+}: VisibilitySelectorProps) {
+  return (
+    <div className="space-y-2 overflow-hidden">
+      <label className="block text-sm font-medium text-muted-foreground">
+        공개 범위
+      </label>
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <RadioGroup
+          value={value}
+          onValueChange={(next) => onChange(next as VisibilityChoice)}
+          aria-label="공개 범위"
+          className="divide-y divide-border gap-0"
+        >
+          <VisibilityOption
+            id="visibility-all"
+            value="all"
+            label="전체 친구"
+            description="모든 친구가 이 소비를 볼 수 있어요."
+            onSelect={() => onChange("all")}
+          />
+          <VisibilityOption
+            id="visibility-close"
+            value="close"
+            label="친한 친구만"
+            description={
+              closeOptionDisabled
+                ? "친한 친구를 먼저 지정하면 쓸 수 있어요."
+                : `선택한 친한 친구 ${closeMemberCount}명에게만 보여요.`
+            }
+            disabled={closeOptionDisabled}
+            onSelect={() => {
+              if (closeOptionDisabled) return;
+              onChange("close");
+            }}
+            trailing={
+              value === "close" && !closeOptionDisabled ? (
+                <button
+                  type="button"
+                  aria-label="친한 친구 목록 보기"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenClosePreview();
+                  }}
+                  className="flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <Users className="size-3.5" aria-hidden />
+                  <span>{closeMemberCount}명</span>
+                  <ChevronRight className="size-3.5" aria-hidden />
+                </button>
+              ) : undefined
+            }
+          />
+          <VisibilityOption
+            id="visibility-private"
+            value="private"
+            label="비공개"
+            description="친구에게 비공개예요. 합계에서도 빠져요."
+            onSelect={() => onChange("private")}
+          />
+        </RadioGroup>
+      </div>
+    </div>
+  );
+}
+
+function VisibilityOption({
+  id,
+  value,
+  label,
+  description,
+  disabled,
+  trailing,
+  onSelect,
+}: {
+  id: string;
+  value: VisibilityChoice;
+  label: string;
+  description: string;
+  disabled?: boolean;
+  trailing?: React.ReactNode;
+  onSelect: () => void;
+}) {
+  return (
+    <div
+      role="presentation"
+      onClick={onSelect}
+      className={cn(
+        "flex items-start gap-3 px-4 py-3 transition-colors",
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "cursor-pointer hover:bg-muted/60",
+      )}
+    >
+      <RadioGroupItem
+        id={id}
+        value={value}
+        disabled={disabled}
+        className="mt-0.5"
+      />
+      <label
+        htmlFor={id}
+        className={cn(
+          "min-w-0 flex-1 select-none",
+          disabled ? "cursor-not-allowed" : "cursor-pointer",
+        )}
+      >
+        <span className="block text-[15px] font-medium leading-tight text-foreground">
+          {label}
+        </span>
+        <span className="mt-1 block text-[12px] leading-snug text-muted-foreground">
+          {description}
+        </span>
+      </label>
+      {trailing ? <span className="shrink-0 self-center">{trailing}</span> : null}
+    </div>
+  );
+}
+
+type CloseGroupPreviewDrawerProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  members: { id: string; nickname: string }[];
+};
+
+function CloseGroupPreviewDrawer({
+  open,
+  onOpenChange,
+  members,
+}: CloseGroupPreviewDrawerProps) {
+  return (
+    <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
+        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
+          <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
+            친한 친구
+          </DrawerTitle>
+          <DrawerDescription className="text-[13px] text-muted-foreground">
+            이 소비는 아래 친구들에게만 보여요.
+          </DrawerDescription>
+        </DrawerHeader>
+
+        {members.length === 0 ? (
+          <p className="rounded-2xl bg-muted px-4 py-6 text-center text-[13px] text-muted-foreground">
+            아직 지정된 친한 친구가 없어요.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {members.map((member) => (
+              <li
+                key={member.id}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5"
+              >
+                <span className="flex size-9 items-center justify-center rounded-full bg-muted text-[13px] font-semibold text-muted-foreground">
+                  {member.nickname.slice(0, 1)}
+                </span>
+                <span className="text-[15px] font-medium">
+                  {member.nickname}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="mt-4 text-[12px] leading-snug text-muted-foreground/80">
+          친한 친구 목록은 친구 페이지에서 관리할 수 있어요.
+        </p>
+
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => onOpenChange(false)}
+          className="mt-6 h-12 w-full rounded-full text-[15px] font-semibold"
+        >
+          닫기
+        </Button>
+      </DrawerContent>
+    </DrawerNestedRoot>
   );
 }

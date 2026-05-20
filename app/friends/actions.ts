@@ -214,6 +214,64 @@ export async function updateFriendVisibilityAction(
   return { ok: true };
 }
 
+export async function setCloseFriendAction(
+  friendUserId: string,
+  isClose: boolean,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!friendUserId || !UUID_RE.test(friendUserId) || friendUserId === user.id) {
+    return { ok: false, error: "잘못된 요청이에요." };
+  }
+
+  // Resolve the viewer's seeded "친한 친구" group. handle_new_user creates it
+  // on signup and the 0042 backfill covers existing users, so this should
+  // always succeed — surface a clear error if not so we can spot drift.
+  const { data: group, error: groupError } = await supabase
+    .from("friend_groups")
+    .select("id")
+    .eq("owner_id", user.id)
+    .eq("slug", "close")
+    .maybeSingle();
+  if (groupError) {
+    return { ok: false, error: groupError.message };
+  }
+  if (!group) {
+    return { ok: false, error: "친한 친구 그룹을 찾지 못했어요." };
+  }
+
+  if (isClose) {
+    // `ignoreDuplicates: true` makes this INSERT … ON CONFLICT DO NOTHING.
+    // Without it, supabase-js performs a real UPDATE on conflict, which the
+    // friend_group_members RLS has no UPDATE policy for → request fails on
+    // any second toggle of the same friend. Idempotent set-membership only
+    // ever needs INSERT or DO NOTHING.
+    const { error } = await supabase
+      .from("friend_group_members")
+      .upsert(
+        { group_id: group.id, member_user_id: friendUserId },
+        { onConflict: "group_id,member_user_id", ignoreDuplicates: true },
+      );
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("friend_group_members")
+      .delete()
+      .eq("group_id", group.id)
+      .eq("member_user_id", friendUserId);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/friends");
+  revalidatePath(`/friends/${friendUserId}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 export async function removeFriendAction(
   friendUserId: string,
 ): Promise<ActionResult> {

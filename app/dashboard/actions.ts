@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import type { TransactionVisibility } from "@/lib/queries/transactions";
 
 export type TransactionActionResult =
   | { ok: true }
@@ -16,10 +17,12 @@ type SubmitInput = {
   categoryId: string | null;
   spentAt: string; // ISO date or ISO datetime
   memo?: string | null;
-  isPrivate?: boolean;
+  visibility?: TransactionVisibility;
+  groupIds?: string[] | null;
 };
 
 const MEMO_MAX_LENGTH = 100;
+const VALID_VISIBILITIES: TransactionVisibility[] = ["all", "groups", "private"];
 
 function normalizeMemo(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -74,32 +77,53 @@ export async function submitTransactionAction(
     return { ok: false, error: `메모는 ${MEMO_MAX_LENGTH}자까지 입력할 수 있어요.` };
   }
 
-  const isPrivate = input.isPrivate === true;
+  const visibility: TransactionVisibility =
+    input.visibility && VALID_VISIBILITIES.includes(input.visibility)
+      ? input.visibility
+      : "all";
+
+  // visibility='groups' requires at least one group id, otherwise the row
+  // would be hidden from everyone (equivalent to 'private' but tagged
+  // 'groups'). Block at the server boundary so a tampered client can't sneak
+  // it through.
+  const groupIds =
+    visibility === "groups"
+      ? Array.from(
+          new Set(
+            (input.groupIds ?? []).filter(
+              (id): id is string => typeof id === "string" && id.length > 0,
+            ),
+          ),
+        )
+      : [];
+  if (visibility === "groups" && groupIds.length === 0) {
+    return {
+      ok: false,
+      error: "공개할 그룹을 한 개 이상 선택해주세요.",
+    };
+  }
 
   if (input.id) {
-    const { error } = await supabase
-      .from("transactions")
-      .update({
-        amount: input.amount,
-        category_id: input.categoryId,
-        spent_at: spentAt,
-        memo,
-        is_private: isPrivate,
-      })
-      .eq("id", input.id)
-      .eq("user_id", user.id);
-
+    const { error } = await supabase.rpc("update_transaction_with_visibility", {
+      p_id: input.id,
+      p_amount: input.amount,
+      p_category_id: input.categoryId,
+      p_spent_at: spentAt,
+      p_memo: memo,
+      p_visibility: visibility,
+      p_group_ids: groupIds.length > 0 ? groupIds : null,
+    });
     if (error) return { ok: false, error: error.message };
   } else {
     const id = randomUUID();
-    const { error } = await supabase.from("transactions").insert({
-      id,
-      user_id: user.id,
-      amount: input.amount,
-      category_id: input.categoryId,
-      spent_at: spentAt,
-      memo,
-      is_private: isPrivate,
+    const { error } = await supabase.rpc("create_transaction_with_visibility", {
+      p_id: id,
+      p_amount: input.amount,
+      p_category_id: input.categoryId,
+      p_spent_at: spentAt,
+      p_memo: memo,
+      p_visibility: visibility,
+      p_group_ids: groupIds.length > 0 ? groupIds : null,
     });
     if (error) return { ok: false, error: error.message };
   }

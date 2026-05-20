@@ -22,7 +22,10 @@ import {
   type TransactionListRow,
 } from "@/components/transactions/transaction-item";
 import { AddTransactionButton } from "@/components/transactions/add-transaction-button";
-import type { TransactionFormCategory } from "@/components/transactions/transaction-form-dialog";
+import type {
+  TransactionFormCategory,
+  TransactionFormCloseGroup,
+} from "@/components/transactions/transaction-form-dialog";
 import type { MonthlyTransaction } from "@/lib/queries/transactions";
 import { cn } from "@/lib/utils";
 import {
@@ -51,6 +54,10 @@ type CalendarDayPanelProps = {
   cycleLabel: string;
   transactions: MonthlyTransaction[];
   categories: TransactionFormCategory[];
+  /** Own-mode only: the viewer's "친한 친구" group + members, forwarded to the
+   *  edit form / FAB so the visibility selector can render correctly. Null in
+   *  friend mode (no edit affordance) or when the seed group is missing. */
+  closeGroup?: TransactionFormCloseGroup | null;
   availableBudget: number;
   /** True when the viewer is looking at their own dashboard. */
   isOwn: boolean;
@@ -86,6 +93,7 @@ export function CalendarDayPanel({
   cycleLabel,
   transactions,
   categories,
+  closeGroup,
   availableBudget,
   isOwn,
   ownerUserId,
@@ -207,7 +215,8 @@ export function CalendarDayPanel({
           category_color: tx.category_color,
           spent_at: tx.spent_at,
           memo: tx.memo,
-          is_private: tx.is_private,
+          visibility: tx.visibility,
+          visible_group_ids: tx.visible_group_ids,
         })),
     [transactions, selectedDay],
   );
@@ -344,6 +353,7 @@ export function CalendarDayPanel({
                     <TransactionItem
                       transaction={transaction}
                       categories={categories}
+                      closeGroup={closeGroup ?? null}
                       isOwn={isOwn}
                       ownerUserId={ownerUserId}
                       lastEmoji={lastEmojiByTx?.[transaction.id] ?? null}
@@ -373,6 +383,7 @@ export function CalendarDayPanel({
       {isOwn ? (
         <AddTransactionButton
           categories={categories}
+          closeGroup={closeGroup ?? null}
           defaultDate={selectedDay}
         />
       ) : null}

@@ -173,7 +173,7 @@ export type Database = {
           category_id: string | null;
           spent_at: string;
           memo: string | null;
-          is_private: boolean;
+          visibility: "all" | "groups" | "private";
           deleted_at: string | null;
           created_at: string;
           updated_at: string;
@@ -185,7 +185,7 @@ export type Database = {
           category_id?: string | null;
           spent_at: string;
           memo?: string | null;
-          is_private?: boolean;
+          visibility?: "all" | "groups" | "private";
           deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -197,7 +197,7 @@ export type Database = {
           category_id?: string | null;
           spent_at?: string;
           memo?: string | null;
-          is_private?: boolean;
+          visibility?: "all" | "groups" | "private";
           deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -208,6 +208,86 @@ export type Database = {
             columns: ["category_id"];
             isOneToOne: false;
             referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      friend_groups: {
+        Row: {
+          id: string;
+          owner_id: string;
+          name: string;
+          slug: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          name: string;
+          slug?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          name?: string;
+          slug?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      friend_group_members: {
+        Row: {
+          group_id: string;
+          member_user_id: string;
+          added_at: string;
+        };
+        Insert: {
+          group_id: string;
+          member_user_id: string;
+          added_at?: string;
+        };
+        Update: {
+          group_id?: string;
+          member_user_id?: string;
+          added_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "friend_group_members_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "friend_groups";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      transaction_visibility_groups: {
+        Row: {
+          transaction_id: string;
+          group_id: string;
+        };
+        Insert: {
+          transaction_id: string;
+          group_id: string;
+        };
+        Update: {
+          transaction_id?: string;
+          group_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "transaction_visibility_groups_transaction_id_fkey";
+            columns: ["transaction_id"];
+            isOneToOne: false;
+            referencedRelation: "transactions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transaction_visibility_groups_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "friend_groups";
             referencedColumns: ["id"];
           },
         ];
@@ -403,6 +483,30 @@ export type Database = {
       get_friend_spending_total: {
         Args: { target: string; start_iso: string; end_iso: string };
         Returns: number;
+      };
+      create_transaction_with_visibility: {
+        Args: {
+          p_id: string;
+          p_amount: number;
+          p_category_id: string | null;
+          p_spent_at: string;
+          p_memo: string | null;
+          p_visibility: "all" | "groups" | "private";
+          p_group_ids: string[] | null;
+        };
+        Returns: undefined;
+      };
+      update_transaction_with_visibility: {
+        Args: {
+          p_id: string;
+          p_amount: number;
+          p_category_id: string | null;
+          p_spent_at: string;
+          p_memo: string | null;
+          p_visibility: "all" | "groups" | "private";
+          p_group_ids: string[] | null;
+        };
+        Returns: undefined;
       };
       get_friend_fixed_total: {
         Args: { target: string };

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Heart, Lock, MessageCircle, Send } from "lucide-react";
+import { Heart, Lock, MessageCircle, Send, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -14,11 +14,13 @@ import { Button } from "@/components/ui/button";
 import {
   TransactionFormDialog,
   type TransactionFormCategory,
+  type TransactionFormCloseGroup,
   type TransactionFormInitial,
 } from "@/components/transactions/transaction-form-dialog";
 import { CategoryIcon } from "@/lib/utils/category-icon";
 import { cn } from "@/lib/utils";
 import { formatKRW } from "@/lib/utils/money";
+import type { TransactionVisibility } from "@/lib/queries/transactions";
 
 export type TransactionListRow = {
   id: string;
@@ -29,7 +31,8 @@ export type TransactionListRow = {
   category_color: string | null;
   spent_at: string;
   memo: string | null;
-  is_private: boolean;
+  visibility: TransactionVisibility;
+  visible_group_ids: string[];
 };
 
 // Curated quick-reaction set — matches the legacy interaction sheet so
@@ -40,6 +43,11 @@ const COMMENT_MAX_LENGTH = 500;
 type TransactionItemProps = {
   transaction: TransactionListRow;
   categories: TransactionFormCategory[];
+  /** Owner's close-friends group, forwarded to the edit form so the
+   *  "친한 친구만" option can render with the correct member list. Null when
+   *  the seed group is missing (shouldn't happen post-0042) or in friend
+   *  view (no edit affordance). */
+  closeGroup?: TransactionFormCloseGroup | null;
   /** True when the transaction belongs to the viewer (own dashboard). Tap
    *  opens the edit form directly; the friend interaction panel is skipped. */
   isOwn: boolean;
@@ -70,6 +78,7 @@ type TransactionItemProps = {
 export function TransactionItem({
   transaction,
   categories,
+  closeGroup,
   isOwn,
   ownerUserId,
   lastEmoji,
@@ -83,7 +92,13 @@ export function TransactionItem({
   onCommitClose,
 }: TransactionItemProps) {
   if (isOwn) {
-    return <OwnRow transaction={transaction} categories={categories} />;
+    return (
+      <OwnRow
+        transaction={transaction}
+        categories={categories}
+        closeGroup={closeGroup ?? null}
+      />
+    );
   }
 
   return (
@@ -108,9 +123,11 @@ export function TransactionItem({
 function OwnRow({
   transaction,
   categories,
+  closeGroup,
 }: {
   transaction: TransactionListRow;
   categories: TransactionFormCategory[];
+  closeGroup: TransactionFormCloseGroup | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -126,6 +143,7 @@ function OwnRow({
         open={open}
         onOpenChange={setOpen}
         categories={categories}
+        closeGroup={closeGroup}
         initial={toFormInitial(transaction)}
         onSaved={() => setOpen(false)}
       />
@@ -399,10 +417,15 @@ function TransactionSummary({
           <span className="truncate">
             {transaction.category_name ?? "기타"}
           </span>
-          {transaction.is_private ? (
+          {transaction.visibility === "private" ? (
             <Lock
               className="size-3 shrink-0 text-muted-foreground"
               aria-label="비공개"
+            />
+          ) : transaction.visibility === "groups" ? (
+            <Users
+              className="size-3 shrink-0 text-muted-foreground"
+              aria-label="친한 친구 공개"
             />
           ) : null}
         </p>
@@ -426,6 +449,7 @@ function toFormInitial(tx: TransactionListRow): TransactionFormInitial {
     category_id: tx.category_id,
     spent_at: tx.spent_at,
     memo: tx.memo,
-    is_private: tx.is_private,
+    visibility: tx.visibility,
+    visible_group_ids: tx.visible_group_ids,
   };
 }

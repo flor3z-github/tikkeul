@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { CycleMode } from "@/lib/utils/calendar";
 import { expandFixedExpensesByDay } from "@/lib/utils/payment-day";
 import type { CalendarFixedExpenseItem } from "@/components/dashboard/calendar-day-panel";
+import type { TransactionFormCloseGroup } from "@/components/transactions/transaction-form-dialog";
 
 type SpendingCalendarSectionProps = {
   /** Viewer id resolved by the page from JWT claims — no auth call here. */
@@ -81,6 +82,7 @@ export async function SpendingCalendarSection({
     categoriesResult,
     viewerInteractions,
     fixedExpensesRes,
+    closeGroupRow,
   ] = await Promise.all([
     getMonthlyTransactions(userId, startIso, endIso),
     getCategories(viewerId),
@@ -105,6 +107,16 @@ export async function SpendingCalendarSection({
             payment_day: number | null;
           }>,
         }),
+    // Own-mode only: resolve the viewer's seeded "친한 친구" group so the
+    // form can offer the "친한 친구만" option. Friend mode never edits.
+    isOwn
+      ? supabase
+          .from("friend_groups")
+          .select("id")
+          .eq("owner_id", viewerId)
+          .eq("slug", "close")
+          .maybeSingle()
+      : Promise.resolve({ data: null as { id: string } | null }),
   ]);
 
   if (!monthlyResult.ok) {
@@ -160,6 +172,36 @@ export async function SpendingCalendarSection({
     fixedExpenseItems,
   );
 
+  // Resolve the close-group members + nicknames in own-mode. The form needs
+  // both the group id (to submit visibility='groups' with the link) and the
+  // member list (to render the nested preview drawer). Friend mode skips
+  // entirely — no edit affordance, no FAB.
+  let closeGroup: TransactionFormCloseGroup | null = null;
+  if (isOwn && closeGroupRow.data?.id) {
+    const groupId = closeGroupRow.data.id;
+    const { data: memberRows } = await supabase
+      .from("friend_group_members")
+      .select("member_user_id")
+      .eq("group_id", groupId);
+    const memberIds = (memberRows ?? []).map(
+      (row) => row.member_user_id as string,
+    );
+
+    let members: TransactionFormCloseGroup["members"] = [];
+    if (memberIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, display_name")
+        .in("id", memberIds);
+      members = (profiles ?? []).map((p) => ({
+        id: p.id as string,
+        nickname: (p.display_name as string | null)?.trim() || "이름 없음",
+      }));
+    }
+
+    closeGroup = { id: groupId, members };
+  }
+
   return (
     <CalendarDayPanel
       key={`${ym}-${cycleMode}`}
@@ -171,6 +213,7 @@ export async function SpendingCalendarSection({
       cycleLabel={cycleLabel}
       transactions={monthlyResult.transactions}
       categories={categoriesResult.categories}
+      closeGroup={closeGroup}
       availableBudget={availableBudget}
       isOwn={isOwn}
       ownerUserId={userId}

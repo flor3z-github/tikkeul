@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
+import { CloseFriendToggle } from "@/components/friends/close-friend-toggle";
 import {
   FriendVisibilityToggles,
   type FriendVisibilityPerms,
@@ -57,6 +58,27 @@ export default async function FriendDetailPage({
     show_fixed_items: row.show_fixed_items ?? false,
   };
 
+  // Whether this friend is in the viewer's seeded "친한 친구" group. Two
+  // round-trips (group → membership) instead of one join because the group
+  // row is keyed by (owner_id, slug) and we want a clean null-or-uuid result.
+  const { data: closeGroup } = await supabase
+    .from("friend_groups")
+    .select("id")
+    .eq("owner_id", user.id)
+    .eq("slug", "close")
+    .maybeSingle();
+
+  let initialIsClose = false;
+  if (closeGroup) {
+    const { data: membership } = await supabase
+      .from("friend_group_members")
+      .select("member_user_id")
+      .eq("group_id", closeGroup.id)
+      .eq("member_user_id", friendId)
+      .maybeSingle();
+    initialIsClose = membership !== null;
+  }
+
   return (
     <AppShell>
       <PageHeader
@@ -80,6 +102,15 @@ export default async function FriendDetailPage({
         friendUserId={friendId}
         initialPerms={initialPerms}
       />
+
+      {closeGroup ? (
+        <div className="mt-6">
+          <CloseFriendToggle
+            friendUserId={friendId}
+            initialIsClose={initialIsClose}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-8">
         <RemoveFriendButton friendUserId={friendId} nickname={nickname} />

@@ -33,7 +33,7 @@ type TransactionRow = {
   category_id: string | null;
   spent_at: string;
   memo: string | null;
-  is_private: boolean | null;
+  visibility: "all" | "groups" | "private" | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -85,7 +85,8 @@ Deno.serve(async (req: Request) => {
   if (payload.type !== "INSERT") return ok("skip non-insert");
   if (payload.table !== "transactions") return ok("skip non-transactions");
   if (payload.record?.deleted_at) return ok("skip soft-deleted");
-  if (payload.record?.is_private === true) return ok("skip private");
+  const visibility = payload.record?.visibility ?? "all";
+  if (visibility === "private") return ok("skip private");
 
   const senderId = payload.record.user_id;
   if (!senderId) return ok("skip no user_id");
@@ -104,8 +105,40 @@ Deno.serve(async (req: Request) => {
     console.error("friendships query failed", viewersError);
     return ok("friendships error");
   }
-  const viewerIds = (viewers ?? []).map((row) => row.viewer_id as string);
+  let viewerIds = (viewers ?? []).map((row) => row.viewer_id as string);
   if (viewerIds.length === 0) return ok("no viewers");
+
+  // visibility='groups' narrows the viewer set to friends who belong to a
+  // group the tx is linked to. RLS already hides the row from non-members
+  // for the in-app dashboard; we mirror that here so the push channel can't
+  // leak the existence of a group-only spend to friends outside the group.
+  if (visibility === "groups") {
+    const { data: tvg, error: tvgError } = await supabase
+      .from("transaction_visibility_groups")
+      .select("group_id")
+      .eq("transaction_id", payload.record.id);
+    if (tvgError) {
+      console.error("tvg query failed", tvgError);
+      return ok("tvg error");
+    }
+    const groupIds = (tvg ?? []).map((row) => row.group_id as string);
+    if (groupIds.length === 0) return ok("groups tx with no links");
+
+    const { data: members, error: membersError } = await supabase
+      .from("friend_group_members")
+      .select("member_user_id")
+      .in("group_id", groupIds)
+      .in("member_user_id", viewerIds);
+    if (membersError) {
+      console.error("friend_group_members query failed", membersError);
+      return ok("members error");
+    }
+    const allowed = new Set(
+      (members ?? []).map((row) => row.member_user_id as string),
+    );
+    viewerIds = viewerIds.filter((id) => allowed.has(id));
+    if (viewerIds.length === 0) return ok("no group members among viewers");
+  }
 
   const { data: optedIn, error: settingsError } = await supabase
     .from("user_settings")
