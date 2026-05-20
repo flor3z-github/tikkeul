@@ -4,11 +4,11 @@ import { ChevronLeft } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
-import { buttonVariants } from "@/components/ui/button";
 import { DmIndexRealtimeWatcher } from "@/components/dm/dm-index-realtime-watcher";
+import { getActiveFriendCode } from "@/lib/queries/friend-codes";
 import { createClient } from "@/lib/supabase/server";
 import { formatRelativeKoreanDate } from "@/lib/utils/date";
-import { cn } from "@/lib/utils";
+import { DmEmptyAddFriend } from "./_components/dm-empty-add-friend";
 
 type DmIndexRow = {
   friend_id: string;
@@ -34,9 +34,11 @@ export default async function DmIndexPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: indexRows, error: indexError } = await supabase.rpc(
-    "get_my_dm_index",
-  );
+  const [{ data: indexRows, error: indexError }, initialActiveCode] =
+    await Promise.all([
+      supabase.rpc("get_my_dm_index"),
+      getActiveFriendCode(user.id),
+    ]);
 
   if (indexError) {
     return (
@@ -86,19 +88,7 @@ export default async function DmIndexPage() {
       />
 
       {items.length === 0 ? (
-        <div className="mt-2 rounded-2xl bg-card px-5 py-8 text-center">
-          <p className="text-sm text-muted-foreground">아직 친구가 없어요</p>
-          <p className="mt-1 text-xs text-muted-foreground/80">
-            대시보드 상단의 친구 칩에서 친구를 추가해 보세요.
-          </p>
-          <Link
-            href="/dashboard"
-            prefetch
-            className={cn(buttonVariants({ size: "sm" }), "mt-4")}
-          >
-            친구 추가하러 가기
-          </Link>
-        </div>
+        <DmEmptyAddFriend initialActiveCode={initialActiveCode} />
       ) : (
         <ul className="flex flex-col gap-2">
           {items.map((it) => {

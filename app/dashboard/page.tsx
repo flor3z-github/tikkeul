@@ -16,6 +16,7 @@ import {
   DEFAULT_CYCLE,
   resolveDashboardParams,
 } from "@/lib/utils/calendar";
+import { getActiveFriendCode } from "@/lib/queries/friend-codes";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { FriendFixedSection } from "./_sections/friend-fixed-section";
@@ -59,8 +60,7 @@ export default async function DashboardPage({
   // (to know friend ids before validating the `viewing` param) and we
   // opportunistically prefetch the self user_settings + active friend code
   // here too — the network cost overlaps with the friendships query.
-  const nowIso = new Date().toISOString();
-  const [outboundRowsRes, ownSettingsRes, activeCodeRowRes] = await Promise.all(
+  const [outboundRowsRes, ownSettingsRes, initialActiveCode] = await Promise.all(
     [
       supabase
         .from("friendships")
@@ -75,15 +75,7 @@ export default async function DashboardPage({
         )
         .eq("user_id", viewerId)
         .maybeSingle(),
-      supabase
-        .from("friend_codes")
-        .select("code, expires_at")
-        .eq("owner_id", viewerId)
-        .is("used_at", null)
-        .gt("expires_at", nowIso)
-        .order("expires_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      getActiveFriendCode(viewerId),
     ],
   );
 
@@ -223,11 +215,6 @@ export default async function DashboardPage({
     },
   }));
   const viewingNickname = nicknameById.get(viewingUserId) ?? "";
-
-  const activeCodeRow = activeCodeRowRes.data;
-  const initialActiveCode = activeCodeRow
-    ? { code: activeCodeRow.code, expiresAt: activeCodeRow.expires_at }
-    : null;
 
   // Own-mode fixed-expense total, hoisted from sections so both Summary and
   // Calendar receive the same prefetched number.

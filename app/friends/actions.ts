@@ -114,6 +114,7 @@ export async function redeemFriendCodeAction(
   if (outcome === "ok") {
     revalidatePath("/friends");
     revalidatePath("/dashboard");
+    revalidatePath("/dm");
     return { ok: true };
   }
   if (outcome === "self") {

@@ -6,10 +6,7 @@ import { FriendCodeIssueCard } from "@/components/friends/friend-code-issue-card
 import { FriendCodeRedeemForm } from "@/components/friends/friend-code-redeem-form";
 import { BottomSheetNested } from "@/components/ui/bottom-sheet";
 
-export type ActiveFriendCode = {
-  code: string;
-  expiresAt: string;
-};
+export type { ActiveFriendCode } from "@/lib/queries/friend-codes";
 
 type Props = {
   open: boolean;
