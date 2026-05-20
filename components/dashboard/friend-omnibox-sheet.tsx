@@ -91,6 +91,7 @@ export function FriendOmniboxSheet({
     const baseParams = new URLSearchParams(searchParams?.toString() ?? "");
     baseParams.delete("ym");
     baseParams.delete("day");
+    baseParams.delete("focus");
 
     const targets = [viewerUserId, ...friends.map((f) => f.userId)];
     for (const target of targets) {
@@ -124,6 +125,10 @@ export function FriendOmniboxSheet({
     // for whoever the new viewer is.
     params.delete("ym");
     params.delete("day");
+    // `focus` is tied to a specific viewer's transaction list. Carrying it
+    // across a viewer switch lands on a row the new viewer can't see and
+    // triggers a "not found" toast on the day panel.
+    params.delete("focus");
     const qs = params.toString();
     const href = qs ? `/dashboard?${qs}` : "/dashboard";
 
