@@ -112,7 +112,7 @@ export function SearchSheet({ cycleMode, cycleStartDay }: SearchSheetProps) {
     <>
       <button
         type="button"
-        aria-label="거래 검색"
+        aria-label="검색"
         onClick={() => setOpen(true)}
         className={cn(
           buttonVariants({ variant: "ghost", size: "icon" }),
@@ -125,8 +125,8 @@ export function SearchSheet({ cycleMode, cycleStartDay }: SearchSheetProps) {
       <BottomSheet
         open={open}
         onOpenChange={handleOpenChange}
-        title="거래 검색"
-        description="메모를 기준으로 거래를 검색합니다."
+        title="검색"
+        description="메모를 기준으로 소비를 검색합니다."
       >
         <div className="flex min-h-0 flex-1 flex-col px-1">
           <label htmlFor={inputId} className="sr-only">
@@ -226,7 +226,7 @@ function SearchResults({ state, query, onTap }: SearchResultsProps) {
   if (showEmpty) {
     return (
       <p className="mt-6 px-1 text-center text-[14px] text-muted-foreground">
-        일치하는 거래가 없어요
+        일치하는 소비가 없어요
       </p>
     );
   }
