@@ -24,11 +24,11 @@ export function BottomTabNav() {
   return (
     <nav
       aria-label="주요 네비게이션"
-      className="pointer-events-none fixed inset-x-0 z-40"
+      className="pointer-events-none fixed inset-x-0 z-40 bg-background"
       style={{ bottom: 0 }}
     >
       <div
-        className="pointer-events-auto mx-auto w-full max-w-md border-t border-border bg-background"
+        className="pointer-events-auto mx-auto w-full max-w-md border-t border-border"
         style={{
           paddingTop: "12px",
           paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
