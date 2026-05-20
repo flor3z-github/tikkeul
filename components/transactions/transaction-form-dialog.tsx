@@ -800,6 +800,11 @@ type GroupPickerDrawerProps = {
   onChange: (next: string[]) => void;
 };
 
+// Buffer model: changes inside the drawer are kept in a local `buffer` and
+// only flushed to the parent when the user taps the primary commit button.
+// Dismissing via overlay tap, swipe-down, or the X button reverts to whatever
+// the parent already had. The buffer reseeds on every false→true transition
+// of `open` so reopening discards any unsubmitted edits from a prior session.
 function GroupPickerDrawer({
   open,
   onOpenChange,
@@ -807,15 +812,42 @@ function GroupPickerDrawer({
   selectedIds,
   onChange,
 }: GroupPickerDrawerProps) {
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const [buffer, setBuffer] = useState<string[]>(selectedIds);
+  const [lastOpenSeen, setLastOpenSeen] = useState(open);
+
+  // React-recommended "adjust state when a prop changes" pattern. Reseed
+  // the buffer at the moment the drawer transitions to open so the user
+  // sees the current parent state, not a stale buffer from earlier.
+  if (open !== lastOpenSeen) {
+    setLastOpenSeen(open);
+    if (open) setBuffer(selectedIds);
+  }
+
+  const bufferSet = useMemo(() => new Set(buffer), [buffer]);
 
   function toggle(groupId: string) {
-    if (selectedSet.has(groupId)) {
-      onChange(selectedIds.filter((id) => id !== groupId));
+    if (bufferSet.has(groupId)) {
+      setBuffer(buffer.filter((id) => id !== groupId));
     } else {
-      onChange([...selectedIds, groupId]);
+      setBuffer([...buffer, groupId]);
     }
   }
+
+  function commit() {
+    onChange(buffer);
+    onOpenChange(false);
+  }
+
+  // Commit button label: list up to 2 selected names, then "외 N개" for the
+  // rest. Names follow the groups array order, which is already seed-first
+  // sorted by the calendar section.
+  const selectedGroupRows = groups.filter((g) => bufferSet.has(g.id));
+  const selectedNames = selectedGroupRows.map((g) => g.name);
+  const namePreview =
+    selectedNames.length <= 2
+      ? selectedNames.join(", ")
+      : `${selectedNames[0]}, ${selectedNames[1]} 외 ${selectedNames.length - 2}개`;
+  const hasSelection = buffer.length > 0;
 
   return (
     <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
@@ -836,7 +868,7 @@ function GroupPickerDrawer({
         ) : (
           <ul className="space-y-1">
             {groups.map((group) => {
-              const checked = selectedSet.has(group.id);
+              const checked = bufferSet.has(group.id);
               return (
                 <li key={group.id}>
                   <button
@@ -893,14 +925,24 @@ function GroupPickerDrawer({
           에서 편집할 수 있어요.
         </p>
 
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => onOpenChange(false)}
-          className="mt-6 h-12 w-full rounded-full text-[15px] font-semibold"
-        >
-          닫기
-        </Button>
+        {hasSelection ? (
+          <Button
+            type="button"
+            onClick={commit}
+            className="mt-6 h-12 w-full rounded-full text-[15px] font-semibold"
+          >
+            {namePreview} 추가
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+            className="mt-6 h-12 w-full rounded-full text-[15px] font-semibold"
+          >
+            닫기
+          </Button>
+        )}
       </DrawerContent>
     </DrawerNestedRoot>
   );
