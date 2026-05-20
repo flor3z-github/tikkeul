@@ -4,6 +4,7 @@ import { MessageCircle, Settings } from "lucide-react";
 
 import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-watcher";
 import { DashboardFriendHeader } from "@/components/dashboard/dashboard-friend-header";
+import { NotificationNudgeCard } from "@/components/dashboard/notification-nudge-card";
 import { AppShell } from "@/components/layout/app-shell";
 import { PwaInstallBanner } from "@/components/pwa/install-banner";
 import { PageHeader } from "@/components/layout/header";
@@ -69,7 +70,9 @@ export default async function DashboardPage({
         .eq("owner_id", viewerId),
       supabase
         .from("user_settings")
-        .select("cycle_mode, cycle_start_day, monthly_income")
+        .select(
+          "cycle_mode, cycle_start_day, monthly_income, friend_spending_notifications, transaction_interaction_notifications",
+        )
         .eq("user_id", viewerId)
         .maybeSingle(),
       supabase
@@ -233,6 +236,21 @@ export default async function DashboardPage({
     0,
   );
 
+  // Push-notification nudge: only meaningful in own mode once the user has
+  // at least one friend and has not engaged with any notification opt-in yet.
+  // If either flag is already on, the user has decided — don't re-nudge.
+  // The card itself does further client-side gating (browser support,
+  // permission state, iOS-PWA, localStorage dismiss).
+  const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+  const anyNotificationEnabled =
+    Boolean(ownSettingsRes.data?.friend_spending_notifications) ||
+    Boolean(ownSettingsRes.data?.transaction_interaction_notifications);
+  const showNotificationNudge =
+    isOwn &&
+    friendIds.length > 0 &&
+    !anyNotificationEnabled &&
+    Boolean(vapidPublicKey);
+
   // Sum unread DMs across the caller's threads. Only computed in own mode
   // (friend mode passes the stubbed null through); the badge is hidden in
   // friend mode anyway because the MessageCircle Link itself is gated on
@@ -352,6 +370,10 @@ export default async function DashboardPage({
           </Suspense>
 
           <PwaInstallBanner />
+
+          {showNotificationNudge ? (
+            <NotificationNudgeCard vapidPublicKey={vapidPublicKey} />
+          ) : null}
 
           <Suspense fallback={<SpendingCalendarSkeleton />}>
             <SpendingCalendarSection
