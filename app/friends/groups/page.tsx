@@ -5,8 +5,6 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
-
 export type GroupsPageGroup = {
   id: string;
   name: string;
