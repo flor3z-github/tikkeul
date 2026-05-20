@@ -1,7 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CalendarIcon, ChevronRight, Trash2, Undo2, Users, X } from "lucide-react";
+import {
+  CalendarIcon,
+  Check,
+  ChevronRight,
+  Trash2,
+  Undo2,
+  Users,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -70,11 +79,9 @@ export type TransactionFormGroup = {
   members: { id: string; nickname: string }[];
 };
 
-// Selector state. 'close' is the phase-1 alias for visibility='groups' bound
-// to the single seeded close-friends group. Phase 2 will replace this with a
-// multi-group picker that sets visibility='groups' with an arbitrary group
-// list, but the wire shape (visibility + group_ids) is already in place.
-type VisibilityChoice = "all" | "close" | "private";
+// Selector state. Mirrors the DB enum verbatim — `groups` carries an
+// accompanying `selectedGroupIds` array; the other two values ignore it.
+type VisibilityChoice = "all" | "groups" | "private";
 
 const MEMO_MAX_LENGTH = 100;
 
@@ -173,21 +180,24 @@ function pickCreateDefaultDate(defaultDate: string | undefined): Date {
 
 function deriveInitialVisibilityChoice(
   initial: TransactionFormInitial | null,
-  closeGroup: TransactionFormGroup | null,
 ): VisibilityChoice {
   if (!initial) return "all";
   if (initial.visibility === "private") return "private";
-  if (
-    initial.visibility === "groups" &&
-    closeGroup &&
-    initial.visible_group_ids.includes(closeGroup.id)
-  ) {
-    return "close";
-  }
-  // visibility='groups' with no recognized link in phase 1 → fall back to
-  // 'all' so the user sees a coherent state. Saving will overwrite the row's
-  // group linkage.
+  if (initial.visibility === "groups") return "groups";
   return "all";
+}
+
+// Filter the row's stored group ids down to the ones that still exist among
+// the viewer's current groups. Deleted groups are silently dropped — the
+// 0044 cascade trigger has already migrated truly orphaned rows to 'private',
+// so any leftover ids here are stale references the user can re-pick.
+function deriveInitialSelectedGroupIds(
+  initial: TransactionFormInitial | null,
+  groups: TransactionFormGroup[],
+): string[] {
+  if (!initial || initial.visibility !== "groups") return [];
+  const valid = new Set(groups.map((g) => g.id));
+  return initial.visible_group_ids.filter((id) => valid.has(id));
 }
 
 function TransactionFormBody({
@@ -198,12 +208,6 @@ function TransactionFormBody({
   onSaved,
 }: FormBodyProps) {
   const mode = initial ? "edit" : "create";
-
-  // Step 5 derives the seed group from the broader `groups` array. The form
-  // currently surfaces only the seed in the "친한 친구만" option — step 6
-  // will rewrite this section into a multi-group checkbox picker over all
-  // entries in `groups`.
-  const closeGroup = groups.find((g) => g.isSeed) ?? null;
 
   const [amountText, setAmountText] = useState(() =>
     initial ? formatNumber(Number(initial.amount)) : "",
@@ -217,9 +221,12 @@ function TransactionFormBody({
   });
   const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
   const [visibilityChoice, setVisibilityChoice] = useState<VisibilityChoice>(
-    () => deriveInitialVisibilityChoice(initial, closeGroup),
+    () => deriveInitialVisibilityChoice(initial),
   );
-  const [closePreviewOpen, setClosePreviewOpen] = useState(false);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(() =>
+    deriveInitialSelectedGroupIds(initial, groups),
+  );
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -230,11 +237,16 @@ function TransactionFormBody({
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const busy = pending || deletePending;
-  const canSubmit = amountValue > 0 && categoryId !== null && !busy;
+  // The 'groups' choice requires at least one selected group — submitting
+  // an empty list would silently make the row no-one-visible. Block it here
+  // so the user has to either pick a group or switch to 'private'.
+  const groupsChoiceReady =
+    visibilityChoice !== "groups" || selectedGroupIds.length > 0;
+  const canSubmit =
+    amountValue > 0 && categoryId !== null && groupsChoiceReady && !busy;
   const amountInputRef = useRef<HTMLInputElement>(null);
 
-  const closeMemberCount = closeGroup?.members.length ?? 0;
-  const closeOptionDisabled = !closeGroup || closeMemberCount === 0;
+  const groupsAvailable = groups.length > 0;
 
   // Mirror the fixed-expenses catalog filter UX: single-row horizontal scroll
   // for category chips, with edge fades that only appear when there's more to
@@ -332,25 +344,21 @@ function TransactionFormBody({
   }
 
   function handleSelectVisibility(next: VisibilityChoice) {
-    if (next === "close" && closeOptionDisabled) return;
+    if (next === "groups" && !groupsAvailable) return;
     setVisibilityChoice(next);
+    // Auto-open the picker when the user selects "부분 공개" with nothing
+    // chosen yet — saves a tap and makes the requirement obvious.
+    if (next === "groups" && selectedGroupIds.length === 0) {
+      setGroupPickerOpen(true);
+    }
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
 
-    if (visibilityChoice === "close" && !closeGroup) {
-      toast.error("친한 친구 그룹을 찾지 못했어요.");
-      return;
-    }
-
-    const visibility: TransactionVisibility =
-      visibilityChoice === "close"
-        ? "groups"
-        : (visibilityChoice as TransactionVisibility);
-    const groupIds =
-      visibilityChoice === "close" && closeGroup ? [closeGroup.id] : null;
+    const visibility: TransactionVisibility = visibilityChoice;
+    const groupIds = visibilityChoice === "groups" ? selectedGroupIds : null;
 
     startTransition(async () => {
       const result = await submitTransactionAction({
@@ -550,9 +558,9 @@ function TransactionFormBody({
       <VisibilitySelector
         value={visibilityChoice}
         onChange={handleSelectVisibility}
-        closeMemberCount={closeMemberCount}
-        closeOptionDisabled={closeOptionDisabled}
-        onOpenClosePreview={() => setClosePreviewOpen(true)}
+        selectedGroupCount={selectedGroupIds.length}
+        groupsAvailable={groupsAvailable}
+        onOpenGroupPicker={() => setGroupPickerOpen(true)}
       />
 
       {mode === "edit" && initial ? (
@@ -625,13 +633,13 @@ function TransactionFormBody({
         </>
       ) : null}
 
-      {closeGroup ? (
-        <CloseGroupPreviewDrawer
-          open={closePreviewOpen}
-          onOpenChange={setClosePreviewOpen}
-          members={closeGroup.members}
-        />
-      ) : null}
+      <GroupPickerDrawer
+        open={groupPickerOpen}
+        onOpenChange={setGroupPickerOpen}
+        groups={groups}
+        selectedIds={selectedGroupIds}
+        onChange={setSelectedGroupIds}
+      />
     </form>
   );
 }
@@ -639,18 +647,26 @@ function TransactionFormBody({
 type VisibilitySelectorProps = {
   value: VisibilityChoice;
   onChange: (next: VisibilityChoice) => void;
-  closeMemberCount: number;
-  closeOptionDisabled: boolean;
-  onOpenClosePreview: () => void;
+  selectedGroupCount: number;
+  groupsAvailable: boolean;
+  onOpenGroupPicker: () => void;
 };
 
 function VisibilitySelector({
   value,
   onChange,
-  closeMemberCount,
-  closeOptionDisabled,
-  onOpenClosePreview,
+  selectedGroupCount,
+  groupsAvailable,
+  onOpenGroupPicker,
 }: VisibilitySelectorProps) {
+  const groupsOptionDescription = !groupsAvailable
+    ? "그룹을 먼저 만들어주세요."
+    : value === "groups" && selectedGroupCount === 0
+      ? "공개할 그룹을 선택해주세요."
+      : value === "groups"
+        ? `선택한 ${selectedGroupCount}개 그룹의 친구에게만 보여요.`
+        : "지정한 그룹의 친구에게만 보여요.";
+
   return (
     <div className="space-y-2 overflow-hidden">
       <label className="block text-sm font-medium text-muted-foreground">
@@ -666,37 +682,33 @@ function VisibilitySelector({
           <VisibilityOption
             id="visibility-all"
             value="all"
-            label="전체 친구"
+            label="전체 공개"
             description="모든 친구가 이 소비를 볼 수 있어요."
             onSelect={() => onChange("all")}
           />
           <VisibilityOption
-            id="visibility-close"
-            value="close"
-            label="친한 친구만"
-            description={
-              closeOptionDisabled
-                ? "친한 친구를 먼저 지정하면 쓸 수 있어요."
-                : `선택한 친한 친구 ${closeMemberCount}명에게만 보여요.`
-            }
-            disabled={closeOptionDisabled}
+            id="visibility-groups"
+            value="groups"
+            label="부분 공개"
+            description={groupsOptionDescription}
+            disabled={!groupsAvailable}
             onSelect={() => {
-              if (closeOptionDisabled) return;
-              onChange("close");
+              if (!groupsAvailable) return;
+              onChange("groups");
             }}
             trailing={
-              value === "close" && !closeOptionDisabled ? (
+              value === "groups" && groupsAvailable ? (
                 <button
                   type="button"
-                  aria-label="친한 친구 목록 보기"
+                  aria-label="그룹 선택"
                   onClick={(event) => {
                     event.stopPropagation();
-                    onOpenClosePreview();
+                    onOpenGroupPicker();
                   }}
                   className="flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <Users className="size-3.5" aria-hidden />
-                  <span>{closeMemberCount}명</span>
+                  <span>{selectedGroupCount}개 그룹</span>
                   <ChevronRight className="size-3.5" aria-hidden />
                 </button>
               ) : undefined
@@ -711,6 +723,18 @@ function VisibilitySelector({
           />
         </RadioGroup>
       </div>
+      {!groupsAvailable ? (
+        <p className="px-1 text-[12px] text-muted-foreground">
+          그룹은{" "}
+          <Link
+            href="/friends/groups"
+            className="font-medium text-foreground underline-offset-2 hover:underline"
+          >
+            그룹 관리
+          </Link>
+          에서 만들 수 있어요.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -768,53 +792,105 @@ function VisibilityOption({
   );
 }
 
-type CloseGroupPreviewDrawerProps = {
+type GroupPickerDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  members: { id: string; nickname: string }[];
+  groups: TransactionFormGroup[];
+  selectedIds: string[];
+  onChange: (next: string[]) => void;
 };
 
-function CloseGroupPreviewDrawer({
+function GroupPickerDrawer({
   open,
   onOpenChange,
-  members,
-}: CloseGroupPreviewDrawerProps) {
+  groups,
+  selectedIds,
+  onChange,
+}: GroupPickerDrawerProps) {
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  function toggle(groupId: string) {
+    if (selectedSet.has(groupId)) {
+      onChange(selectedIds.filter((id) => id !== groupId));
+    } else {
+      onChange([...selectedIds, groupId]);
+    }
+  }
+
   return (
     <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
         <DrawerHeader className="px-0 pb-3 pt-2 text-left">
           <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
-            친한 친구
+            그룹 선택
           </DrawerTitle>
           <DrawerDescription className="text-[13px] text-muted-foreground">
-            이 소비는 아래 친구들에게만 보여요.
+            선택한 그룹의 친구에게만 이 소비가 보여요.
           </DrawerDescription>
         </DrawerHeader>
 
-        {members.length === 0 ? (
+        {groups.length === 0 ? (
           <p className="rounded-2xl bg-muted px-4 py-6 text-center text-[13px] text-muted-foreground">
-            아직 지정된 친한 친구가 없어요.
+            아직 그룹이 없어요.
           </p>
         ) : (
           <ul className="space-y-1">
-            {members.map((member) => (
-              <li
-                key={member.id}
-                className="flex items-center gap-3 rounded-2xl px-3 py-2.5"
-              >
-                <span className="flex size-9 items-center justify-center rounded-full bg-muted text-[13px] font-semibold text-muted-foreground">
-                  {member.nickname.slice(0, 1)}
-                </span>
-                <span className="text-[15px] font-medium">
-                  {member.nickname}
-                </span>
-              </li>
-            ))}
+            {groups.map((group) => {
+              const checked = selectedSet.has(group.id);
+              return (
+                <li key={group.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggle(group.id)}
+                    aria-pressed={checked}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors",
+                      checked ? "bg-secondary" : "hover:bg-muted",
+                    )}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <span className="truncate text-[15px] font-medium">
+                        {group.name}
+                      </span>
+                      {group.isSeed ? (
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          기본
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
+                        <Users className="size-3.5" aria-hidden />
+                        {group.members.length}명
+                      </span>
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "flex size-5 items-center justify-center rounded-full border",
+                          checked
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-muted-foreground/40",
+                        )}
+                      >
+                        {checked ? <Check className="size-3.5" /> : null}
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
 
         <p className="mt-4 text-[12px] leading-snug text-muted-foreground/80">
-          친한 친구 목록은 친구 페이지에서 관리할 수 있어요.
+          그룹과 친구는{" "}
+          <Link
+            href="/friends/groups"
+            className="font-medium text-foreground underline-offset-2 hover:underline"
+          >
+            그룹 관리
+          </Link>
+          에서 편집할 수 있어요.
         </p>
 
         <Button
