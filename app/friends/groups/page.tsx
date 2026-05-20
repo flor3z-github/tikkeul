@@ -14,6 +14,11 @@ export type GroupsPageGroup = {
   previewMemberNicknames: string[];
 };
 
+export type GroupsPageFriend = {
+  userId: string;
+  nickname: string;
+};
+
 export default async function FriendGroupsPage() {
   const supabase = await createClient();
   const {
@@ -21,14 +26,21 @@ export default async function FriendGroupsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Fetch the viewer's groups. Order by (seed first, then created_at) on the
-  // client — Postgres can do this with CASE but PostgREST's `order` clause is
-  // a hassle to express it through, and the row count is bounded by the
-  // 0044 cap (≤ 10).
-  const { data: groupRows } = await supabase
-    .from("friend_groups")
-    .select("id, name, slug, created_at")
-    .eq("owner_id", user.id);
+  // Fetch the viewer's groups in parallel with the outgoing-friendships
+  // list. Friends are needed for the create/edit dialogs' member picker.
+  // Order groups (seed first, then created_at) on the client — Postgres
+  // can do this with CASE but PostgREST's `order` clause is a hassle to
+  // express it through, and the row count is bounded by the 0044 cap (≤ 10).
+  const [{ data: groupRows }, { data: friendshipRows }] = await Promise.all([
+    supabase
+      .from("friend_groups")
+      .select("id, name, slug, created_at")
+      .eq("owner_id", user.id),
+    supabase
+      .from("friendships")
+      .select("viewer_id")
+      .eq("owner_id", user.id),
+  ]);
 
   const groups = (groupRows ?? [])
     .map((g) => ({
@@ -44,9 +56,12 @@ export default async function FriendGroupsPage() {
       return a.created_at.localeCompare(b.created_at);
     });
 
-  // One round-trip for members across all groups, one for the matching
-  // profile rows. Keeps the query count constant regardless of group count.
+  // One round-trip for members across all groups, one combined round-trip
+  // for member + friend profile rows. Keeps the query count constant
+  // regardless of group/friend count.
   const groupIds = groups.map((g) => g.id);
+  const friendIds = (friendshipRows ?? []).map((f) => f.viewer_id as string);
+
   let memberRows: Array<{ group_id: string; member_user_id: string }> = [];
   let nicknameById = new Map<string, string>();
 
@@ -59,22 +74,25 @@ export default async function FriendGroupsPage() {
       group_id: m.group_id as string,
       member_user_id: m.member_user_id as string,
     }));
+  }
 
-    const memberIds = Array.from(
-      new Set(memberRows.map((m) => m.member_user_id)),
+  // Fetch nicknames for the union of (group members) ∪ (friends). The
+  // friend-multi-picker needs every friend, and the group preview needs every
+  // member. They overlap heavily so we union the ids and fetch once.
+  const allProfileIds = Array.from(
+    new Set([...memberRows.map((m) => m.member_user_id), ...friendIds]),
+  );
+  if (allProfileIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", allProfileIds);
+    nicknameById = new Map(
+      (profiles ?? []).map((p) => [
+        p.id as string,
+        ((p.display_name as string | null)?.trim() || "이름 없음"),
+      ]),
     );
-    if (memberIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, display_name")
-        .in("id", memberIds);
-      nicknameById = new Map(
-        (profiles ?? []).map((p) => [
-          p.id as string,
-          ((p.display_name as string | null)?.trim() || "이름 없음"),
-        ]),
-      );
-    }
   }
 
   // Build the per-group view rows. previewMemberNicknames are sorted in the
@@ -86,6 +104,13 @@ export default async function FriendGroupsPage() {
     list.push(m.member_user_id);
     membersByGroup.set(m.group_id, list);
   }
+
+  const viewFriends: GroupsPageFriend[] = friendIds
+    .map((id) => ({
+      userId: id,
+      nickname: nicknameById.get(id) ?? "이름 없음",
+    }))
+    .sort((a, b) => a.nickname.localeCompare(b.nickname, "ko"));
 
   const viewGroups: GroupsPageGroup[] = groups.map((g) => {
     const memberIds = membersByGroup.get(g.id) ?? [];
@@ -116,7 +141,7 @@ export default async function FriendGroupsPage() {
         subtitle="거래마다 어떤 친구가 볼지 그룹으로 묶어 정해요."
       />
 
-      <GroupsPage groups={viewGroups} />
+      <GroupsPage groups={viewGroups} friends={viewFriends} />
     </AppShell>
   );
 }

@@ -1,18 +1,31 @@
 "use client";
 
+import { useState } from "react";
 import { Plus, Users } from "lucide-react";
 
-import type { GroupsPageGroup } from "@/app/friends/groups/page";
+import type {
+  GroupsPageFriend,
+  GroupsPageGroup,
+} from "@/app/friends/groups/page";
+import { CreateGroupDialog } from "@/components/friends/groups/create-group-dialog";
 import { cn } from "@/lib/utils";
 
 type Props = {
   groups: GroupsPageGroup[];
+  friends: GroupsPageFriend[];
 };
 
-export function GroupsPage({ groups }: Props) {
-  // 3a is read-only — create/edit handlers ship in 3b/3c. Until then the
-  // row and FAB are visually present but disabled so the surface area is
-  // testable without dead behavior.
+export function GroupsPage({ groups, friends }: Props) {
+  const [createOpen, setCreateOpen] = useState(false);
+
+  // Cap-aware: the create button stays clickable until the 10-group limit is
+  // reached. The 0044 trigger also enforces this server-side; the disabled
+  // state is just a UX courtesy.
+  const atCap = groups.length >= 10;
+
+  // Row click is still inert until 3c wires the edit drawer. We keep the row
+  // disabled to communicate that intent rather than render a misleading
+  // affordance.
   return (
     <div className="space-y-3">
       {groups.length === 0 ? (
@@ -31,7 +44,8 @@ export function GroupsPage({ groups }: Props) {
 
       <button
         type="button"
-        disabled
+        onClick={() => setCreateOpen(true)}
+        disabled={atCap}
         className={cn(
           "mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary text-[15px] font-semibold text-primary-foreground",
           "disabled:opacity-50",
@@ -43,8 +57,16 @@ export function GroupsPage({ groups }: Props) {
       </button>
 
       <p className="mt-2 text-center text-xs text-muted-foreground">
-        그룹은 최대 10개까지 만들 수 있어요.
+        {atCap
+          ? "그룹은 최대 10개예요. 기존 그룹을 정리한 후 다시 만들어 보세요."
+          : "그룹은 최대 10개까지 만들 수 있어요."}
       </p>
+
+      <CreateGroupDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        friends={friends}
+      />
     </div>
   );
 }
