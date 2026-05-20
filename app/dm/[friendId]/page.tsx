@@ -72,16 +72,19 @@ export default async function DmThreadPage({
     .maybeSingle();
   const friendNickname = profile?.display_name ?? "이름 없음";
 
-  // Pull messages oldest → newest. RLS already restricts to thread members,
-  // so an ORDER BY + LIMIT is enough; we leave pagination for future work.
-  const { data: rawMessages, error: messagesError } = await supabase
+  // Pull the latest 200 messages. We order DESC at the DB to make `LIMIT`
+  // keep the newest window, then reverse in JS so the UI still receives
+  // them oldest → newest. RLS already restricts to thread members; real
+  // pagination is future work.
+  const { data: latestMessages, error: messagesError } = await supabase
     .from("dm_messages")
     .select(
       "id, sender_id, content, quoted_transaction_id, created_at",
     )
     .eq("thread_id", threadId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(200);
+  const rawMessages = latestMessages ? [...latestMessages].reverse() : [];
 
   if (messagesError) {
     return (
