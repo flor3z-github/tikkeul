@@ -44,7 +44,7 @@ export function BottomTabNav() {
                   prefetch
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
+                    "flex min-h-[44px] flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
                     active
                       ? "text-foreground"
                       : "text-muted-foreground hover:text-foreground",
