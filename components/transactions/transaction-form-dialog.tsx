@@ -63,8 +63,10 @@ export type TransactionFormInitial = {
   visible_group_ids: string[];
 };
 
-export type TransactionFormCloseGroup = {
+export type TransactionFormGroup = {
   id: string;
+  name: string;
+  isSeed: boolean;
   members: { id: string; nickname: string }[];
 };
 
@@ -83,9 +85,10 @@ type TransactionFormDialogProps = {
   initial?: TransactionFormInitial | null;
   /** YYYY-MM-DD. Initial date for create mode; ignored in edit mode. */
   defaultDate?: string;
-  /** The viewer's "친한 친구" group + its current members. When null/empty,
-   *  the "친한 친구만" option is shown but disabled with a helper. */
-  closeGroup?: TransactionFormCloseGroup | null;
+  /** The viewer's friend groups (seed + user-defined). Phase 1/5 only
+   *  exposes the seed group in the form; phase 6 turns the picker into a
+   *  multi-checkbox over this whole array. */
+  groups?: TransactionFormGroup[];
   onSaved?: () => void;
   /**
    * When true, render as a nested drawer (`DrawerNestedRoot`) so vaul scales
@@ -102,7 +105,7 @@ export function TransactionFormDialog({
   categories,
   initial,
   defaultDate,
-  closeGroup,
+  groups,
   onSaved,
   nested = false,
 }: TransactionFormDialogProps) {
@@ -128,7 +131,7 @@ export function TransactionFormDialog({
           initial={initial ?? null}
           categories={categories}
           defaultDate={defaultDate}
-          closeGroup={closeGroup ?? null}
+          groups={groups ?? []}
           onSaved={() => {
             onOpenChange(false);
             onSaved?.();
@@ -143,7 +146,7 @@ type FormBodyProps = {
   initial: TransactionFormInitial | null;
   categories: TransactionFormCategory[];
   defaultDate?: string;
-  closeGroup: TransactionFormCloseGroup | null;
+  groups: TransactionFormGroup[];
   onSaved: () => void;
 };
 
@@ -170,7 +173,7 @@ function pickCreateDefaultDate(defaultDate: string | undefined): Date {
 
 function deriveInitialVisibilityChoice(
   initial: TransactionFormInitial | null,
-  closeGroup: TransactionFormCloseGroup | null,
+  closeGroup: TransactionFormGroup | null,
 ): VisibilityChoice {
   if (!initial) return "all";
   if (initial.visibility === "private") return "private";
@@ -191,10 +194,16 @@ function TransactionFormBody({
   initial,
   categories,
   defaultDate,
-  closeGroup,
+  groups,
   onSaved,
 }: FormBodyProps) {
   const mode = initial ? "edit" : "create";
+
+  // Step 5 derives the seed group from the broader `groups` array. The form
+  // currently surfaces only the seed in the "친한 친구만" option — step 6
+  // will rewrite this section into a multi-group checkbox picker over all
+  // entries in `groups`.
+  const closeGroup = groups.find((g) => g.isSeed) ?? null;
 
   const [amountText, setAmountText] = useState(() =>
     initial ? formatNumber(Number(initial.amount)) : "",

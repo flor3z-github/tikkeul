@@ -24,7 +24,7 @@ import {
 import { AddTransactionButton } from "@/components/transactions/add-transaction-button";
 import type {
   TransactionFormCategory,
-  TransactionFormCloseGroup,
+  TransactionFormGroup,
 } from "@/components/transactions/transaction-form-dialog";
 import type { MonthlyTransaction } from "@/lib/queries/transactions";
 import { cn } from "@/lib/utils";
@@ -54,10 +54,10 @@ type CalendarDayPanelProps = {
   cycleLabel: string;
   transactions: MonthlyTransaction[];
   categories: TransactionFormCategory[];
-  /** Own-mode only: the viewer's "친한 친구" group + members, forwarded to the
-   *  edit form / FAB so the visibility selector can render correctly. Null in
-   *  friend mode (no edit affordance) or when the seed group is missing. */
-  closeGroup?: TransactionFormCloseGroup | null;
+  /** Own-mode only: the viewer's friend groups (seed + user-defined), forwarded
+   *  to the edit form / FAB so the visibility selector can render. Empty in
+   *  friend mode (no edit affordance) or until the data loads. */
+  groups?: TransactionFormGroup[];
   availableBudget: number;
   /** True when the viewer is looking at their own dashboard. */
   isOwn: boolean;
@@ -93,7 +93,7 @@ export function CalendarDayPanel({
   cycleLabel,
   transactions,
   categories,
-  closeGroup,
+  groups,
   availableBudget,
   isOwn,
   ownerUserId,
@@ -353,7 +353,7 @@ export function CalendarDayPanel({
                     <TransactionItem
                       transaction={transaction}
                       categories={categories}
-                      closeGroup={closeGroup ?? null}
+                      groups={groups ?? []}
                       isOwn={isOwn}
                       ownerUserId={ownerUserId}
                       lastEmoji={lastEmojiByTx?.[transaction.id] ?? null}
@@ -383,7 +383,7 @@ export function CalendarDayPanel({
       {isOwn ? (
         <AddTransactionButton
           categories={categories}
-          closeGroup={closeGroup ?? null}
+          groups={groups ?? []}
           defaultDate={selectedDay}
         />
       ) : null}

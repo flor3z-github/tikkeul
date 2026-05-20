@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { CycleMode } from "@/lib/utils/calendar";
 import { expandFixedExpensesByDay } from "@/lib/utils/payment-day";
 import type { CalendarFixedExpenseItem } from "@/components/dashboard/calendar-day-panel";
-import type { TransactionFormCloseGroup } from "@/components/transactions/transaction-form-dialog";
+import type { TransactionFormGroup } from "@/components/transactions/transaction-form-dialog";
 
 type SpendingCalendarSectionProps = {
   /** Viewer id resolved by the page from JWT claims — no auth call here. */
@@ -82,7 +82,7 @@ export async function SpendingCalendarSection({
     categoriesResult,
     viewerInteractions,
     fixedExpensesRes,
-    closeGroupRow,
+    ownGroupsRes,
   ] = await Promise.all([
     getMonthlyTransactions(userId, startIso, endIso),
     getCategories(viewerId),
@@ -107,16 +107,22 @@ export async function SpendingCalendarSection({
             payment_day: number | null;
           }>,
         }),
-    // Own-mode only: resolve the viewer's seeded "친한 친구" group so the
-    // form can offer the "친한 친구만" option. Friend mode never edits.
+    // Own-mode only: resolve all of the viewer's friend groups (seed +
+    // user-defined). The form needs the seed today and the full array in
+    // step 6 (multi-group picker). Friend mode never edits.
     isOwn
       ? supabase
           .from("friend_groups")
-          .select("id")
+          .select("id, name, slug, created_at")
           .eq("owner_id", viewerId)
-          .eq("slug", "close")
-          .maybeSingle()
-      : Promise.resolve({ data: null as { id: string } | null }),
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            name: string;
+            slug: string | null;
+            created_at: string;
+          }>,
+        }),
   ]);
 
   if (!monthlyResult.ok) {
@@ -172,34 +178,68 @@ export async function SpendingCalendarSection({
     fixedExpenseItems,
   );
 
-  // Resolve the close-group members + nicknames in own-mode. The form needs
-  // both the group id (to submit visibility='groups' with the link) and the
-  // member list (to render the nested preview drawer). Friend mode skips
-  // entirely — no edit affordance, no FAB.
-  let closeGroup: TransactionFormCloseGroup | null = null;
-  if (isOwn && closeGroupRow.data?.id) {
-    const groupId = closeGroupRow.data.id;
+  // Resolve member ids and nicknames for every own-mode group in one pass.
+  // The form needs each group's members for the visibility selector / nested
+  // preview drawer. Friend mode skips entirely — no edit affordance, no FAB.
+  let groups: TransactionFormGroup[] = [];
+  if (isOwn && (ownGroupsRes.data ?? []).length > 0) {
+    const rawGroups = (ownGroupsRes.data ?? []).map((g) => ({
+      id: g.id as string,
+      name: g.name as string,
+      slug: g.slug as string | null,
+      created_at: g.created_at as string,
+    }));
+    const groupIds = rawGroups.map((g) => g.id);
+
     const { data: memberRows } = await supabase
       .from("friend_group_members")
-      .select("member_user_id")
-      .eq("group_id", groupId);
-    const memberIds = (memberRows ?? []).map(
-      (row) => row.member_user_id as string,
-    );
+      .select("group_id, member_user_id")
+      .in("group_id", groupIds);
 
-    let members: TransactionFormCloseGroup["members"] = [];
-    if (memberIds.length > 0) {
+    const membersByGroup = new Map<string, string[]>();
+    const allMemberIds = new Set<string>();
+    for (const row of memberRows ?? []) {
+      const gid = row.group_id as string;
+      const mid = row.member_user_id as string;
+      const list = membersByGroup.get(gid) ?? [];
+      list.push(mid);
+      membersByGroup.set(gid, list);
+      allMemberIds.add(mid);
+    }
+
+    let nicknameById = new Map<string, string>();
+    if (allMemberIds.size > 0) {
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, display_name")
-        .in("id", memberIds);
-      members = (profiles ?? []).map((p) => ({
-        id: p.id as string,
-        nickname: (p.display_name as string | null)?.trim() || "이름 없음",
-      }));
+        .in("id", Array.from(allMemberIds));
+      nicknameById = new Map(
+        (profiles ?? []).map((p) => [
+          p.id as string,
+          (p.display_name as string | null)?.trim() || "이름 없음",
+        ]),
+      );
     }
 
-    closeGroup = { id: groupId, members };
+    // Sort: seed first, then created_at — matches /friends/groups so the
+    // form's eventual multi-group picker (step 6) lists in the same order
+    // the user sees in the management screen.
+    groups = rawGroups
+      .sort((a, b) => {
+        const aSeed = a.slug === "close" ? 0 : 1;
+        const bSeed = b.slug === "close" ? 0 : 1;
+        if (aSeed !== bSeed) return aSeed - bSeed;
+        return a.created_at.localeCompare(b.created_at);
+      })
+      .map((g) => ({
+        id: g.id,
+        name: g.name,
+        isSeed: g.slug === "close",
+        members: (membersByGroup.get(g.id) ?? []).map((mid) => ({
+          id: mid,
+          nickname: nicknameById.get(mid) ?? "이름 없음",
+        })),
+      }));
   }
 
   return (
@@ -213,7 +253,7 @@ export async function SpendingCalendarSection({
       cycleLabel={cycleLabel}
       transactions={monthlyResult.transactions}
       categories={categoriesResult.categories}
-      closeGroup={closeGroup}
+      groups={groups}
       availableBudget={availableBudget}
       isOwn={isOwn}
       ownerUserId={userId}

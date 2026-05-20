@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   TransactionFormDialog,
   type TransactionFormCategory,
-  type TransactionFormCloseGroup,
+  type TransactionFormGroup,
   type TransactionFormInitial,
 } from "@/components/transactions/transaction-form-dialog";
 import { CategoryIcon } from "@/lib/utils/category-icon";
@@ -43,11 +43,10 @@ const COMMENT_MAX_LENGTH = 500;
 type TransactionItemProps = {
   transaction: TransactionListRow;
   categories: TransactionFormCategory[];
-  /** Owner's close-friends group, forwarded to the edit form so the
-   *  "친한 친구만" option can render with the correct member list. Null when
-   *  the seed group is missing (shouldn't happen post-0042) or in friend
-   *  view (no edit affordance). */
-  closeGroup?: TransactionFormCloseGroup | null;
+  /** Owner's friend groups (seed + user-defined), forwarded to the edit
+   *  form so the visibility selector can render. Empty in friend view
+   *  (no edit affordance). */
+  groups?: TransactionFormGroup[];
   /** True when the transaction belongs to the viewer (own dashboard). Tap
    *  opens the edit form directly; the friend interaction panel is skipped. */
   isOwn: boolean;
@@ -78,7 +77,7 @@ type TransactionItemProps = {
 export function TransactionItem({
   transaction,
   categories,
-  closeGroup,
+  groups,
   isOwn,
   ownerUserId,
   lastEmoji,
@@ -96,7 +95,7 @@ export function TransactionItem({
       <OwnRow
         transaction={transaction}
         categories={categories}
-        closeGroup={closeGroup ?? null}
+        groups={groups ?? []}
       />
     );
   }
@@ -123,11 +122,11 @@ export function TransactionItem({
 function OwnRow({
   transaction,
   categories,
-  closeGroup,
+  groups,
 }: {
   transaction: TransactionListRow;
   categories: TransactionFormCategory[];
-  closeGroup: TransactionFormCloseGroup | null;
+  groups: TransactionFormGroup[];
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -143,7 +142,7 @@ function OwnRow({
         open={open}
         onOpenChange={setOpen}
         categories={categories}
-        closeGroup={closeGroup}
+        groups={groups}
         initial={toFormInitial(transaction)}
         onSaved={() => setOpen(false)}
       />

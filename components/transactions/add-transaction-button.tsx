@@ -7,22 +7,21 @@ import { Button } from "@/components/ui/button";
 import {
   TransactionFormDialog,
   type TransactionFormCategory,
-  type TransactionFormCloseGroup,
+  type TransactionFormGroup,
 } from "./transaction-form-dialog";
 
 type AddTransactionButtonProps = {
   categories: TransactionFormCategory[];
-  /** Owner's "친한 친구" group + members, forwarded to the form so the
-   *  visibility selector can offer "친한 친구만". Null when the seed group is
-   *  unavailable. */
-  closeGroup?: TransactionFormCloseGroup | null;
+  /** Owner's friend groups (seed + user-defined), forwarded to the form so
+   *  the visibility selector can render. Empty until the data loads. */
+  groups?: TransactionFormGroup[];
   /** YYYY-MM-DD. Pre-fills the date field when opening in create mode. */
   defaultDate?: string;
 };
 
 export function AddTransactionButton({
   categories,
-  closeGroup,
+  groups,
   defaultDate,
 }: AddTransactionButtonProps) {
   const [open, setOpen] = useState(false);
@@ -45,7 +44,7 @@ export function AddTransactionButton({
         open={open}
         onOpenChange={setOpen}
         categories={categories}
-        closeGroup={closeGroup ?? null}
+        groups={groups ?? []}
         defaultDate={defaultDate}
       />
     </>
