@@ -42,7 +42,6 @@ import {
   DrawerNestedRoot,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
@@ -380,7 +379,7 @@ function TransactionFormBody({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <label className="block text-sm font-medium text-muted-foreground">
           금액
@@ -652,6 +651,12 @@ type VisibilitySelectorProps = {
   onOpenGroupPicker: () => void;
 };
 
+const VISIBILITY_SEGMENTS: { value: VisibilityChoice; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "groups", label: "부분" },
+  { value: "private", label: "비공개" },
+];
+
 function VisibilitySelector({
   value,
   onChange,
@@ -659,135 +664,83 @@ function VisibilitySelector({
   groupsAvailable,
   onOpenGroupPicker,
 }: VisibilitySelectorProps) {
-  const groupsOptionDescription = !groupsAvailable
-    ? "그룹을 먼저 만들어주세요."
-    : value === "groups" && selectedGroupCount === 0
-      ? "공개할 그룹을 선택해주세요."
-      : value === "groups"
-        ? `선택한 ${selectedGroupCount}개 그룹의 친구에게만 보여요.`
-        : "지정한 그룹의 친구에게만 보여요.";
+  const description =
+    value === "all"
+      ? "모든 친구가 이 소비를 볼 수 있어요."
+      : value === "private"
+        ? "친구에게 비공개예요. 합계에서도 빠져요."
+        : !groupsAvailable
+          ? "그룹을 먼저 만들어주세요."
+          : selectedGroupCount === 0
+            ? "공개할 그룹을 선택해주세요."
+            : `선택한 ${selectedGroupCount}개 그룹의 친구에게만 보여요.`;
 
   return (
-    <div className="space-y-2 overflow-hidden">
+    <div className="space-y-2">
       <label className="block text-sm font-medium text-muted-foreground">
         공개 범위
       </label>
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <RadioGroup
-          value={value}
-          onValueChange={(next) => onChange(next as VisibilityChoice)}
-          aria-label="공개 범위"
-          className="divide-y divide-border gap-0"
-        >
-          <VisibilityOption
-            id="visibility-all"
-            value="all"
-            label="전체 공개"
-            description="모든 친구가 이 소비를 볼 수 있어요."
-            onSelect={() => onChange("all")}
-          />
-          <VisibilityOption
-            id="visibility-groups"
-            value="groups"
-            label="부분 공개"
-            description={groupsOptionDescription}
-            disabled={!groupsAvailable}
-            onSelect={() => {
-              if (!groupsAvailable) return;
-              onChange("groups");
-            }}
-            trailing={
-              value === "groups" && groupsAvailable ? (
-                <button
-                  type="button"
-                  aria-label="그룹 선택"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenGroupPicker();
-                  }}
-                  className="flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <Users className="size-3.5" aria-hidden />
-                  <span>{selectedGroupCount}개 그룹</span>
-                  <ChevronRight className="size-3.5" aria-hidden />
-                </button>
-              ) : undefined
-            }
-          />
-          <VisibilityOption
-            id="visibility-private"
-            value="private"
-            label="비공개"
-            description="친구에게 비공개예요. 합계에서도 빠져요."
-            onSelect={() => onChange("private")}
-          />
-        </RadioGroup>
-      </div>
-      {!groupsAvailable ? (
-        <p className="px-1 text-[12px] text-muted-foreground">
-          그룹은{" "}
-          <Link
-            href="/friends/groups"
-            className="font-medium text-foreground underline-offset-2 hover:underline"
-          >
-            그룹 관리
-          </Link>
-          에서 만들 수 있어요.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function VisibilityOption({
-  id,
-  value,
-  label,
-  description,
-  disabled,
-  trailing,
-  onSelect,
-}: {
-  id: string;
-  value: VisibilityChoice;
-  label: string;
-  description: string;
-  disabled?: boolean;
-  trailing?: React.ReactNode;
-  onSelect: () => void;
-}) {
-  return (
-    <div
-      role="presentation"
-      onClick={onSelect}
-      className={cn(
-        "flex items-start gap-3 px-4 py-3 transition-colors",
-        disabled
-          ? "cursor-not-allowed opacity-50"
-          : "cursor-pointer hover:bg-muted/60",
-      )}
-    >
-      <RadioGroupItem
-        id={id}
-        value={value}
-        disabled={disabled}
-        className="mt-0.5"
-      />
-      <label
-        htmlFor={id}
-        className={cn(
-          "min-w-0 flex-1 select-none",
-          disabled ? "cursor-not-allowed" : "cursor-pointer",
-        )}
+      <div
+        role="radiogroup"
+        aria-label="공개 범위"
+        className="grid grid-cols-3 gap-1 rounded-full border border-border bg-card p-1"
       >
-        <span className="block text-[15px] font-medium leading-tight text-foreground">
-          {label}
-        </span>
-        <span className="mt-1 block text-[12px] leading-snug text-muted-foreground">
+        {VISIBILITY_SEGMENTS.map((segment) => {
+          const selected = segment.value === value;
+          const disabled = segment.value === "groups" && !groupsAvailable;
+          return (
+            <button
+              key={segment.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              disabled={disabled}
+              onClick={() => {
+                if (disabled) return;
+                onChange(segment.value);
+              }}
+              className={cn(
+                "h-9 rounded-full text-[13px] font-medium transition-all duration-150 ease-out",
+                "active:scale-[0.98]",
+                selected
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted",
+                disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
+              )}
+            >
+              {segment.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between gap-2 px-1">
+        <p className="text-[12px] leading-snug text-muted-foreground">
           {description}
-        </span>
-      </label>
-      {trailing ? <span className="shrink-0 self-center">{trailing}</span> : null}
+          {!groupsAvailable && value === "groups" ? (
+            <>
+              {" "}
+              <Link
+                href="/friends/groups"
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                그룹 관리
+              </Link>
+            </>
+          ) : null}
+        </p>
+        {value === "groups" && groupsAvailable ? (
+          <button
+            type="button"
+            aria-label="그룹 선택"
+            onClick={onOpenGroupPicker}
+            className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Users className="size-3.5" aria-hidden />
+            <span>{selectedGroupCount}개 그룹</span>
+            <ChevronRight className="size-3.5" aria-hidden />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
