@@ -132,6 +132,95 @@ export async function submitTransactionAction(
   return { ok: true };
 }
 
+export type SearchMemoResultItem = {
+  id: string;
+  amount: number;
+  category_id: string | null;
+  category_name: string | null;
+  category_icon: string | null;
+  category_color: string | null;
+  spent_at: string;
+  memo: string;
+};
+
+export type SearchMemoActionResult =
+  | { ok: true; items: SearchMemoResultItem[]; truncated: boolean }
+  | { ok: false; error: string };
+
+const SEARCH_LIMIT = 100;
+const SEARCH_QUERY_MAX_LENGTH = 100;
+
+// Escape SQL LIKE wildcards so a user-typed `%`/`_` is matched literally instead
+// of acting as a pattern. The leading backslash escapes itself so a typed
+// backslash still survives as a literal.
+function escapeLikePattern(raw: string): string {
+  return raw.replace(/\\/g, "\\\\").replace(/[%_]/g, (m) => `\\${m}`);
+}
+
+export async function searchTransactionsByMemoAction(
+  rawQuery: string,
+): Promise<SearchMemoActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const query = (rawQuery ?? "").trim();
+  if (query.length === 0) return { ok: true, items: [], truncated: false };
+  if (query.length > SEARCH_QUERY_MAX_LENGTH) {
+    return { ok: false, error: "검색어가 너무 길어요." };
+  }
+
+  const pattern = `%${escapeLikePattern(query)}%`;
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select(
+      "id, amount, category_id, spent_at, memo, categories ( name, icon, color )",
+    )
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .not("memo", "is", null)
+    .ilike("memo", pattern)
+    .order("spent_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(SEARCH_LIMIT + 1);
+
+  if (error) return { ok: false, error: error.message };
+
+  const rows = (data ?? []) as Array<{
+    id: string;
+    amount: number;
+    category_id: string | null;
+    spent_at: string;
+    memo: string | null;
+    categories: {
+      name: string | null;
+      icon: string | null;
+      color: string | null;
+    } | null;
+  }>;
+
+  const truncated = rows.length > SEARCH_LIMIT;
+  const trimmed = truncated ? rows.slice(0, SEARCH_LIMIT) : rows;
+
+  const items: SearchMemoResultItem[] = trimmed
+    .filter((row): row is typeof row & { memo: string } => row.memo != null)
+    .map((row) => ({
+      id: row.id,
+      amount: Number(row.amount),
+      category_id: row.category_id,
+      category_name: row.categories?.name ?? null,
+      category_icon: row.categories?.icon ?? null,
+      category_color: row.categories?.color ?? null,
+      spent_at: row.spent_at,
+      memo: row.memo,
+    }));
+
+  return { ok: true, items, truncated };
+}
+
 export async function deleteTransactionAction(
   id: string,
 ): Promise<TransactionActionResult> {

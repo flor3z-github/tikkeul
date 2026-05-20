@@ -24,6 +24,7 @@ import { SpendingSummarySection } from "./_sections/spending-summary-section";
 import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
 import { SpendingCalendarSection } from "./_sections/spending-calendar-section";
 import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
+import { SearchSheet } from "@/components/dashboard/search-sheet";
 
 // PPR is enabled globally via `cacheComponents: true` in next.config.ts; no
 // per-route opt-in needed in Next 16. The dashboard's loading.tsx provides
@@ -109,13 +110,14 @@ export default async function DashboardPage({
       : viewerId;
   const isOwn = viewingUserId === viewerId;
 
-  // ?focus=<txId> is set by the friend-spending push notification. Validate
-  // the shape only; the day panel itself decides whether the row actually
-  // exists in the resolved cycle (and toasts on miss). Only honored in
-  // friend mode — focusing your own dashboard via a notification is not a
-  // flow this app produces.
+  // ?focus=<txId> is set by:
+  //   - the friend-spending push notification (friend mode), and
+  //   - the own-mode memo search sheet (jumps the viewer to the cycle/day
+  //     containing the matched transaction).
+  // Validate the shape only; the day panel itself decides whether the row
+  // actually exists in the resolved cycle (and toasts on miss).
   const focusTxId =
-    !isOwn && sp.focus && UUID_RE.test(sp.focus) ? sp.focus : null;
+    sp.focus && UUID_RE.test(sp.focus) ? sp.focus : null;
 
   // Round 2: queries that need either round-1 results or the resolved
   // viewingUserId. All independent — fired in parallel. Friend-only queries
@@ -288,6 +290,12 @@ export default async function DashboardPage({
               initialActiveCode={initialActiveCode}
             />
             {isOwn ? (
+              <SearchSheet
+                cycleMode={cycle.mode}
+                cycleStartDay={cycle.startDay}
+              />
+            ) : null}
+            {isOwn ? (
               <Link
                 href="/dm"
                 prefetch
@@ -377,6 +385,7 @@ export default async function DashboardPage({
               ownSettings={ownSettings}
               ownFixedExpense={ownFixedExpense}
               showSpendingItems={perms.spendingItems}
+              focusTxId={focusTxId}
             />
           </Suspense>
         </>
