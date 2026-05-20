@@ -144,7 +144,7 @@ export function EditGroupDialog({ target, onClose, friends }: Props) {
       const results = await Promise.all(opPromises);
       const failures = results.filter((r) => !r.ok);
       if (failures.length > 0) {
-        toast.error(`멤버 ${failures.length}건 변경 실패: ${failures[0].error}`);
+        toast.error(`친구 ${failures.length}건 변경 실패: ${failures[0].error}`);
       } else {
         toast.success("그룹을 저장했어요.");
       }
@@ -163,7 +163,7 @@ export function EditGroupDialog({ target, onClose, friends }: Props) {
       onOpenChange={handleOpenChange}
       title="그룹 편집"
       subtitle={stableTarget.isSeed ? "기본 그룹" : undefined}
-      description="그룹 이름과 멤버를 편집합니다."
+      description="그룹 이름과 친구를 편집합니다."
       showCloseButton
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-5 pb-2">
@@ -188,7 +188,7 @@ export function EditGroupDialog({ target, onClose, friends }: Props) {
 
         <div className="flex flex-col gap-2">
           <Label className="text-[13px] font-medium">
-            멤버 ({selectedIds.length}명)
+            친구 ({selectedIds.length}명)
           </Label>
           <FriendMultiPicker
             friends={friends}

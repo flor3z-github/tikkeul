@@ -58,7 +58,7 @@ export function CreateGroupDialog({ open, onOpenChange, friends }: Props) {
       open={open}
       onOpenChange={handleOpenChange}
       title="새 그룹 만들기"
-      description="새 친구 그룹을 만들고 멤버를 지정합니다."
+      description="새 그룹을 만들고 친구를 지정합니다."
       showCloseButton
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-5 pb-2">
@@ -85,7 +85,7 @@ export function CreateGroupDialog({ open, onOpenChange, friends }: Props) {
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <Label className="text-[13px] font-medium">
-              멤버 ({selectedIds.length}명)
+              친구 ({selectedIds.length}명)
             </Label>
             <span className="text-[11px] text-muted-foreground">
               나중에 추가/제거할 수 있어요
@@ -96,7 +96,7 @@ export function CreateGroupDialog({ open, onOpenChange, friends }: Props) {
             selectedIds={selectedIds}
             onChange={setSelectedIds}
             disabled={isPending}
-            emptyState="멤버로 추가할 친구가 없어요. 그룹은 빈 상태로 만들 수 있어요."
+            emptyState="추가할 친구가 없어요. 그룹은 빈 상태로 만들 수 있어요."
           />
         </div>
 

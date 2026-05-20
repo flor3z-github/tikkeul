@@ -90,7 +90,7 @@ function GroupRow({
       <Switch
         checked={isMember}
         onCheckedChange={handleChange}
-        aria-label={`${row.name} 멤버십`}
+        aria-label={`${row.name} 그룹`}
       />
     </div>
   );

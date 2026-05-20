@@ -255,7 +255,7 @@ export async function createGroupAction(
   // friend_group_members re-checks friendship server-side.
   const uniqueMemberIds = Array.from(new Set(memberIds));
   if (uniqueMemberIds.length > GROUP_MEMBER_HARD_CAP) {
-    return { ok: false, error: "한 번에 추가할 수 있는 멤버 수를 초과했어요." };
+    return { ok: false, error: "한 번에 추가할 수 있는 친구 수를 초과했어요." };
   }
   for (const id of uniqueMemberIds) {
     if (!UUID_RE.test(id) || id === user.id) {

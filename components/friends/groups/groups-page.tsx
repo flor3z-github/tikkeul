@@ -84,7 +84,7 @@ function GroupRow({
 }) {
   const preview =
     group.previewMemberNicknames.length === 0
-      ? "멤버 없음"
+      ? "친구 없음"
       : group.memberCount > group.previewMemberNicknames.length
         ? `${group.previewMemberNicknames.join(", ")} 외 ${group.memberCount - group.previewMemberNicknames.length}명`
         : group.previewMemberNicknames.join(", ");
