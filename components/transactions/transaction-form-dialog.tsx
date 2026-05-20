@@ -6,6 +6,7 @@ import {
   CalendarIcon,
   Check,
   ChevronRight,
+  Pencil,
   Trash2,
   Undo2,
   Users,
@@ -43,6 +44,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { CategoryIcon } from "@/lib/utils/category-icon";
 import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import type { TransactionVisibility } from "@/lib/queries/transactions";
@@ -59,6 +61,7 @@ export type TransactionFormCategory = {
   id: string;
   name: string;
   icon: string | null;
+  color: string | null;
 };
 
 export type TransactionFormInitial = {
@@ -118,12 +121,10 @@ export function TransactionFormDialog({
   const Root = nested ? DrawerNestedRoot : Drawer;
   return (
     <Root open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
-        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
-          <DrawerTitle className="text-[22px] font-bold tracking-[-0.025em]">
-            {initial ? "소비 수정" : "소비 추가"}
-          </DrawerTitle>
-          <DrawerDescription className="sr-only">
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-4">
+        <DrawerHeader className="sr-only">
+          <DrawerTitle>{initial ? "소비 수정" : "소비 추가"}</DrawerTitle>
+          <DrawerDescription>
             카테고리, 금액, 날짜를 입력해 소비를 기록합니다.
           </DrawerDescription>
         </DrawerHeader>
@@ -379,82 +380,88 @@ function TransactionFormBody({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 pt-4">
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-muted-foreground">
-          금액
+        <label className="block px-1 text-sm font-medium text-muted-foreground">
+          지출 금액
         </label>
         <div
           role="presentation"
           onClick={focusAmountInput}
-          className="relative cursor-text rounded-2xl bg-muted px-4 py-6"
+          className="relative cursor-text space-y-4 rounded-2xl bg-muted px-4 pb-4 pt-6"
         >
-          {amountValue > 0 || quickHistory.length > 0 ? (
-            <div className="absolute right-3 top-3 flex gap-1.5">
-              {quickHistory.length > 0 ? (
-                <button
-                  type="button"
-                  aria-label="빠른 금액 되돌리기"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleUndoQuickAdd();
-                    focusAmountInput();
-                  }}
-                  className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-all duration-150 ease-out hover:bg-background active:scale-[0.96]"
-                >
-                  <Undo2 className="size-3.5" />
-                </button>
-              ) : null}
-              {amountValue > 0 ? (
-                <button
-                  type="button"
-                  aria-label="금액 지우기"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleClearAmount();
-                    focusAmountInput();
-                  }}
-                  className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-all duration-150 ease-out hover:bg-background active:scale-[0.96]"
-                >
-                  <X className="size-3.5" />
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="flex items-baseline justify-center gap-2">
-            <input
-              ref={amountInputRef}
-              inputMode="numeric"
-              value={amountText}
-              onChange={handleAmountChange}
-              placeholder="0"
-              className="min-w-[1ch] bg-transparent text-right text-[40px] font-bold tracking-[-0.045em] tabular-nums outline-none [field-sizing:content]"
-            />
-            <span className="text-[22px] font-semibold text-muted-foreground">
-              원
-            </span>
+        {amountValue > 0 || quickHistory.length > 0 ? (
+          <div className="absolute right-3 top-3 flex gap-1.5">
+            {quickHistory.length > 0 ? (
+              <button
+                type="button"
+                aria-label="빠른 금액 되돌리기"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleUndoQuickAdd();
+                  focusAmountInput();
+                }}
+                className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-all duration-150 ease-out hover:bg-background active:scale-[0.96]"
+              >
+                <Undo2 className="size-3.5" />
+              </button>
+            ) : null}
+            {amountValue > 0 ? (
+              <button
+                type="button"
+                aria-label="금액 지우기"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleClearAmount();
+                  focusAmountInput();
+                }}
+                className="flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground transition-all duration-150 ease-out hover:bg-background active:scale-[0.96]"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
           </div>
+        ) : null}
+        <div className="flex items-baseline justify-center gap-2">
+          <input
+            ref={amountInputRef}
+            inputMode="numeric"
+            aria-label="지출 금액"
+            value={amountText}
+            onChange={handleAmountChange}
+            placeholder="0"
+            className="min-w-[1ch] bg-transparent text-right text-[40px] font-bold tracking-[-0.045em] tabular-nums outline-none [field-sizing:content]"
+          />
+          <span className="text-[22px] font-semibold text-muted-foreground">
+            원
+          </span>
         </div>
         <div className="grid grid-cols-5 gap-1.5">
           {QUICK_AMOUNTS.map(({ value, label }) => (
             <button
               key={value}
               type="button"
-              onClick={() => handleQuickAdd(value)}
-              className="h-9 rounded-full border border-border bg-card text-xs font-medium tabular-nums transition-all duration-150 ease-out hover:bg-muted active:scale-[0.98]"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleQuickAdd(value);
+              }}
+              className="h-8 rounded-full bg-card text-xs font-medium tabular-nums shadow-sm transition-all duration-150 ease-out hover:bg-background active:scale-[0.98]"
             >
               +{label}
             </button>
           ))}
         </div>
+        </div>
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-muted-foreground">
+        <label className="block px-1 text-xs font-medium text-muted-foreground">
           카테고리
         </label>
         <div
           ref={categoryScrollRef}
+          role="group"
+          aria-label="카테고리"
           className="flex gap-2 overflow-x-auto pb-1"
           style={{
             scrollbarWidth: "none",
@@ -464,19 +471,25 @@ function TransactionFormBody({
         >
           {categories.map((category) => {
             const selected = category.id === categoryId;
+            const tint = category.color;
             return (
               <button
                 key={category.id}
                 type="button"
                 onClick={() => setCategoryId(category.id)}
                 className={cn(
-                  "h-9 shrink-0 rounded-full border px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
+                  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
                   "active:scale-[0.98]",
                   selected
                     ? "border-transparent bg-primary text-primary-foreground"
                     : "border-border bg-card text-foreground hover:bg-muted",
                 )}
               >
+                <CategoryIcon
+                  slug={category.icon}
+                  className="size-3.5"
+                  style={!selected && tint ? { color: tint } : undefined}
+                />
                 {category.name}
               </button>
             );
@@ -485,42 +498,45 @@ function TransactionFormBody({
       </div>
 
       <div className="space-y-2">
-        <label
-          htmlFor="transaction-memo"
-          className="flex items-center justify-between text-sm font-medium text-muted-foreground"
-        >
-          <span>메모 (선택)</span>
-          <span className="text-xs tabular-nums">
+        <label className="block px-1 text-xs font-medium text-muted-foreground">
+          상세 정보
+        </label>
+        <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="flex items-center gap-3 px-4">
+          <Pencil className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <input
+            id="transaction-memo"
+            type="text"
+            aria-label="메모"
+            value={memoText}
+            onChange={(event) =>
+              setMemoText(event.target.value.slice(0, MEMO_MAX_LENGTH))
+            }
+            maxLength={MEMO_MAX_LENGTH}
+            placeholder="메모 추가 (선택)"
+            className="h-12 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/60"
+          />
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/80">
             {memoText.length}/{MEMO_MAX_LENGTH}
           </span>
-        </label>
-        <input
-          id="transaction-memo"
-          type="text"
-          value={memoText}
-          onChange={(event) =>
-            setMemoText(event.target.value.slice(0, MEMO_MAX_LENGTH))
-          }
-          maxLength={MEMO_MAX_LENGTH}
-          placeholder="무엇에 썼나요?"
-          className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:bg-background"
-        />
-      </div>
+        </div>
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-muted-foreground">
-          날짜
-        </label>
         <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
           <PopoverTrigger
             type="button"
-            className={cn(
-              buttonVariants({ variant: "outline" }),
-              "h-12 w-full justify-start gap-2 rounded-2xl px-4 text-[15px] font-medium",
-            )}
+            className="flex h-12 w-full items-center gap-3 px-4 text-left outline-none transition-colors hover:bg-muted/60"
           >
-            <CalendarIcon className="size-4" />
-            <span>{formatKoreanFullDate(spentDate)}</span>
+            <CalendarIcon
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <span className="flex-1 text-[15px] font-medium">
+              {formatKoreanFullDate(spentDate)}
+            </span>
+            <ChevronRight
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
           </PopoverTrigger>
           <PopoverContent
             className="w-auto p-0 [&_button]:pointer-events-auto [&_input]:pointer-events-auto"
@@ -552,15 +568,16 @@ function TransactionFormBody({
             />
           </PopoverContent>
         </Popover>
-      </div>
 
-      <VisibilitySelector
-        value={visibilityChoice}
-        onChange={handleSelectVisibility}
-        selectedGroupCount={selectedGroupIds.length}
-        groupsAvailable={groupsAvailable}
-        onOpenGroupPicker={() => setGroupPickerOpen(true)}
-      />
+        <VisibilitySelector
+          value={visibilityChoice}
+          onChange={handleSelectVisibility}
+          selectedGroupCount={selectedGroupIds.length}
+          groupsAvailable={groupsAvailable}
+          onOpenGroupPicker={() => setGroupPickerOpen(true)}
+        />
+        </div>
+      </div>
 
       {mode === "edit" && initial ? (
         <>
@@ -676,14 +693,20 @@ function VisibilitySelector({
             : `선택한 ${selectedGroupCount}개 그룹의 친구에게만 보여요.`;
 
   return (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium text-muted-foreground">
-        공개 범위
-      </label>
+    <div className="space-y-2 px-4 py-3">
+      <div className="flex items-center gap-3">
+        <Users
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+        <span className="text-xs font-medium text-muted-foreground">
+          공개 범위
+        </span>
+      </div>
       <div
         role="radiogroup"
         aria-label="공개 범위"
-        className="grid grid-cols-3 gap-1 rounded-full border border-border bg-card p-1"
+        className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1"
       >
         {VISIBILITY_SEGMENTS.map((segment) => {
           const selected = segment.value === value;
@@ -704,7 +727,7 @@ function VisibilitySelector({
                 "active:scale-[0.98]",
                 selected
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-muted",
+                  : "text-muted-foreground hover:bg-background",
                 disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
               )}
             >
@@ -713,7 +736,7 @@ function VisibilitySelector({
           );
         })}
       </div>
-      <div className="flex items-center justify-between gap-2 px-1">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-[12px] leading-snug text-muted-foreground">
           {description}
           {!groupsAvailable && value === "groups" ? (
@@ -733,7 +756,7 @@ function VisibilitySelector({
             type="button"
             aria-label="그룹 선택"
             onClick={onOpenGroupPicker}
-            className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
           >
             <Users className="size-3.5" aria-hidden />
             <span>{selectedGroupCount}개 그룹</span>

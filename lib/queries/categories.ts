@@ -35,7 +35,7 @@ export const getCategories = cache(
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("categories")
-      .select("id, name, icon, user_id")
+      .select("id, name, icon, color, user_id")
       .or(`user_id.is.null,user_id.eq.${userId}`)
       .order("created_at", { ascending: true });
 
@@ -44,7 +44,12 @@ export const getCategories = cache(
     const categories: TransactionFormCategory[] = (data ?? [])
       .filter((row) => !HIDDEN_CATEGORIES.has(row.name))
       .sort((a, b) => categoryRank(a.name) - categoryRank(b.name))
-      .map((row) => ({ id: row.id, name: row.name, icon: row.icon }));
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        icon: row.icon,
+        color: row.color,
+      }));
 
     return { ok: true, categories };
   },
