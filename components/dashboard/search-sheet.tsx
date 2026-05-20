@@ -146,7 +146,11 @@ export function SearchSheet({ cycleMode, cycleStartDay }: SearchSheetProps) {
               id={inputId}
               ref={inputRef}
               autoFocus
-              type="search"
+              // type="text" not "search" — WebKit renders a native clear
+              // button for type="search" inputs which would duplicate the
+              // custom X button below. inputMode/enterKeyHint already drive
+              // the mobile keyboard's search affordance.
+              type="text"
               inputMode="search"
               enterKeyHint="search"
               value={query}
