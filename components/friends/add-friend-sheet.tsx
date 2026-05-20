@@ -5,8 +5,9 @@ import { useEffect, useState } from "react";
 import { FriendCodeIssueCard } from "@/components/friends/friend-code-issue-card";
 import { FriendCodeRedeemForm } from "@/components/friends/friend-code-redeem-form";
 import { BottomSheetNested } from "@/components/ui/bottom-sheet";
+import type { ActiveFriendCode } from "@/lib/queries/friend-codes";
 
-export type { ActiveFriendCode } from "@/lib/queries/friend-codes";
+export type { ActiveFriendCode };
 
 type Props = {
   open: boolean;
