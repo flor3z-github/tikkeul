@@ -10,6 +10,8 @@ export type GroupsPageGroup = {
   name: string;
   isSeed: boolean;
   memberCount: number;
+  /** Full member id list for the edit drawer's picker initial state. */
+  currentMemberIds: string[];
   /** First 3 member nicknames for the inline preview. */
   previewMemberNicknames: string[];
 };
@@ -122,6 +124,7 @@ export default async function FriendGroupsPage() {
       name: g.name,
       isSeed: g.slug === "close",
       memberCount: memberIds.length,
+      currentMemberIds: memberIds,
       previewMemberNicknames: memberNicknames.slice(0, 3),
     };
   });

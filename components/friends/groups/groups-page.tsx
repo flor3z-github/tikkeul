@@ -8,6 +8,7 @@ import type {
   GroupsPageGroup,
 } from "@/app/friends/groups/page";
 import { CreateGroupDialog } from "@/components/friends/groups/create-group-dialog";
+import { EditGroupDialog } from "@/components/friends/groups/edit-group-dialog";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -17,15 +18,13 @@ type Props = {
 
 export function GroupsPage({ groups, friends }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<GroupsPageGroup | null>(null);
 
   // Cap-aware: the create button stays clickable until the 10-group limit is
   // reached. The 0044 trigger also enforces this server-side; the disabled
   // state is just a UX courtesy.
   const atCap = groups.length >= 10;
 
-  // Row click is still inert until 3c wires the edit drawer. We keep the row
-  // disabled to communicate that intent rather than render a misleading
-  // affordance.
   return (
     <div className="space-y-3">
       {groups.length === 0 ? (
@@ -36,7 +35,7 @@ export function GroupsPage({ groups, friends }: Props) {
         <ul className="space-y-2">
           {groups.map((g) => (
             <li key={g.id}>
-              <GroupRow group={g} />
+              <GroupRow group={g} onClick={() => setEditTarget(g)} />
             </li>
           ))}
         </ul>
@@ -67,11 +66,22 @@ export function GroupsPage({ groups, friends }: Props) {
         onOpenChange={setCreateOpen}
         friends={friends}
       />
+      <EditGroupDialog
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        friends={friends}
+      />
     </div>
   );
 }
 
-function GroupRow({ group }: { group: GroupsPageGroup }) {
+function GroupRow({
+  group,
+  onClick,
+}: {
+  group: GroupsPageGroup;
+  onClick: () => void;
+}) {
   const preview =
     group.previewMemberNicknames.length === 0
       ? "멤버 없음"
@@ -82,11 +92,10 @@ function GroupRow({ group }: { group: GroupsPageGroup }) {
   return (
     <button
       type="button"
-      disabled
+      onClick={onClick}
       className={cn(
         "flex w-full items-start justify-between gap-3 rounded-2xl bg-card px-4 py-3 text-left transition-colors",
         "hover:bg-muted",
-        "disabled:cursor-default disabled:hover:bg-card",
       )}
     >
       <div className="min-w-0 flex-1">
