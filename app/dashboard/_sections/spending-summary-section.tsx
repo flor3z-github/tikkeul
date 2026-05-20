@@ -82,7 +82,6 @@ export async function SpendingSummarySection({
           monthlyExpense={monthlyResult.monthlyTotal}
           hasSettings={false}
           friendView
-          cycleLabel={cycleLabel}
         />
       );
     }
@@ -108,7 +107,6 @@ export async function SpendingSummarySection({
         monthlyExpense={Number(totalData ?? 0)}
         hasSettings={false}
         friendView
-        cycleLabel={cycleLabel}
       />
     );
   }
@@ -162,7 +160,6 @@ export async function SpendingSummarySection({
       monthlyExpense={monthlyResult.monthlyTotal}
       hasSettings={ownSettings?.hasSettings ?? false}
       friendView={false}
-      cycleLabel={cycleLabel}
       daysRemainingInCycle={daysRemaining}
       cycleMode={cycleMode}
     />
