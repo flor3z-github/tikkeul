@@ -114,11 +114,6 @@ export function CalendarDayPanel({
   const [commentDraft, setCommentDraft] = useState("");
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const listContainerRef = useRef<HTMLDivElement | null>(null);
-  // Guards the focus-on-mount effect so React 19 StrictMode's double-invoke
-  // (and any future re-render that doesn't change focusTxId) can't trigger
-  // the pulse animation twice. Keyed by the id we already handled, not a
-  // boolean, so a different focus id later in the session still runs.
-  const handledFocusRef = useRef<string | null>(null);
 
   const hasDraft = commentDraft.trim().length > 0;
 
@@ -234,8 +229,6 @@ export function CalendarDayPanel({
   // why the notification didn't land anywhere specific.
   useEffect(() => {
     if (!focusTxId) return;
-    if (handledFocusRef.current === focusTxId) return;
-    handledFocusRef.current = focusTxId;
 
     // Defer the DOM lookup to the next frame so any in-progress commit has
     // landed before we query for the row.

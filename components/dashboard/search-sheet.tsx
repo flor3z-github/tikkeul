@@ -113,7 +113,7 @@ export function SearchSheet({ cycleMode, cycleStartDay }: SearchSheetProps) {
       <button
         type="button"
         aria-label="검색"
-        onClick={() => setOpen(true)}
+        onClick={() => handleOpenChange(true)}
         className={cn(
           buttonVariants({ variant: "ghost", size: "icon" }),
           "rounded-full text-muted-foreground",

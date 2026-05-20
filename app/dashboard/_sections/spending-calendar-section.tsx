@@ -244,7 +244,7 @@ export async function SpendingCalendarSection({
 
   return (
     <CalendarDayPanel
-      key={`${ym}-${cycleMode}`}
+      key={`${ym}-${cycleMode}-${initialDay}`}
       ym={ym}
       initialDay={initialDay}
       cycleStart={cycleStart}
