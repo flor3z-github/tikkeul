@@ -36,17 +36,36 @@ export async function getViewerInteractionsByTransaction(
   if (!viewerId || !ownerId || viewerId === ownerId) return result;
 
   const supabase = await createClient();
+
+  // Resolve the canonical (viewer, owner) thread first so the dm_messages read
+  // can be narrowed to THIS pair only. Without this filter, an active viewer
+  // with many friends would burn the 500-row budget on messages from other
+  // threads, dropping older reactions on the currently-viewed friend out of
+  // the result set. dm_threads enforces user_a_id < user_b_id, so we sort the
+  // two ids lexicographically to hit the unique key directly.
+  const [userAId, userBId] =
+    viewerId < ownerId ? [viewerId, ownerId] : [ownerId, viewerId];
+  const { data: threadRow, error: threadError } = await supabase
+    .from("dm_threads")
+    .select("id")
+    .eq("user_a_id", userAId)
+    .eq("user_b_id", userBId)
+    .maybeSingle();
+  if (threadError || !threadRow) return result;
+
   // RLS scopes dm_messages to thread members, so an unauthorized request
   // returns an empty array rather than leaking another pair's data.
   const { data, error } = await supabase
     .from("dm_messages")
     .select("id, content, quoted_transaction_id, created_at")
+    .eq("thread_id", threadRow.id)
     .eq("sender_id", viewerId)
     .not("quoted_transaction_id", "is", null)
     .order("created_at", { ascending: false })
     // Hard cap so an active thread doesn't pull thousands of rows just to
     // populate per-transaction state. Newest-first ordering means we naturally
-    // see the latest emoji/comment per tx first.
+    // see the latest emoji/comment per tx first. Now that the query is scoped
+    // to a single thread, 500 covers every reasonable history depth.
     .limit(500);
 
   if (error || !data) return result;
