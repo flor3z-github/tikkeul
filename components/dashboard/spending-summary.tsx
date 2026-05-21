@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { NumberTicker } from "@/components/ui/number-ticker";
 import { cn } from "@/lib/utils";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
 import {
@@ -22,6 +21,12 @@ type SpendingSummaryProps = {
    * to the data owner. Used when viewing a friend's dashboard.
    */
   friendView?: boolean;
+  /**
+   * Identifier for the current budget cycle. When this changes (e.g. user
+   * navigates to a different month), the hero number re-mounts and fades in
+   * instead of snapping. Optional — friendView card also uses it.
+   */
+  cycleLabel?: string;
   /**
    * Days remaining in the selected cycle (last day − today). `null` means the
    * selected cycle is past or future, so no pace line is rendered. `0` means
@@ -55,6 +60,7 @@ export function SpendingSummary({
   monthlyExpense,
   hasSettings,
   friendView = false,
+  cycleLabel,
   daysRemainingInCycle = null,
   cycleMode,
 }: SpendingSummaryProps) {
@@ -66,9 +72,11 @@ export function SpendingSummary({
       <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
         <CardContent className="space-y-2 p-6">
           <p className="text-sm font-medium text-muted-foreground">총 소비</p>
-          <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
-            <NumberTicker value={monthlyExpense} />
-            <span className="ml-1">원</span>
+          <p
+            key={cycleLabel}
+            className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
+          >
+            {formatNumber(monthlyExpense)} 원
           </p>
         </CardContent>
       </Card>
@@ -100,11 +108,14 @@ export function SpendingSummary({
           </p>
         ) : (
           <>
-            <div className="grid grid-cols-2 items-end gap-3">
+            <div
+              key={cycleLabel}
+              className="grid grid-cols-2 items-end gap-3 animate-in fade-in duration-200"
+            >
               <div className="min-w-0 space-y-1">
                 <p className="text-[12px] text-muted-foreground">쓴 돈</p>
                 <p className="text-[clamp(20px,6vw,32px)] font-extrabold leading-none tracking-[-0.04em] tabular-nums whitespace-nowrap">
-                  <NumberTicker value={summary.totalSpent} />
+                  {formatNumber(summary.totalSpent)}
                   <span className="ml-1 text-base font-semibold text-muted-foreground">
                     원
                   </span>
@@ -121,11 +132,11 @@ export function SpendingSummary({
                 </p>
                 <p
                   className={cn(
-                    "flex justify-end text-[clamp(16px,4.5vw,22px)] font-medium leading-none tabular-nums whitespace-nowrap",
+                    "text-[clamp(16px,4.5vw,22px)] font-medium leading-none tabular-nums whitespace-nowrap",
                     isOver ? "text-destructive" : "text-muted-foreground",
                   )}
                 >
-                  <NumberTicker value={Math.abs(summary.remainingBudget)} />
+                  {formatNumber(Math.abs(summary.remainingBudget))}
                   <span
                     className={cn(
                       "ml-1 text-sm font-medium",
