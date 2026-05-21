@@ -8,6 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Stack: Next.js 16 (App Router, Turbopack, React 19) · Supabase (auth + Postgres with RLS) · Tailwind v4 · shadcn/ui (`base-nova`) · Serwist (PWA) · pnpm.
 
+## Target platforms
+
+The app ships exclusively as an installed PWA on two engines:
+
+- **iOS Safari (PWA, added to Home Screen)** — primary target. Mobile Safari quirks apply: `visualViewport` shrinks behind the soft keyboard, the layout viewport scrolls on text-input focus, `100vh` is unreliable (use `100dvh`), `position: fixed` elements need `bottom` rewritten against `visualViewport` when the keyboard is open, and `safe-area-inset-*` must be honored on every bottom-anchored surface.
+- **Samsung Internet (PWA, added to Home Screen on Android)** — secondary target. Chromium-based but tracks behind upstream Chrome; assume Chromium feature support, but verify anything newer than 1 year old.
+
+Desktop browsers are **not** a target. When choosing between a desktop-clean implementation and one that survives iOS Safari + Samsung Internet PWA, always pick the latter — even if it adds visualViewport listeners, ResizeObserver hacks, or extra refs. Touch handlers (`onTouchStart`/`onTouchEnd`), `inputMode`, `enterKeyHint`, soft-keyboard-aware positioning, and explicit `focus()` retention after submits are first-class concerns, not edge cases. When a UI change "works on desktop Chrome" that is not evidence it works on the actual target — verify on iOS Safari PWA (or at minimum mobile Chrome with device emulation + touch events) before declaring it done.
+
+The bottom-sheet (`DrawerContent`) and DM chat (`app/dm/[friendId]/_components/dm-chat.tsx`) already encode the visualViewport keyboard pattern — copy from them rather than reinventing.
+
 ## Commands
 
 ```bash
