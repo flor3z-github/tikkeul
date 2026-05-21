@@ -89,6 +89,20 @@ type Props = {
 
 const HIGHLIGHT_MS = 1500;
 
+function mintUUIDv4(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
+    "",
+  );
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 function buildRenderItems(
   messages: DmChatMessage[],
   viewerId: string,
@@ -176,6 +190,7 @@ export function DmChat({
   const listEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Scroll the window to the document bottom on the next frame so layout
   // (composer height, new message DOM) has settled. We deliberately do NOT
@@ -433,15 +448,25 @@ export function DmChat({
     const trimmed = draft.trim();
     if (trimmed.length === 0) return;
 
+    // Keep focus on the textarea so iOS Safari doesn't slide the soft
+    // keyboard down between sends. Must run synchronously inside the
+    // submit user-gesture tick — a focus() call from a later async
+    // continuation (after the server action resolves) is too late, iOS
+    // has already dismissed the keyboard. The send button below also
+    // suppresses mousedown/touchstart focus transfer, so this focus()
+    // is mostly a belt-and-suspenders re-anchor.
+    textareaRef.current?.focus();
+
     const quoteToSend = pendingQuote;
     // Mint a client-side UUID and render the message instantly as part of
     // the merged list. The server action below reuses the same id, so the
     // realtime echo will dedupe against this entry rather than producing a
-    // brief duplicate.
-    const clientMessageId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    // brief duplicate. The server validates the id against an RFC4122 regex,
+    // so the fallback must also produce a valid UUID — not a random string.
+    // crypto.randomUUID requires a secure context (HTTPS / localhost), which
+    // breaks on LAN HTTP dev (NEXT_DEV_ALLOWED_ORIGINS=192.168.x.y). Fall
+    // back to crypto.getRandomValues, which works in insecure contexts.
+    const clientMessageId = mintUUIDv4();
     const optimistic: DmChatMessage = {
       id: clientMessageId,
       senderId: viewerId,
@@ -592,6 +617,7 @@ export function DmChat({
         ) : null}
         <div className="flex items-end gap-2">
           <textarea
+            ref={textareaRef}
             value={draft}
             onChange={(event) =>
               setDraft(event.target.value.slice(0, MESSAGE_MAX_LENGTH))
@@ -599,11 +625,20 @@ export function DmChat({
             maxLength={MESSAGE_MAX_LENGTH}
             placeholder="메시지 보내기"
             rows={1}
+            inputMode="text"
+            enterKeyHint="send"
             className="min-h-12 flex-1 resize-none rounded-2xl border border-border bg-card px-4 py-3 text-[14px] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/40 focus:bg-background"
           />
           <Button
             type="submit"
             disabled={draft.trim().length === 0}
+            // Suppress focus transfer to the button on tap. Without this,
+            // iOS Safari blurs the textarea on the pointer-down event → the
+            // soft keyboard slides down → the next send needs a re-tap on
+            // the textarea. preventDefault on pointerdown keeps focus where
+            // it is and, unlike touchstart.preventDefault, does NOT cancel
+            // the subsequent click on iOS Safari.
+            onPointerDown={(event) => event.preventDefault()}
             className="h-12 rounded-full px-4 text-[14px] font-semibold"
           >
             전송
