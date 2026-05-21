@@ -28,6 +28,12 @@ type SpendingCalendarSectionProps = {
   /** Own-mode fixed-expense total prefetched by the page. Ignored in friend mode. */
   ownFixedExpense?: number;
   /**
+   * Own-mode per-cycle extra income prefetched by the page. Folded into
+   * `availableBudget` so calendar day-classification (normal/warning/danger)
+   * uses the effective cycle budget. Ignored in friend mode.
+   */
+  ownExtraIncome?: number;
+  /**
    * Friend-mode flag: render only when the owner has granted the spending
    * items perm. Ignored in own mode. Defaults to true for backward compat.
    */
@@ -50,6 +56,7 @@ export async function SpendingCalendarSection({
   targetUserId,
   ownSettings,
   ownFixedExpense,
+  ownExtraIncome,
   showSpendingItems = true,
   focusTxId,
 }: SpendingCalendarSectionProps) {
@@ -145,7 +152,11 @@ export async function SpendingCalendarSection({
 
   const monthlyIncome = isOwn ? (ownSettings?.monthlyIncome ?? 0) : 0;
   const fixedExpense = isOwn ? (ownFixedExpense ?? 0) : 0;
-  const availableBudget = Math.max(0, monthlyIncome - fixedExpense);
+  const extraIncome = isOwn ? (ownExtraIncome ?? 0) : 0;
+  const availableBudget = Math.max(
+    0,
+    monthlyIncome + extraIncome - fixedExpense,
+  );
 
   // Map isn't directly preserved across the Server → Client boundary in all
   // Next build modes, so flatten to plain objects keyed by txId.

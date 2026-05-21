@@ -25,6 +25,8 @@ import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
 import { SpendingCalendarSection } from "./_sections/spending-calendar-section";
 import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
 import { SearchSheet } from "@/components/dashboard/search-sheet";
+import { LongPressGuide } from "@/components/onboarding/long-press-guide";
+import { toISODate } from "@/lib/utils/date";
 
 // PPR is enabled globally via `cacheComponents: true` in next.config.ts; no
 // per-route opt-in needed in Next 16. The dashboard's loading.tsx provides
@@ -129,6 +131,7 @@ export default async function DashboardPage({
     permsRowRes,
     ownFixedRes,
     dmIndexRes,
+    ownTxCountRes,
   ] = await Promise.all([
     profileTargets.length > 0
       ? supabase
@@ -161,6 +164,17 @@ export default async function DashboardPage({
     isOwn
       ? supabase.rpc("get_my_dm_index")
       : Promise.resolve({ data: null }),
+    // Lifetime transaction count: drives the long-press onboarding overlay.
+    // We only show the guide once the user has at least one transaction, so
+    // first-time users learn the primary tap action before discovering the
+    // secondary long-press action. `head: true` skips row payload.
+    isOwn
+      ? supabase
+          .from("transactions")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", viewerId)
+          .is("deleted_at", null)
+      : Promise.resolve({ count: 0 as number | null }),
   ]);
 
   // Resolve cycle: own → from user_settings; friend → from get_user_cycle.
@@ -198,6 +212,28 @@ export default async function DashboardPage({
     resolveDashboardParams(sp, cycle);
   const startIso = cycleStart.toISOString();
   const endIso = cycleEnd.toISOString();
+
+  // Round 3: per-cycle income adjustments (own mode only). Cannot be in round
+  // 2 because the cycle bounds aren't resolved until after round 2 settings
+  // land. Compared as YYYY-MM-DD against the `date`-typed `occurred_on`
+  // column to avoid timezone round-trips. Friend mode never reads this —
+  // income_adjustments inherits the same privacy stance as monthly_income.
+  const cycleStartDate = toISODate(cycleStart);
+  const cycleEndDate = toISODate(cycleEnd);
+  const ownExtraIncomeRes = isOwn
+    ? await supabase
+        .from("income_adjustments")
+        .select("amount")
+        .eq("user_id", viewerId)
+        .gte("occurred_on", cycleStartDate)
+        .lt("occurred_on", cycleEndDate)
+    : { data: [] as { amount: number }[] };
+  const ownExtraIncome = (ownExtraIncomeRes.data ?? []).reduce(
+    (sum, row) => sum + Number(row.amount ?? 0),
+    0,
+  );
+
+  const lifetimeTxCount = isOwn ? (ownTxCountRes.count ?? 0) : 0;
 
   const nicknameById = new Map<string, string>(
     (profileRowsRes.data ?? []).map((row) => [
@@ -356,6 +392,7 @@ export default async function DashboardPage({
               targetUserId={undefined}
               ownSettings={ownSettings}
               ownFixedExpense={ownFixedExpense}
+              ownExtraIncome={ownExtraIncome}
               showSpendingTotal={perms.spendingTotal}
               showSpendingItems={perms.spendingItems}
               cycleStart={cycleStart}
@@ -384,10 +421,13 @@ export default async function DashboardPage({
               targetUserId={undefined}
               ownSettings={ownSettings}
               ownFixedExpense={ownFixedExpense}
+              ownExtraIncome={ownExtraIncome}
               showSpendingItems={perms.spendingItems}
               focusTxId={focusTxId}
             />
           </Suspense>
+
+          {lifetimeTxCount > 0 ? <LongPressGuide /> : null}
         </>
       ) : (
         // Friend mode: group blocks under "소비" / "고정지출" headings so

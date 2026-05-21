@@ -1,5 +1,7 @@
 export type BudgetSummary = {
   monthlyIncome: number;
+  extraIncome: number;
+  effectiveIncome: number;
   fixedExpense: number;
   availableBudget: number;
   monthlyExpense: number;
@@ -14,19 +16,29 @@ export function calculateBudgetSummary(input: {
   monthlyIncome: number;
   fixedExpense: number;
   monthlyExpense: number;
+  /**
+   * Per-cycle one-shot income (bonus, refund, side income) summed from
+   * `income_adjustments` whose `occurred_on` falls inside the current cycle.
+   * Optional; defaults to 0 so existing callers keep working unchanged.
+   */
+  extraIncome?: number;
 }): BudgetSummary {
   const monthlyIncome = Math.max(0, input.monthlyIncome ?? 0);
   const fixedExpense = Math.max(0, input.fixedExpense ?? 0);
   const monthlyExpense = Math.max(0, input.monthlyExpense ?? 0);
+  const extraIncome = Math.max(0, input.extraIncome ?? 0);
 
-  const availableBudget = Math.max(0, monthlyIncome - fixedExpense);
+  const effectiveIncome = monthlyIncome + extraIncome;
+  const availableBudget = Math.max(0, effectiveIncome - fixedExpense);
   const totalSpent = fixedExpense + monthlyExpense;
-  const remainingBudget = monthlyIncome - totalSpent;
+  const remainingBudget = effectiveIncome - totalSpent;
   const spendingRate =
-    monthlyIncome > 0 ? (totalSpent / monthlyIncome) * 100 : 0;
+    effectiveIncome > 0 ? (totalSpent / effectiveIncome) * 100 : 0;
 
   return {
     monthlyIncome,
+    extraIncome,
+    effectiveIncome,
     fixedExpense,
     availableBudget,
     monthlyExpense,

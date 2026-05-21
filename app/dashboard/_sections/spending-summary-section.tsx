@@ -17,6 +17,13 @@ type SpendingSummarySectionProps = {
   /** Own-mode fixed-expense total, prefetched by the page. Ignored in friend mode. */
   ownFixedExpense?: number;
   /**
+   * Own-mode per-cycle extra income (sum of `income_adjustments` whose
+   * `occurred_on` falls inside the cycle), prefetched by the page so this
+   * section can fold it into the budget summary without a round-trip.
+   * Ignored in friend mode.
+   */
+  ownExtraIncome?: number;
+  /**
    * Friend-mode visibility flags. Ignored in own mode (where the data owner
    * always has full visibility of their own data).
    */
@@ -40,6 +47,7 @@ export async function SpendingSummarySection({
   targetUserId,
   ownSettings,
   ownFixedExpense,
+  ownExtraIncome,
   showSpendingTotal = true,
   showSpendingItems = true,
   cycleStart,
@@ -160,6 +168,7 @@ export async function SpendingSummarySection({
       monthlyIncome={ownSettings?.monthlyIncome ?? 0}
       fixedExpense={ownFixedExpense ?? 0}
       monthlyExpense={monthlyResult.monthlyTotal}
+      extraIncome={ownExtraIncome ?? 0}
       hasSettings={ownSettings?.hasSettings ?? false}
       friendView={false}
       cycleLabel={cycleLabel}

@@ -6,9 +6,12 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { NotificationToggle } from "@/components/settings/notification-toggle";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { SettingsExtras } from "@/components/settings/extras-section";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
+import { getCycleRange } from "@/lib/utils/calendar";
+import { toISODate } from "@/lib/utils/date";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -78,6 +81,37 @@ export default async function SettingsPage() {
         initialCycleMode={settingsResult.data?.cycle_mode ?? "calendar"}
         initialCycleStartDay={Number(settingsResult.data?.cycle_start_day ?? 1)}
       />
+
+      {(() => {
+        // Resolve the viewer's *current* cycle so the income drawer in the
+        // extras section can bound its calendar picker. The dashboard does
+        // this same calc for the rendered cycle — here we always anchor on
+        // today since settings has no month-switcher of its own.
+        const cycleMode = settingsResult.data?.cycle_mode ?? "calendar";
+        const cycleStartDay = Number(
+          settingsResult.data?.cycle_start_day ?? 1,
+        );
+        const range = getCycleRange(cycleMode, cycleStartDay, new Date());
+        const now = new Date();
+        const todayMid = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+        );
+        const inRange =
+          todayMid.getTime() >= range.start.getTime() &&
+          todayMid.getTime() < range.end.getTime();
+        const defaultDate = toISODate(inRange ? todayMid : range.start);
+        return (
+          <div className="mt-10 border-t border-border pt-6">
+            <SettingsExtras
+              cycleStart={toISODate(range.start)}
+              cycleEnd={toISODate(range.end)}
+              defaultDate={defaultDate}
+            />
+          </div>
+        );
+      })()}
 
       <div className="mt-10 space-y-8 border-t border-border pt-6">
         <NotificationToggle

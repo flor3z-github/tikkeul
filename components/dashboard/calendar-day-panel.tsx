@@ -378,6 +378,8 @@ export function CalendarDayPanel({
           categories={categories}
           groups={groups ?? []}
           defaultDate={selectedDay}
+          cycleStart={cycleStart}
+          cycleEnd={cycleEnd}
         />
       ) : null}
 

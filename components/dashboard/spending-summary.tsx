@@ -14,6 +14,14 @@ type SpendingSummaryProps = {
   monthlyIncome: number;
   fixedExpense: number;
   monthlyExpense: number;
+  /**
+   * Per-cycle one-shot income (bonus, refund, side income). Summed by the
+   * page from `income_adjustments` whose `occurred_on` falls inside the
+   * current cycle, then folded into `effectiveIncome` for spendingRate /
+   * remainingBudget. Rendered as a secondary line under the hero numbers
+   * when > 0. Defaults to 0 so existing callers keep working.
+   */
+  extraIncome?: number;
   hasSettings: boolean;
   /**
    * When true, render only the monthly expense total. Income, fixed expense,
@@ -58,6 +66,7 @@ export function SpendingSummary({
   monthlyIncome,
   fixedExpense,
   monthlyExpense,
+  extraIncome = 0,
   hasSettings,
   friendView = false,
   cycleLabel,
@@ -87,10 +96,12 @@ export function SpendingSummary({
     monthlyIncome,
     fixedExpense,
     monthlyExpense,
+    extraIncome,
   });
   const status = getSpendingStatus(summary.spendingRate);
   const rateRounded = Math.round(summary.spendingRate);
   const isOver = summary.remainingBudget < 0;
+  const hasExtraIncome = summary.extraIncome > 0;
 
   return (
     <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
@@ -151,7 +162,7 @@ export function SpendingSummary({
 
             <div className="space-y-2">
               <SpendingProgress
-                monthlyIncome={monthlyIncome}
+                monthlyIncome={summary.effectiveIncome}
                 fixedExpense={fixedExpense}
                 monthlyExpense={monthlyExpense}
                 status={status}
@@ -182,6 +193,14 @@ export function SpendingSummary({
                   {rateRounded}% 사용
                 </span>
               </div>
+              {hasExtraIncome ? (
+                <p className="text-[11px] text-muted-foreground">
+                  이번 {cycleMode === "income_day" ? "주기" : "달"} 추가 수입{" "}
+                  <span className="font-semibold tabular-nums text-foreground">
+                    +{formatNumber(summary.extraIncome)}원
+                  </span>
+                </p>
+              ) : null}
               {status !== "normal" ? (
                 <p className={cn("text-xs font-medium", STATUS_COPY[status].tone)}>
                   {STATUS_COPY[status].label}
