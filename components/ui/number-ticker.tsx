@@ -38,7 +38,7 @@ export function NumberTicker({ value, className }: NumberTickerProps) {
       className={cn("inline-flex items-baseline tabular-nums", className)}
       style={{ lineHeight: 1 }}
     >
-      <AnimatePresence initial={false} mode="popLayout">
+      <AnimatePresence initial={false}>
         {chars.map((char, index) => {
           // Key by position from the right so a length change (e.g. 999 → 1,000)
           // adds/removes slots on the left while the existing digits keep rolling
