@@ -86,10 +86,17 @@ Deno.serve(async (req: Request) => {
   if (payload.table !== "transactions") return ok("skip non-transactions");
   if (payload.record?.deleted_at) return ok("skip soft-deleted");
   const visibility = payload.record?.visibility ?? "all";
-  if (visibility === "private") return ok("skip private");
+  const txId = payload.record?.id ?? null;
+  if (visibility === "private") {
+    console.log(JSON.stringify({ tx: txId, sender: payload.record?.user_id ?? null, skip: "private" }));
+    return ok("skip private");
+  }
 
   const senderId = payload.record.user_id;
-  if (!senderId) return ok("skip no user_id");
+  if (!senderId) {
+    console.log(JSON.stringify({ tx: txId, skip: "no_user_id" }));
+    return ok("skip no user_id");
+  }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -106,7 +113,10 @@ Deno.serve(async (req: Request) => {
     return ok("friendships error");
   }
   let viewerIds = (viewers ?? []).map((row) => row.viewer_id as string);
-  if (viewerIds.length === 0) return ok("no viewers");
+  if (viewerIds.length === 0) {
+    console.log(JSON.stringify({ tx: txId, sender: senderId, skip: "no_viewers" }));
+    return ok("no viewers");
+  }
 
   // visibility='groups' narrows the viewer set to friends who belong to a
   // group the tx is linked to. RLS already hides the row from non-members
@@ -122,7 +132,10 @@ Deno.serve(async (req: Request) => {
       return ok("tvg error");
     }
     const groupIds = (tvg ?? []).map((row) => row.group_id as string);
-    if (groupIds.length === 0) return ok("groups tx with no links");
+    if (groupIds.length === 0) {
+      console.log(JSON.stringify({ tx: txId, sender: senderId, visibility, skip: "groups_tx_no_links" }));
+      return ok("groups tx with no links");
+    }
 
     const { data: members, error: membersError } = await supabase
       .from("friend_group_members")
@@ -137,7 +150,10 @@ Deno.serve(async (req: Request) => {
       (members ?? []).map((row) => row.member_user_id as string),
     );
     viewerIds = viewerIds.filter((id) => allowed.has(id));
-    if (viewerIds.length === 0) return ok("no group members among viewers");
+    if (viewerIds.length === 0) {
+      console.log(JSON.stringify({ tx: txId, sender: senderId, visibility, skip: "no_group_members_among_viewers", groupIds }));
+      return ok("no group members among viewers");
+    }
   }
 
   const { data: optedIn, error: settingsError } = await supabase
@@ -150,17 +166,23 @@ Deno.serve(async (req: Request) => {
     return ok("settings error");
   }
   const recipientIds = (optedIn ?? []).map((row) => row.user_id as string);
-  if (recipientIds.length === 0) return ok("no opt-in");
+  if (recipientIds.length === 0) {
+    console.log(JSON.stringify({ tx: txId, sender: senderId, visibility, skip: "no_opt_in", viewers: viewerIds }));
+    return ok("no opt-in");
+  }
 
   const { data: subscriptions, error: subsError } = await supabase
     .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
+    .select("id, endpoint, p256dh, auth, user_id")
     .in("user_id", recipientIds);
   if (subsError) {
     console.error("push_subscriptions query failed", subsError);
     return ok("subs error");
   }
-  if (!subscriptions || subscriptions.length === 0) return ok("no subscriptions");
+  if (!subscriptions || subscriptions.length === 0) {
+    console.log(JSON.stringify({ tx: txId, sender: senderId, visibility, skip: "no_subscriptions", recipients: recipientIds }));
+    return ok("no subscriptions");
+  }
 
   const { data: senderProfile } = await supabase
     .from("profiles")
@@ -191,8 +213,11 @@ Deno.serve(async (req: Request) => {
     tag: `friend-spend-${senderId}`,
   });
 
+  type SendOutcome = { userId: string; subId: string; ok: boolean; statusCode?: number; pruned?: boolean };
   const results = await Promise.allSettled(
-    subscriptions.map(async (sub) => {
+    subscriptions.map(async (sub): Promise<SendOutcome> => {
+      const subId = sub.id as string;
+      const userId = sub.user_id as string;
       try {
         await webpush.sendNotification(
           {
@@ -202,6 +227,7 @@ Deno.serve(async (req: Request) => {
           body,
           { TTL: 60 * 60 * 12 },
         );
+        return { userId, subId, ok: true };
       } catch (err) {
         const statusCode = (err as { statusCode?: number }).statusCode;
         // 404 = endpoint never existed, 410 = unsubscribed at the push service.
@@ -210,14 +236,33 @@ Deno.serve(async (req: Request) => {
           await supabase
             .from("push_subscriptions")
             .delete()
-            .eq("id", sub.id as string);
-        } else {
-          console.error("web-push send failed", { statusCode, err });
+            .eq("id", subId);
+          return { userId, subId, ok: false, statusCode, pruned: true };
         }
+        console.error("web-push send failed", { statusCode, err });
+        return { userId, subId, ok: false, statusCode };
       }
     }),
   );
 
-  const sent = results.filter((r) => r.status === "fulfilled").length;
+  const outcomes: SendOutcome[] = results.map((r) =>
+    r.status === "fulfilled"
+      ? r.value
+      : { userId: "?", subId: "?", ok: false, statusCode: undefined },
+  );
+  const sent = outcomes.filter((o) => o.ok).length;
+  const pruned = outcomes.filter((o) => o.pruned).length;
+  console.log(
+    JSON.stringify({
+      tx: txId,
+      sender: senderId,
+      visibility,
+      sent,
+      total: subscriptions.length,
+      pruned,
+      recipients: recipientIds,
+      outcomes,
+    }),
+  );
   return ok(`sent=${sent} total=${subscriptions.length}`);
 });

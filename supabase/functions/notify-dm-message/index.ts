@@ -94,7 +94,9 @@ Deno.serve(async (req: Request) => {
 
   const record = payload.record;
   const { thread_id, sender_id, content } = record;
+  const msgId = record?.id ?? null;
   if (!thread_id || !sender_id || !content) {
+    console.log(JSON.stringify({ msg: msgId, thread: thread_id ?? null, sender: sender_id ?? null, skip: "missing_fields" }));
     return ok("skip missing fields");
   }
 
@@ -112,10 +114,16 @@ Deno.serve(async (req: Request) => {
     console.error("dm_threads query failed", threadError);
     return ok("thread error");
   }
-  if (!thread) return ok("thread not found");
+  if (!thread) {
+    console.log(JSON.stringify({ msg: msgId, thread: thread_id, sender: sender_id, skip: "thread_not_found" }));
+    return ok("thread not found");
+  }
   const recipientId =
     thread.user_a_id === sender_id ? thread.user_b_id : thread.user_a_id;
-  if (recipientId === sender_id) return ok("skip self thread");
+  if (recipientId === sender_id) {
+    console.log(JSON.stringify({ msg: msgId, thread: thread_id, sender: sender_id, skip: "self_thread" }));
+    return ok("skip self thread");
+  }
 
   // Opt-in check (column from 0035, now repurposed for DM messages — see
   // §12.8.8 in DESIGN.md). Treat missing user_settings as opted out.
@@ -129,18 +137,20 @@ Deno.serve(async (req: Request) => {
     return ok("settings error");
   }
   if (!settingsRow?.transaction_interaction_notifications) {
+    console.log(JSON.stringify({ msg: msgId, thread: thread_id, sender: sender_id, recipient: recipientId, skip: "opted_out" }));
     return ok("opted out");
   }
 
   const { data: subscriptions, error: subsError } = await supabase
     .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
+    .select("id, endpoint, p256dh, auth, user_id")
     .eq("user_id", recipientId);
   if (subsError) {
     console.error("push_subscriptions query failed", subsError);
     return ok("subs error");
   }
   if (!subscriptions || subscriptions.length === 0) {
+    console.log(JSON.stringify({ msg: msgId, thread: thread_id, sender: sender_id, recipient: recipientId, skip: "no_subscriptions" }));
     return ok("no subscriptions");
   }
 
@@ -172,8 +182,11 @@ Deno.serve(async (req: Request) => {
     tag: `dm-thread-${thread_id}`,
   });
 
+  type SendOutcome = { userId: string; subId: string; ok: boolean; statusCode?: number; pruned?: boolean };
   const results = await Promise.allSettled(
-    subscriptions.map(async (sub) => {
+    subscriptions.map(async (sub): Promise<SendOutcome> => {
+      const subId = sub.id as string;
+      const userId = sub.user_id as string;
       try {
         await webpush.sendNotification(
           {
@@ -183,20 +196,40 @@ Deno.serve(async (req: Request) => {
           pushBody,
           { TTL: 60 * 60 * 12 },
         );
+        return { userId, subId, ok: true };
       } catch (err) {
         const statusCode = (err as { statusCode?: number }).statusCode;
         if (statusCode === 404 || statusCode === 410) {
           await supabase
             .from("push_subscriptions")
             .delete()
-            .eq("id", sub.id as string);
-        } else {
-          console.error("web-push send failed", { statusCode, err });
+            .eq("id", subId);
+          return { userId, subId, ok: false, statusCode, pruned: true };
         }
+        console.error("web-push send failed", { statusCode, err });
+        return { userId, subId, ok: false, statusCode };
       }
     }),
   );
 
-  const sent = results.filter((r) => r.status === "fulfilled").length;
+  const outcomes: SendOutcome[] = results.map((r) =>
+    r.status === "fulfilled"
+      ? r.value
+      : { userId: "?", subId: "?", ok: false, statusCode: undefined },
+  );
+  const sent = outcomes.filter((o) => o.ok).length;
+  const pruned = outcomes.filter((o) => o.pruned).length;
+  console.log(
+    JSON.stringify({
+      msg: msgId,
+      thread: thread_id,
+      sender: sender_id,
+      recipient: recipientId,
+      sent,
+      total: subscriptions.length,
+      pruned,
+      outcomes,
+    }),
+  );
   return ok(`sent=${sent} total=${subscriptions.length}`);
 });
