@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { IncomeLine, type IncomeLineItem } from "@/components/income/income-line";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
@@ -22,6 +23,16 @@ type SpendingSummaryProps = {
    * when > 0. Defaults to 0 so existing callers keep working.
    */
   extraIncome?: number;
+  /**
+   * Per-cycle income adjustment rows. When provided alongside cycle bounds,
+   * the summary line becomes tappable and opens the list/edit sheet. When
+   * omitted (e.g. friend view, or callers that haven't migrated yet), the
+   * line stays static.
+   */
+  extraIncomeItems?: IncomeLineItem[];
+  /** YYYY-MM-DD bounds used by the income editor's calendar (inclusive start, exclusive end). */
+  cycleStartDate?: string;
+  cycleEndDate?: string;
   hasSettings: boolean;
   /**
    * When true, render only the monthly expense total. Income, fixed expense,
@@ -67,6 +78,9 @@ export function SpendingSummary({
   fixedExpense,
   monthlyExpense,
   extraIncome = 0,
+  extraIncomeItems,
+  cycleStartDate,
+  cycleEndDate,
   hasSettings,
   friendView = false,
   cycleLabel,
@@ -194,12 +208,22 @@ export function SpendingSummary({
                 </span>
               </div>
               {hasExtraIncome ? (
-                <p className="text-[11px] text-muted-foreground">
-                  이번 {cycleMode === "income_day" ? "주기" : "달"} 추가 수입{" "}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    +{formatNumber(summary.extraIncome)}원
-                  </span>
-                </p>
+                extraIncomeItems && cycleStartDate && cycleEndDate ? (
+                  <IncomeLine
+                    items={extraIncomeItems}
+                    totalAmount={summary.extraIncome}
+                    cycleStartDate={cycleStartDate}
+                    cycleEndDate={cycleEndDate}
+                    cycleMode={cycleMode}
+                  />
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    이번 {cycleMode === "income_day" ? "주기" : "달"} 추가 수입{" "}
+                    <span className="font-semibold tabular-nums text-foreground">
+                      +{formatNumber(summary.extraIncome)}원
+                    </span>
+                  </p>
+                )
               ) : null}
               {status !== "normal" ? (
                 <p className={cn("text-xs font-medium", STATUS_COPY[status].tone)}>

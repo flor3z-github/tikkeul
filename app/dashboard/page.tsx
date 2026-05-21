@@ -223,13 +223,28 @@ export default async function DashboardPage({
   const ownExtraIncomeRes = isOwn
     ? await supabase
         .from("income_adjustments")
-        .select("amount")
+        .select("id, amount, occurred_on, memo")
         .eq("user_id", viewerId)
         .gte("occurred_on", cycleStartDate)
         .lt("occurred_on", cycleEndDate)
-    : { data: [] as { amount: number }[] };
-  const ownExtraIncome = (ownExtraIncomeRes.data ?? []).reduce(
-    (sum, row) => sum + Number(row.amount ?? 0),
+        .order("occurred_on", { ascending: false })
+        .order("id", { ascending: false })
+    : {
+        data: [] as {
+          id: string;
+          amount: number;
+          occurred_on: string;
+          memo: string | null;
+        }[],
+      };
+  const ownExtraIncomeItems = (ownExtraIncomeRes.data ?? []).map((row) => ({
+    id: row.id,
+    amount: Number(row.amount ?? 0),
+    occurredOn: row.occurred_on,
+    memo: row.memo,
+  }));
+  const ownExtraIncome = ownExtraIncomeItems.reduce(
+    (sum, row) => sum + row.amount,
     0,
   );
 
@@ -393,6 +408,9 @@ export default async function DashboardPage({
               ownSettings={ownSettings}
               ownFixedExpense={ownFixedExpense}
               ownExtraIncome={ownExtraIncome}
+              ownExtraIncomeItems={ownExtraIncomeItems}
+              cycleStartDate={cycleStartDate}
+              cycleEndDate={cycleEndDate}
               showSpendingTotal={perms.spendingTotal}
               showSpendingItems={perms.spendingItems}
               cycleStart={cycleStart}

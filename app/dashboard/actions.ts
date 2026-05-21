@@ -337,6 +337,54 @@ export async function addIncomeAdjustmentAction(input: {
   return { ok: true, id };
 }
 
+export async function updateIncomeAdjustmentAction(input: {
+  id: string;
+  amount: number;
+  occurredOn: string;
+  memo?: string | null;
+}): Promise<TransactionActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!input.id) return { ok: false, error: "수정할 항목이 없어요." };
+
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return { ok: false, error: "금액은 0원보다 커야 해요." };
+  }
+
+  let occurredOn: string;
+  try {
+    occurredOn = normalizeOccurredOn(input.occurredOn);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "날짜 오류",
+    };
+  }
+
+  const memo = normalizeMemo(input.memo);
+  if (memo !== null && memo.length > INCOME_MEMO_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: `메모는 ${INCOME_MEMO_MAX_LENGTH}자까지 입력할 수 있어요.`,
+    };
+  }
+
+  const { error } = await supabase
+    .from("income_adjustments")
+    .update({ occurred_on: occurredOn, amount: input.amount, memo })
+    .eq("id", input.id)
+    .eq("user_id", user.id);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 export async function deleteIncomeAdjustmentAction(
   id: string,
 ): Promise<TransactionActionResult> {

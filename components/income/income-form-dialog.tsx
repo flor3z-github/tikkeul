@@ -1,14 +1,25 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { CalendarIcon, ChevronRight, Pencil, X } from "lucide-react";
+import { CalendarIcon, ChevronRight, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   addIncomeAdjustmentAction,
   deleteIncomeAdjustmentAction,
+  updateIncomeAdjustmentAction,
 } from "@/app/dashboard/actions";
-import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -20,10 +31,12 @@ import {
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
+  DrawerNestedRoot,
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
+import { cn } from "@/lib/utils";
 
 const QUICK_AMOUNTS: { value: number; label: string }[] = [
   { value: 10_000, label: "1만" },
@@ -35,6 +48,13 @@ const QUICK_AMOUNTS: { value: number; label: string }[] = [
 
 const MEMO_MAX_LENGTH = 100;
 
+export type IncomeAdjustmentInitial = {
+  id: string;
+  amount: number;
+  occurredOn: string;
+  memo: string | null;
+};
+
 type IncomeFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -44,6 +64,15 @@ type IncomeFormDialogProps = {
   cycleEnd: Date;
   /** YYYY-MM-DD. Pre-fills the date field; clamped to today if future. */
   defaultDate: string;
+  /** When present, the dialog enters edit mode (update + delete). */
+  initial?: IncomeAdjustmentInitial;
+  /**
+   * Render via `DrawerNestedRoot` so the sheet can open from inside an
+   * already-open drawer (e.g. the income list sheet). vaul scales the parent
+   * automatically when this is true; the keyboard inset handling in
+   * `DrawerContent` still applies at the nested level.
+   */
+  nested?: boolean;
 };
 
 export function IncomeFormDialog({
@@ -52,29 +81,35 @@ export function IncomeFormDialog({
   cycleStart,
   cycleEnd,
   defaultDate,
+  initial,
+  nested = false,
 }: IncomeFormDialogProps) {
+  const isEdit = Boolean(initial);
+  const Root = nested ? DrawerNestedRoot : Drawer;
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
+    <Root open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-4">
         <DrawerHeader className="px-0 pb-3 pt-2 text-left">
           <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
-            추가 수입
+            {isEdit ? "추가 수입 수정" : "추가 수입"}
           </DrawerTitle>
           <DrawerDescription className="text-[13px] text-muted-foreground">
-            이번 주기에 들어온 일회성 수입을 기록해요.
+            {isEdit
+              ? "금액·날짜·메모를 바꾸거나 삭제할 수 있어요."
+              : "이번 주기에 들어온 일회성 수입을 기록해요."}
           </DrawerDescription>
         </DrawerHeader>
-        {/* Reset body state on each open by keying on the default date so the
-            user always sees a clean form. */}
+        {/* Reset body state per item (or per default date in add mode). */}
         <IncomeFormBody
-          key={`income-${defaultDate}`}
+          key={initial?.id ?? `income-${defaultDate}`}
           cycleStart={cycleStart}
           cycleEnd={cycleEnd}
           defaultDate={defaultDate}
+          initial={initial}
           onSaved={() => onOpenChange(false)}
         />
       </DrawerContent>
-    </Drawer>
+    </Root>
   );
 }
 
@@ -82,6 +117,7 @@ type FormBodyProps = {
   cycleStart: Date;
   cycleEnd: Date;
   defaultDate: string;
+  initial?: IncomeAdjustmentInitial;
   onSaved: () => void;
 };
 
@@ -107,22 +143,38 @@ function parseDefaultDate(value: string): Date {
   return dt;
 }
 
+// Parse a stored YYYY-MM-DD without the today-clamp — edit mode trusts
+// whatever is on the row, even if the server's future check would block a
+// brand-new entry on that date today.
+function parseStoredDate(value: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return parseDefaultDate(value);
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
+}
+
 function IncomeFormBody({
   cycleStart,
   cycleEnd,
   defaultDate,
+  initial,
   onSaved,
 }: FormBodyProps) {
-  const [amountText, setAmountText] = useState("");
-  const [occurredDate, setOccurredDate] = useState<Date>(() =>
-    parseDefaultDate(defaultDate),
+  const isEdit = Boolean(initial);
+  const [amountText, setAmountText] = useState(() =>
+    initial ? formatNumber(initial.amount) : "",
   );
-  const [memoText, setMemoText] = useState("");
+  const [occurredDate, setOccurredDate] = useState<Date>(() =>
+    initial ? parseStoredDate(initial.occurredOn) : parseDefaultDate(defaultDate),
+  );
+  const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [deletePending, setDeletePending] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const busy = pending || deletePending;
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
-  const canSubmit = amountValue > 0 && !pending;
+  const canSubmit = amountValue > 0 && !busy;
 
   const amountInputRef = useRef<HTMLInputElement>(null);
 
@@ -181,6 +233,24 @@ function IncomeFormBody({
     event.preventDefault();
     if (!canSubmit) return;
 
+    if (initial) {
+      startTransition(async () => {
+        const result = await updateIncomeAdjustmentAction({
+          id: initial.id,
+          amount: amountValue,
+          occurredOn: toISODate(occurredDate),
+          memo: memoText,
+        });
+        if (result.ok) {
+          toast.success("추가 수입 수정됐어요.");
+          onSaved();
+        } else {
+          toast.error(result.error);
+        }
+      });
+      return;
+    }
+
     startTransition(async () => {
       const result = await addIncomeAdjustmentAction({
         amount: amountValue,
@@ -189,8 +259,9 @@ function IncomeFormBody({
       });
       if (result.ok) {
         const inserted = result.id;
-        // Five-second undo via sonner's `action` button. No persistent list
-        // is exposed, so this is the user's only chance to back out a typo.
+        // Five-second undo via sonner's `action` button. Now that an edit
+        // surface exists, this is a quick safety net rather than the only
+        // recovery path.
         toast.success("추가 수입 등록됐어요.", {
           duration: 5000,
           action: {
@@ -209,6 +280,22 @@ function IncomeFormBody({
         toast.error(result.error);
       }
     });
+  }
+
+  function handleDelete() {
+    if (!initial) return;
+    setDeletePending(true);
+    void (async () => {
+      const result = await deleteIncomeAdjustmentAction(initial.id);
+      setDeletePending(false);
+      if (result.ok) {
+        toast.success("삭제됐어요.");
+        setConfirmDeleteOpen(false);
+        onSaved();
+      } else {
+        toast.error(result.error);
+      }
+    })();
   }
 
   return (
@@ -334,13 +421,71 @@ function IncomeFormBody({
         </div>
       </div>
 
-      <Button
-        type="submit"
-        disabled={!canSubmit}
-        className="h-12 w-full rounded-full text-[15px] font-semibold"
-      >
-        {pending ? "추가 중…" : "추가하기"}
-      </Button>
+      {isEdit && initial ? (
+        <div className="grid grid-cols-4 gap-2">
+          <Button
+            type="submit"
+            disabled={!canSubmit}
+            className="col-span-3 h-12 rounded-full text-[15px] font-semibold"
+          >
+            {pending ? "수정 중…" : "수정하기"}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => setConfirmDeleteOpen(true)}
+            disabled={busy}
+            aria-label="삭제하기"
+            className="col-span-1 h-12 rounded-full px-0 text-[15px] font-semibold"
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="submit"
+          disabled={!canSubmit}
+          className="h-12 w-full rounded-full text-[15px] font-semibold"
+        >
+          {pending ? "추가 중…" : "추가하기"}
+        </Button>
+      )}
+
+      {isEdit && initial ? (
+        <AlertDialog
+          open={confirmDeleteOpen}
+          onOpenChange={(open) => {
+            if (!deletePending) setConfirmDeleteOpen(open);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>이 추가 수입을 삭제할까요?</AlertDialogTitle>
+              <AlertDialogDescription>
+                삭제한 추가 수입은 합계에서 즉시 사라져요.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletePending}>
+                취소
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleDelete();
+                }}
+                disabled={deletePending}
+                className={cn(
+                  buttonVariants({ variant: "destructive" }),
+                  "h-12 w-full rounded-full text-[15px] font-semibold",
+                )}
+              >
+                {deletePending ? "삭제 중…" : "삭제"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
     </form>
   );
 }
