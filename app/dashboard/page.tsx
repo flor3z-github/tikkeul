@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { MessageCircle, Settings } from "lucide-react";
 
 import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-watcher";
+import { RefreshOnRestore } from "@/components/dm/refresh-on-restore";
 import { DashboardFriendHeader } from "@/components/dashboard/dashboard-friend-header";
 import { NotificationNudgeCard } from "@/components/dashboard/notification-nudge-card";
 import { AppShell } from "@/components/layout/app-shell";
@@ -391,6 +392,7 @@ export default async function DashboardPage({
         isOwn={isOwn}
         nicknameById={nicknameById}
       />
+      {isOwn ? <RefreshOnRestore /> : null}
 
       {allHiddenInFriendMode ? (
         <div className="mt-6 rounded-2xl border border-dashed border-border bg-card/50 px-4 py-8 text-center text-sm text-muted-foreground">

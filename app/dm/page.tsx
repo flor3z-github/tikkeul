@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { DmIndexRealtimeWatcher } from "@/components/dm/dm-index-realtime-watcher";
+import { RefreshOnRestore } from "@/components/dm/refresh-on-restore";
 import { getActiveFriendCode } from "@/lib/queries/friend-codes";
 import { createClient } from "@/lib/supabase/server";
 import { formatRelativeKoreanDate } from "@/lib/utils/date";
@@ -73,6 +74,7 @@ export default async function DmIndexPage() {
   return (
     <AppShell>
       <DmIndexRealtimeWatcher />
+      <RefreshOnRestore />
       <PageHeader
         eyebrow={
           <Link
