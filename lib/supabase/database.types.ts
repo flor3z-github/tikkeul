@@ -507,6 +507,19 @@ export type Database = {
           cycle_start_day: number;
         }[];
       };
+      delete_category: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+      get_user_categories: {
+        Args: { target: string };
+        Returns: {
+          id: string;
+          name: string;
+          icon: string | null;
+          color: string | null;
+        }[];
+      };
       get_friend_spending_total: {
         Args: { target: string; start_iso: string; end_iso: string };
         Returns: number;

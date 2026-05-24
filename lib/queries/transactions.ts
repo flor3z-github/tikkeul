@@ -90,6 +90,41 @@ export const getMonthlyTransactions = cache(
       ),
     }));
 
+    // Friend-mode backfill: friend RLS hides the owner's CUSTOM category rows,
+    // so the `categories(...)` join comes back null for transactions tagged
+    // with a custom category (category_id set, category_name null). Fetch the
+    // owner's custom category metadata via the get_user_categories RPC (which
+    // gates on the friendship) and backfill those rows. In own mode the owner
+    // can read their own categories, so this branch never fires (no rows have
+    // category_id set with a null name) — the condition is the natural gate
+    // that keeps own mode at a single round-trip.
+    const needsBackfill = transactions.some(
+      (tx) => tx.category_id !== null && tx.category_name === null,
+    );
+    if (needsBackfill) {
+      const { data: customCats } = await supabase.rpc("get_user_categories", {
+        target: userId,
+      });
+      if (customCats) {
+        const metaById = new Map(
+          customCats.map((cat) => [
+            cat.id,
+            { name: cat.name, icon: cat.icon, color: cat.color },
+          ]),
+        );
+        for (const tx of transactions) {
+          if (tx.category_id !== null && tx.category_name === null) {
+            const meta = metaById.get(tx.category_id);
+            if (meta) {
+              tx.category_name = meta.name;
+              tx.category_icon = meta.icon;
+              tx.category_color = meta.color;
+            }
+          }
+        }
+      }
+    }
+
     const dailyTotals: Record<string, number> = {};
     let monthlyTotal = 0;
     for (const tx of transactions) {

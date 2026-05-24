@@ -19,8 +19,19 @@ const CATEGORY_ORDER = [
 ];
 const HIDDEN_CATEGORIES = new Set(["구독"]);
 
-function categoryRank(name: string): number {
-  const index = CATEGORY_ORDER.indexOf(name);
+// Rank keyed on seed-vs-custom, not on name. Customs always sort AFTER every
+// seed (including 기타, the last seed) regardless of their name — a user may
+// legitimately create a custom named identically to a seed (the unique index
+// is per (user_id, name), and seeds are NULL user_id), so we must not let a
+// custom borrow a seed's order slot by name match. Seeds use their
+// CATEGORY_ORDER index; an unlisted seed (shouldn't happen) falls just before
+// customs. The query is ordered by created_at asc and Array.prototype.sort is
+// stable, so customs preserve creation order among themselves.
+const CUSTOM_RANK_BASE = CATEGORY_ORDER.length + 1; // strictly after all seeds
+
+function categoryRank(row: { name: string; user_id: string | null }): number {
+  if (row.user_id !== null) return CUSTOM_RANK_BASE; // custom → after all seeds
+  const index = CATEGORY_ORDER.indexOf(row.name);
   return index === -1 ? CATEGORY_ORDER.length : index;
 }
 
@@ -43,12 +54,13 @@ export const getCategories = cache(
 
     const categories: TransactionFormCategory[] = (data ?? [])
       .filter((row) => !HIDDEN_CATEGORIES.has(row.name))
-      .sort((a, b) => categoryRank(a.name) - categoryRank(b.name))
+      .sort((a, b) => categoryRank(a) - categoryRank(b))
       .map((row) => ({
         id: row.id,
         name: row.name,
         icon: row.icon,
         color: row.color,
+        isCustom: row.user_id !== null,
       }));
 
     return { ok: true, categories };

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   CalendarIcon,
   Check,
@@ -45,6 +46,10 @@ import {
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { CategoryIcon } from "@/lib/utils/category-icon";
+import {
+  CategoryPickerDrawer,
+  type CategoryMutation,
+} from "@/components/transactions/category-picker-drawer";
 import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import type { TransactionVisibility } from "@/lib/queries/transactions";
@@ -62,6 +67,10 @@ export type TransactionFormCategory = {
   name: string;
   icon: string | null;
   color: string | null;
+  /** True for per-user custom categories (editable/deletable in the picker),
+   *  false/undefined for shared seeds (locked). Optional so existing call
+   *  sites that don't set it keep treating rows as seeds. */
+  isCustom?: boolean;
 };
 
 export type TransactionFormInitial = {
@@ -202,12 +211,20 @@ function deriveInitialSelectedGroupIds(
 
 function TransactionFormBody({
   initial,
-  categories,
+  categories: initialCategories,
   defaultDate,
   groups,
   onSaved,
 }: FormBodyProps) {
   const mode = initial ? "edit" : "create";
+  const router = useRouter();
+
+  // Local category list seeded from the prop so create/update/delete inside
+  // the picker reflect immediately without waiting for the server round-trip.
+  // `router.refresh()` (fired alongside the action's revalidatePath) resyncs
+  // the persisted order on the next render.
+  const [categories, setCategories] =
+    useState<TransactionFormCategory[]>(initialCategories);
 
   const [amountText, setAmountText] = useState(() =>
     initial ? formatNumber(Number(initial.amount)) : "",
@@ -215,6 +232,7 @@ function TransactionFormBody({
   const [categoryId, setCategoryId] = useState<string | null>(() =>
     initial ? initial.category_id : (categories[0]?.id ?? null),
   );
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [spentDate, setSpentDate] = useState<Date>(() => {
     if (initial) return new Date(initial.spent_at);
     return pickCreateDefaultDate(defaultDate);
@@ -248,50 +266,33 @@ function TransactionFormBody({
 
   const groupsAvailable = groups.length > 0;
 
-  // Mirror the fixed-expenses catalog filter UX: single-row horizontal scroll
-  // for category chips, with edge fades that only appear when there's more to
-  // scroll on that side.
-  const categoryScrollRef = useRef<HTMLDivElement | null>(null);
-  const [categoryFadeLeft, setCategoryFadeLeft] = useState(false);
-  const [categoryFadeRight, setCategoryFadeRight] = useState(false);
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === categoryId) ?? null,
+    [categories, categoryId],
+  );
 
-  useEffect(() => {
-    const el = categoryScrollRef.current;
-    if (!el) return;
-
-    function update() {
-      const node = categoryScrollRef.current;
-      if (!node) return;
-      const overflow = node.scrollWidth - node.clientWidth;
-      const threshold = 4;
-      setCategoryFadeLeft(node.scrollLeft > threshold);
-      setCategoryFadeRight(
-        overflow > threshold && node.scrollLeft < overflow - threshold,
+  // Apply a create/update/delete from the picker to the local category list
+  // and keep the form's selection coherent (a deleted selection falls back to
+  // the first remaining category). `router.refresh()` resyncs persisted order.
+  function handleCategoryMutated(op: CategoryMutation) {
+    if (op.type === "create") {
+      setCategories((prev) => [...prev, op.category]);
+    } else if (op.type === "update") {
+      setCategories((prev) =>
+        prev.map((c) => (c.id === op.category.id ? op.category : c)),
       );
+    } else {
+      const deletedId = op.id;
+      setCategories((prev) => prev.filter((c) => c.id !== deletedId));
+      if (categoryId === deletedId) {
+        // Fall back to the first remaining category. Resolve against the
+        // current list minus the deleted row so we don't pick the dead id.
+        const remaining = categories.filter((c) => c.id !== deletedId);
+        setCategoryId(remaining[0]?.id ?? null);
+      }
     }
-
-    update();
-    const rafId = requestAnimationFrame(update);
-
-    el.addEventListener("scroll", update, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      el.removeEventListener("scroll", update);
-      ro.disconnect();
-    };
-  }, []);
-
-  const categoryFadeMask =
-    categoryFadeLeft || categoryFadeRight
-      ? `linear-gradient(to right, ${
-          categoryFadeLeft ? "transparent" : "black"
-        } 0, black 24px, black calc(100% - 24px), ${
-          categoryFadeRight ? "transparent" : "black"
-        } 100%)`
-      : undefined;
+    router.refresh();
+  }
 
   function focusAmountInput() {
     const el = amountInputRef.current;
@@ -458,43 +459,40 @@ function TransactionFormBody({
         <label className="block px-1 text-xs font-medium text-muted-foreground">
           카테고리
         </label>
-        <div
-          ref={categoryScrollRef}
-          role="group"
-          aria-label="카테고리"
-          className="flex gap-2 overflow-x-auto pb-1"
-          style={{
-            scrollbarWidth: "none",
-            maskImage: categoryFadeMask,
-            WebkitMaskImage: categoryFadeMask,
-          }}
+        <button
+          type="button"
+          onClick={() => setCategoryPickerOpen(true)}
+          className="flex h-14 w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 text-left transition-colors hover:bg-muted/60 active:scale-[0.99]"
         >
-          {categories.map((category) => {
-            const selected = category.id === categoryId;
-            const tint = category.color;
-            return (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => setCategoryId(category.id)}
-                className={cn(
-                  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
-                  "active:scale-[0.98]",
-                  selected
-                    ? "border-transparent bg-primary text-primary-foreground"
-                    : "border-border bg-card text-foreground hover:bg-muted",
-                )}
+          {selectedCategory ? (
+            <>
+              <span
+                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted"
+                style={
+                  selectedCategory.color
+                    ? { color: selectedCategory.color }
+                    : undefined
+                }
               >
                 <CategoryIcon
-                  slug={category.icon}
-                  className="size-3.5"
-                  style={!selected && tint ? { color: tint } : undefined}
+                  slug={selectedCategory.icon}
+                  className="size-4.5"
                 />
-                {category.name}
-              </button>
-            );
-          })}
-        </div>
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
+                {selectedCategory.name}
+              </span>
+            </>
+          ) : (
+            <span className="min-w-0 flex-1 text-[15px] font-medium text-muted-foreground">
+              카테고리 선택
+            </span>
+          )}
+          <ChevronRight
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+        </button>
       </div>
 
       <div className="space-y-2">
@@ -655,6 +653,15 @@ function TransactionFormBody({
         groups={groups}
         selectedIds={selectedGroupIds}
         onChange={setSelectedGroupIds}
+      />
+
+      <CategoryPickerDrawer
+        open={categoryPickerOpen}
+        onOpenChange={setCategoryPickerOpen}
+        categories={categories}
+        selectedId={categoryId}
+        onSelect={setCategoryId}
+        onMutated={handleCategoryMutated}
       />
     </form>
   );

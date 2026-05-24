@@ -6,6 +6,10 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import type { TransactionVisibility } from "@/lib/queries/transactions";
+import {
+  CATEGORY_COLORS,
+  CATEGORY_ICON_SLUGS,
+} from "@/lib/utils/category-icon";
 
 export type TransactionActionResult =
   | { ok: true }
@@ -402,6 +406,172 @@ export async function deleteIncomeAdjustmentAction(
     .eq("id", id)
     .eq("user_id", user.id);
 
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+// -- Custom categories ------------------------------------------------------
+//
+// Per-user custom spending categories (create/update/delete). Seeds
+// (user_id is null) are shared and read-only. icon/color are validated
+// against the app's fixed allowlists here (not in the DB) because they expand
+// often — the DB only checks name length. Deletion reassigns the user's
+// transactions to the shared 기타 seed via the delete_category RPC.
+
+export type CategoryActionCategory = {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  isCustom: boolean;
+};
+
+export type CategoryMutationResult =
+  | { ok: true; category: CategoryActionCategory }
+  | { ok: false; error: string };
+
+const CATEGORY_NAME_MAX_LENGTH = 10;
+const CATEGORY_MAX_CUSTOM = 20;
+const CATEGORY_ICON_SET = new Set(CATEGORY_ICON_SLUGS);
+const CATEGORY_COLOR_SET = new Set(CATEGORY_COLORS);
+
+function normalizeCategoryName(value: string): string {
+  return (value ?? "").trim();
+}
+
+type ValidatedCategoryInput = {
+  name: string;
+  icon: string;
+  color: string;
+};
+
+function validateCategoryInput(input: {
+  name: string;
+  icon: string;
+  color: string;
+}): { ok: true; value: ValidatedCategoryInput } | { ok: false; error: string } {
+  const name = normalizeCategoryName(input.name);
+  if (name.length === 0) {
+    return { ok: false, error: "카테고리 이름을 입력해주세요." };
+  }
+  if (name.length > CATEGORY_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: `이름은 ${CATEGORY_NAME_MAX_LENGTH}자까지 입력할 수 있어요.`,
+    };
+  }
+  if (!CATEGORY_ICON_SET.has(input.icon)) {
+    return { ok: false, error: "아이콘을 선택해주세요." };
+  }
+  if (!CATEGORY_COLOR_SET.has(input.color)) {
+    return { ok: false, error: "색상을 선택해주세요." };
+  }
+  return { ok: true, value: { name, icon: input.icon, color: input.color } };
+}
+
+// Postgres unique_violation (duplicate name) → friendly Korean copy.
+function isUniqueViolation(error: { code?: string }): boolean {
+  return error.code === "23505";
+}
+
+export async function createCategoryAction(input: {
+  name: string;
+  icon: string;
+  color: string;
+}): Promise<CategoryMutationResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const validated = validateCategoryInput(input);
+  if (!validated.ok) return validated;
+  const { name, icon, color } = validated.value;
+
+  const { count, error: countError } = await supabase
+    .from("categories")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if (countError) return { ok: false, error: countError.message };
+  if ((count ?? 0) >= CATEGORY_MAX_CUSTOM) {
+    return {
+      ok: false,
+      error: `카테고리는 최대 ${CATEGORY_MAX_CUSTOM}개까지 만들 수 있어요.`,
+    };
+  }
+
+  const id = randomUUID();
+  const { error } = await supabase
+    .from("categories")
+    .insert({ id, user_id: user.id, name, icon, color });
+  if (error) {
+    if (isUniqueViolation(error)) {
+      return { ok: false, error: "같은 이름의 카테고리가 이미 있어요." };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return { ok: true, category: { id, name, icon, color, isCustom: true } };
+}
+
+export async function updateCategoryAction(input: {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+}): Promise<CategoryMutationResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!input.id) return { ok: false, error: "수정할 카테고리가 없어요." };
+
+  const validated = validateCategoryInput(input);
+  if (!validated.ok) return validated;
+  const { name, icon, color } = validated.value;
+
+  // Ownership is fenced by RLS (eq user_id is redundant safety). Seed rows
+  // (user_id is null) never match eq("user_id", user.id) so they can't be
+  // edited through this path.
+  const { error } = await supabase
+    .from("categories")
+    .update({ name, icon, color })
+    .eq("id", input.id)
+    .eq("user_id", user.id);
+  if (error) {
+    if (isUniqueViolation(error)) {
+      return { ok: false, error: "같은 이름의 카테고리가 이미 있어요." };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return {
+    ok: true,
+    category: { id: input.id, name, icon, color, isCustom: true },
+  };
+}
+
+export async function deleteCategoryAction(
+  id: string,
+): Promise<TransactionActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!id) return { ok: false, error: "삭제할 카테고리가 없어요." };
+
+  // delete_category reassigns this category's transactions to the 기타 seed,
+  // then deletes the row — atomic, SECURITY DEFINER, own-only.
+  const { error } = await supabase.rpc("delete_category", { p_id: id });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/dashboard");
