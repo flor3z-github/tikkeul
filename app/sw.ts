@@ -116,9 +116,20 @@ self.addEventListener("notificationclick", (event) => {
 
 // Push services may rotate the subscription endpoint (browser update,
 // permission reset). The browser fires pushsubscriptionchange before the old
-// endpoint stops working; resubscribe and let the next server interaction
-// re-register the new endpoint. The SW itself can't talk to the server here
-// without credentials, so we just refresh the local subscription.
+// endpoint stops working; we resubscribe AND POST the new endpoint to the
+// server. A same-origin fetch carries the auth cookies, so /api/push/sync can
+// resolve the user and persist the rotated endpoint — otherwise the DB keeps
+// the dead endpoint and the user silently stops receiving pushes (the exact
+// failure this whole change set is fixing).
+function subscriptionKeyToBase64(sub: PushSubscription, name: "p256dh" | "auth"): string {
+  const key = sub.getKey(name);
+  if (!key) return "";
+  const bytes = new Uint8Array(key);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
 self.addEventListener("pushsubscriptionchange", (event) => {
   const change = event as ExtendableEvent & {
     oldSubscription?: PushSubscription | null;
@@ -126,17 +137,34 @@ self.addEventListener("pushsubscriptionchange", (event) => {
   };
   event.waitUntil(
     (async () => {
-      const oldSub = change.oldSubscription ?? null;
-      if (!oldSub) return;
-      const applicationServerKey = oldSub.options.applicationServerKey ?? undefined;
+      let newSub = change.newSubscription ?? null;
+      if (!newSub) {
+        const oldSub = change.oldSubscription ?? null;
+        const applicationServerKey = oldSub?.options.applicationServerKey ?? undefined;
+        try {
+          newSub = await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey,
+          });
+        } catch {
+          // Resubscribe failed — the next /settings visit or the dashboard
+          // PushReconciler will re-register through the normal flow.
+          return;
+        }
+      }
       try {
-        await self.registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey,
+        await fetch("/api/push/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            endpoint: newSub.endpoint,
+            p256dh: subscriptionKeyToBase64(newSub, "p256dh"),
+            auth: subscriptionKeyToBase64(newSub, "auth"),
+          }),
         });
       } catch {
-        // Best-effort: if resubscribe fails the next /settings visit will
-        // re-prompt and re-register through the normal flow.
+        // Best-effort: PushReconciler on the next app open backfills it.
       }
     })(),
   );

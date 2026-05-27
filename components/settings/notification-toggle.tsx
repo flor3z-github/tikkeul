@@ -153,7 +153,7 @@ export function NotificationToggle({
       return;
     }
     try {
-      const sub = await subscribeDevice(vapidPublicKey);
+      const sub = await subscribeDevice(vapidPublicKey, true);
       const registerResult = await registerPushSubscriptionAction({
         endpoint: sub.endpoint,
         p256dh: sub.p256dh,

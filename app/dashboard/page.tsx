@@ -6,6 +6,7 @@ import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-wa
 import { RefreshOnRestore } from "@/components/dm/refresh-on-restore";
 import { DashboardFriendHeader } from "@/components/dashboard/dashboard-friend-header";
 import { NotificationNudgeCard } from "@/components/dashboard/notification-nudge-card";
+import { PushReconciler } from "@/components/push/push-reconciler";
 import { AppShell } from "@/components/layout/app-shell";
 import { PwaInstallBanner } from "@/components/pwa/install-banner";
 import { PageHeader } from "@/components/layout/header";
@@ -425,6 +426,13 @@ export default async function DashboardPage({
 
           {showNotificationNudge ? (
             <NotificationNudgeCard vapidPublicKey={vapidPublicKey} />
+          ) : null}
+
+          {isOwn && vapidPublicKey && anyNotificationEnabled ? (
+            <PushReconciler
+              vapidPublicKey={vapidPublicKey}
+              enabled={anyNotificationEnabled}
+            />
           ) : null}
 
           <Suspense fallback={<SpendingCalendarSkeleton />}>
