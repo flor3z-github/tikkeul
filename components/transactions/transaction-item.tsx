@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Heart, Lock, MessageCircle, Send, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -182,6 +182,7 @@ function FriendRow({
   const router = useRouter();
   const [reactionPending, startReactionTransition] = useTransition();
   const [commentPending, startCommentTransition] = useTransition();
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
   // A row is "comment-locked" once the viewer has sent a text comment on it —
   // the message-icon turns into a deep link to that DM message and the inline
@@ -236,6 +237,21 @@ function FriendRow({
       // to a deep-link anchor on the next render — the comment is now locked.
       router.refresh();
     });
+  }
+
+  // The comment textarea mounts inline in the middle of the dashboard scroll
+  // body and is autoFocused the moment the panel expands. On iOS the focus
+  // event that autoFocus fires during that layout change does NOT trigger the
+  // native "scroll focused input into view" (a later manual tap on the same,
+  // now-settled, input does — confirmed on device). So the soft keyboard rises
+  // and covers the textarea. Scroll it into view ourselves on focus, after the
+  // keyboard inset settles (rAF for the immediate layout, ~350ms for the
+  // keyboard animation — mirrors the memo field's handleMemoFocus timing).
+  function handleCommentFocus() {
+    const reveal = () =>
+      commentInputRef.current?.scrollIntoView({ block: "center" });
+    requestAnimationFrame(reveal);
+    setTimeout(reveal, 350);
   }
 
   const heartLabel = lastEmoji ?? null;
@@ -351,12 +367,14 @@ function FriendRow({
           className="space-y-2 px-3 pb-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150"
         >
           <textarea
+            ref={commentInputRef}
             value={commentDraft}
             onChange={(event) =>
               onCommentDraftChange?.(
                 event.target.value.slice(0, COMMENT_MAX_LENGTH),
               )
             }
+            onFocus={handleCommentFocus}
             maxLength={COMMENT_MAX_LENGTH}
             placeholder="이 소비에 댓글 달기"
             rows={2}
