@@ -220,7 +220,28 @@
   }
 }
 
+/* Comment composer reveal: the inline friend-comment form grows its height
+   smoothly instead of popping in. Animating grid-template-rows 0fr→1fr scales
+   the collapsed→full height of an overflow-hidden child, so the rows below
+   reflow smoothly. The form stays conditionally mounted with autoFocus (iOS
+   only raises the soft keyboard for focus tied to the originating tap, so we
+   must NOT defer focus to an effect). fr-unit grid-row animation needs
+   Safari 16+ / Chromium 107+ — both PWA targets clear that. */
+@keyframes comment-reveal {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
 @layer utilities {
+  .animate-comment-reveal {
+    animation: comment-reveal 200ms ease-out;
+  }
   .focus-pulse {
     animation: focus-pulse 2.4s ease-out 1;
     border-radius: 1rem;

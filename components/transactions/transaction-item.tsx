@@ -243,15 +243,18 @@ function FriendRow({
   // body and is autoFocused the moment the panel expands. On iOS the focus
   // event that autoFocus fires during that layout change does NOT trigger the
   // native "scroll focused input into view" (a later manual tap on the same,
-  // now-settled, input does — confirmed on device). So the soft keyboard rises
-  // and covers the textarea. Scroll it into view ourselves on focus, after the
-  // keyboard inset settles (rAF for the immediate layout, ~350ms for the
-  // keyboard animation — mirrors the memo field's handleMemoFocus timing).
+  // now-settled, input does — confirmed on device), so the soft keyboard rises
+  // and covers the textarea. We scroll it into view ourselves — once, smoothly,
+  // and only after the reveal animation (200ms) and the keyboard rise (~300ms)
+  // have settled. Firing earlier or twice fights the keyboard's own animation
+  // and reads as a hard jump; a single delayed glide lands it cleanly.
   function handleCommentFocus() {
-    const reveal = () =>
-      commentInputRef.current?.scrollIntoView({ block: "center" });
-    requestAnimationFrame(reveal);
-    setTimeout(reveal, 350);
+    setTimeout(() => {
+      commentInputRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 350);
   }
 
   const heartLabel = lastEmoji ?? null;
@@ -361,11 +364,17 @@ function FriendRow({
       ) : null}
 
       {isActive && activeMode === "comment" && !hasComment ? (
-        <form
-          onSubmit={handleCommentSubmit}
-          onClick={(event) => event.stopPropagation()}
-          className="space-y-2 px-3 pb-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150"
-        >
+        // grid + grid-rows-[1fr] with an overflow-hidden child is the height
+        // animation target; motion-safe:animate-comment-reveal plays the
+        // 0fr→1fr grow on mount. Under reduced motion the resting 1fr applies
+        // instantly. The <form> keeps autoFocus so iOS still raises the
+        // keyboard from the tap that opened the panel.
+        <div className="grid grid-rows-[1fr] motion-safe:animate-comment-reveal">
+          <form
+            onSubmit={handleCommentSubmit}
+            onClick={(event) => event.stopPropagation()}
+            className="space-y-2 overflow-hidden px-3 pb-3 pt-0.5"
+          >
           <textarea
             ref={commentInputRef}
             value={commentDraft}
@@ -398,7 +407,8 @@ function FriendRow({
               {commentPending ? "전송 중…" : "전송"}
             </Button>
           </div>
-        </form>
+          </form>
+        </div>
       ) : null}
     </div>
   );
