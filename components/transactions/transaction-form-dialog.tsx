@@ -263,6 +263,7 @@ function TransactionFormBody({
   const canSubmit =
     amountValue > 0 && categoryId !== null && groupsChoiceReady && !busy;
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const memoInputRef = useRef<HTMLInputElement>(null);
 
   const groupsAvailable = groups.length > 0;
 
@@ -300,6 +301,20 @@ function TransactionFormBody({
     el.focus();
     const end = el.value.length;
     el.setSelectionRange(end, end);
+  }
+
+  // Memo is the only mid-sheet text input. When it gets focus the iOS soft
+  // keyboard opens and covers it: DrawerContent clamps the sheet to the
+  // visualViewport height, but the memo sits in the middle of the scroll body
+  // and iOS's native "scroll focused input into view" can't move a
+  // position:fixed sheet's inner scroller. Scroll it into the visible area
+  // ourselves, after the keyboard inset has settled (mirrors DrawerContent's
+  // rAF + ~300ms timing so we run once the sheet is resized).
+  function handleMemoFocus() {
+    const reveal = () =>
+      memoInputRef.current?.scrollIntoView({ block: "center" });
+    requestAnimationFrame(reveal);
+    setTimeout(reveal, 350);
   }
 
   function handleDelete() {
@@ -503,6 +518,7 @@ function TransactionFormBody({
         <div className="flex items-center gap-3 px-4">
           <Pencil className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           <input
+            ref={memoInputRef}
             id="transaction-memo"
             type="text"
             aria-label="메모"
@@ -510,6 +526,7 @@ function TransactionFormBody({
             onChange={(event) =>
               setMemoText(event.target.value.slice(0, MEMO_MAX_LENGTH))
             }
+            onFocus={handleMemoFocus}
             maxLength={MEMO_MAX_LENGTH}
             placeholder="메모 추가 (선택)"
             className="h-12 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/60"
