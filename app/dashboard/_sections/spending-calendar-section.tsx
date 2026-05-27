@@ -1,7 +1,9 @@
 import { CalendarDayPanel } from "@/components/dashboard/calendar-day-panel";
 import { getCategories } from "@/lib/queries/categories";
 import {
+  getIncomingInteractionsByTransaction,
   getViewerInteractionsByTransaction,
+  type IncomingInteractionsByTransaction,
   type ViewerInteractionsByTransaction,
 } from "@/lib/queries/interactions";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
@@ -38,6 +40,13 @@ type SpendingCalendarSectionProps = {
    * items perm. Ignored in own mode. Defaults to true for backward compat.
    */
   showSpendingItems?: boolean;
+  /**
+   * Own-mode flag: true when the viewer has at least one friend. Gates the
+   * incoming-comment fetch — with zero friends no DM thread can exist, so we
+   * skip the extra round-trip entirely and keep the dashboard hot path lean
+   * (DESIGN.md §3). Ignored in friend mode.
+   */
+  hasFriends?: boolean;
   /** Push-notification deep link target. Forwarded straight to the day
    *  panel which handles scroll-and-pulse on mount. */
   focusTxId?: string | null;
@@ -58,6 +67,7 @@ export async function SpendingCalendarSection({
   ownFixedExpense,
   ownExtraIncome,
   showSpendingItems = true,
+  hasFriends = false,
   focusTxId,
 }: SpendingCalendarSectionProps) {
   const userId = targetUserId ?? viewerId;
@@ -158,6 +168,21 @@ export async function SpendingCalendarSection({
     monthlyIncome + extraIncome - fixedExpense,
   );
 
+  // Own mode only: comments friends left on the owner's own transactions,
+  // surfaced as a trace under each row (deep-links to the DM message). Needs
+  // the resolved transaction ids, so it runs after the monthly fetch rather
+  // than inside the Promise.all above (one extra round-trip, own mode only).
+  // Friend mode never queries this — the viewer-direction trace above already
+  // covers that surface. With zero friends there can be no DM thread, so we
+  // skip the round-trip and keep the dashboard hot path lean (DESIGN.md §3).
+  const incomingInteractions: IncomingInteractionsByTransaction =
+    isOwn && hasFriends
+      ? await getIncomingInteractionsByTransaction(
+          viewerId,
+          monthlyResult.transactions.map((tx) => tx.id),
+        )
+      : new Map();
+
   // Map isn't directly preserved across the Server → Client boundary in all
   // Next build modes, so flatten to plain objects keyed by txId.
   const lastEmojiByTx: Record<string, string> = {};
@@ -168,6 +193,19 @@ export async function SpendingCalendarSection({
     if (entry.lastComment) lastCommentByTx[txId] = entry.lastComment;
     if (entry.lastCommentMessageId)
       lastCommentMessageIdByTx[txId] = entry.lastCommentMessageId;
+  }
+
+  const incomingCommentByTx: Record<string, string> = {};
+  const incomingCommentMessageIdByTx: Record<string, string> = {};
+  const incomingCommentSenderIdByTx: Record<string, string> = {};
+  const incomingCommentSenderNameByTx: Record<string, string> = {};
+  const incomingCommentUnreadByTx: Record<string, boolean> = {};
+  for (const [txId, entry] of incomingInteractions) {
+    incomingCommentByTx[txId] = entry.lastComment;
+    incomingCommentMessageIdByTx[txId] = entry.lastCommentMessageId;
+    incomingCommentSenderIdByTx[txId] = entry.senderId;
+    incomingCommentSenderNameByTx[txId] = entry.senderName;
+    incomingCommentUnreadByTx[txId] = entry.unread;
   }
 
   // Resolve each fixed expense's payment_day → concrete dates within the
@@ -271,6 +309,11 @@ export async function SpendingCalendarSection({
       lastEmojiByTx={lastEmojiByTx}
       lastCommentByTx={lastCommentByTx}
       lastCommentMessageIdByTx={lastCommentMessageIdByTx}
+      incomingCommentByTx={incomingCommentByTx}
+      incomingCommentMessageIdByTx={incomingCommentMessageIdByTx}
+      incomingCommentSenderIdByTx={incomingCommentSenderIdByTx}
+      incomingCommentSenderNameByTx={incomingCommentSenderNameByTx}
+      incomingCommentUnreadByTx={incomingCommentUnreadByTx}
       fixedExpensesByDay={fixedExpensesByDay}
       focusTxId={focusTxId ?? null}
     />

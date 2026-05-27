@@ -101,3 +101,112 @@ export async function getViewerInteractionsByTransaction(
   }
   return result;
 }
+
+export type IncomingInteraction = {
+  /** Most recent text comment a friend left on the owner's transaction. */
+  lastComment: string;
+  /** dm_messages.id of that comment — deep-link target for /dm/<sender>?message=. */
+  lastCommentMessageId: string;
+  /** Friend who wrote the comment. Routes the trace to /dm/<senderId>. */
+  senderId: string;
+  /** Friend's nickname for the trace label ("이름 없음" fallback). */
+  senderName: string;
+  /** True when the comment arrived after the owner last read that DM thread. */
+  unread: boolean;
+};
+
+export type IncomingInteractionsByTransaction = Map<string, IncomingInteraction>;
+
+// Inverse of getViewerInteractionsByTransaction: returns, for each of the
+// OWNER's own transactions, the most recent text comment a FRIEND left on it
+// (sender_id <> owner). Drives the incoming-comment trace under each row on
+// the owner's own dashboard. Reactions (emoji-only messages) are intentionally
+// excluded — the owner-side surface is comments only.
+//
+// RLS on dm_messages (SELECT = thread member) guarantees this only ever sees
+// messages from threads the owner belongs to, so the `sender_id <> ownerId`
+// filter is enough to scope it to "comments others wrote on my spending"
+// without leaking any other pair's data.
+export async function getIncomingInteractionsByTransaction(
+  ownerId: string,
+  txIds: string[],
+): Promise<IncomingInteractionsByTransaction> {
+  const result: IncomingInteractionsByTransaction = new Map();
+  if (!ownerId || txIds.length === 0) return result;
+
+  const supabase = await createClient();
+
+  const { data: messages, error } = await supabase
+    .from("dm_messages")
+    .select(
+      "id, content, quoted_transaction_id, sender_id, thread_id, created_at",
+    )
+    .in("quoted_transaction_id", txIds)
+    .neq("sender_id", ownerId)
+    .order("created_at", { ascending: false })
+    // Same hard cap as the viewer-direction query — newest-first ordering
+    // means the first text comment we see per tx is the most recent.
+    .limit(500);
+
+  if (error || !messages || messages.length === 0) return result;
+
+  type MessageRow = {
+    id: string;
+    content: string;
+    quoted_transaction_id: string | null;
+    sender_id: string;
+    thread_id: string;
+    created_at: string;
+  };
+  const rows = messages as MessageRow[];
+
+  // Per-thread owner-side last_read_at (to flag unread) and sender nicknames
+  // (for the trace label) are independent reads — resolve them in parallel.
+  const threadIds = Array.from(new Set(rows.map((m) => m.thread_id)));
+  const senderIds = Array.from(new Set(rows.map((m) => m.sender_id)));
+  const [threadsRes, profilesRes] = await Promise.all([
+    supabase
+      .from("dm_threads")
+      .select(
+        "id, user_a_id, user_b_id, last_read_at_user_a, last_read_at_user_b",
+      )
+      .in("id", threadIds),
+    supabase.from("profiles").select("id, display_name").in("id", senderIds),
+  ]);
+
+  const myLastReadByThread = new Map<string, string | null>();
+  for (const t of threadsRes.data ?? []) {
+    const isUserA = t.user_a_id === ownerId;
+    myLastReadByThread.set(
+      t.id,
+      isUserA ? t.last_read_at_user_a : t.last_read_at_user_b,
+    );
+  }
+
+  const nameById = new Map<string, string>();
+  for (const p of profilesRes.data ?? []) {
+    nameById.set(p.id, p.display_name?.trim() || "이름 없음");
+  }
+
+  for (const row of rows) {
+    const txId = row.quoted_transaction_id;
+    if (!txId || result.has(txId)) continue;
+    const trimmed = row.content.trim();
+    // Comments only — skip emoji-only reactions.
+    if (trimmed.length === 0 || EMOJI_ONLY.test(trimmed)) continue;
+
+    const myLastRead = myLastReadByThread.get(row.thread_id) ?? null;
+    const unread =
+      myLastRead === null ||
+      new Date(row.created_at).getTime() > new Date(myLastRead).getTime();
+
+    result.set(txId, {
+      lastComment: trimmed,
+      lastCommentMessageId: row.id,
+      senderId: row.sender_id,
+      senderName: nameById.get(row.sender_id) ?? "이름 없음",
+      unread,
+    });
+  }
+  return result;
+}

@@ -451,6 +451,7 @@ export default async function DashboardPage({
               ownFixedExpense={ownFixedExpense}
               ownExtraIncome={ownExtraIncome}
               showSpendingItems={perms.spendingItems}
+              hasFriends={friendIds.length > 0}
               focusTxId={focusTxId}
             />
           </Suspense>

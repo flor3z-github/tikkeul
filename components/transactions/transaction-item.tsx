@@ -51,6 +51,18 @@ type TransactionItemProps = {
    *  opens the edit form directly; the friend interaction panel is skipped. */
   isOwn: boolean;
   ownerUserId: string;
+  /** Own mode: most recent text comment a friend left on this transaction.
+   *  Renders a read-only trace under the summary that deep-links to the DM
+   *  message. Null when no friend has commented. */
+  incomingComment?: string | null;
+  /** Own mode: dm_messages.id for incomingComment — /dm/<sender>?message=<id>. */
+  incomingCommentMessageId?: string | null;
+  /** Own mode: friend who wrote incomingComment — routes the trace to their DM. */
+  incomingCommentSenderId?: string | null;
+  /** Own mode: that friend's nickname, shown before the comment text. */
+  incomingCommentSenderName?: string | null;
+  /** Own mode: true when incomingComment is unread (accents the trace). */
+  incomingCommentUnread?: boolean;
   /** Friend mode: viewer's last emoji-only DM reaction on this transaction.
    *  Renders in place of the empty heart so the viewer sees their own state. */
   lastEmoji?: string | null;
@@ -80,6 +92,11 @@ export function TransactionItem({
   groups,
   isOwn,
   ownerUserId,
+  incomingComment,
+  incomingCommentMessageId,
+  incomingCommentSenderId,
+  incomingCommentSenderName,
+  incomingCommentUnread,
   lastEmoji,
   lastComment,
   lastCommentMessageId,
@@ -96,6 +113,11 @@ export function TransactionItem({
         transaction={transaction}
         categories={categories}
         groups={groups ?? []}
+        incomingComment={incomingComment ?? null}
+        incomingCommentMessageId={incomingCommentMessageId ?? null}
+        incomingCommentSenderId={incomingCommentSenderId ?? null}
+        incomingCommentSenderName={incomingCommentSenderName ?? null}
+        incomingCommentUnread={incomingCommentUnread ?? false}
       />
     );
   }
@@ -123,21 +145,65 @@ function OwnRow({
   transaction,
   categories,
   groups,
+  incomingComment,
+  incomingCommentMessageId,
+  incomingCommentSenderId,
+  incomingCommentSenderName,
+  incomingCommentUnread,
 }: {
   transaction: TransactionListRow;
   categories: TransactionFormCategory[];
   groups: TransactionFormGroup[];
+  incomingComment: string | null;
+  incomingCommentMessageId: string | null;
+  incomingCommentSenderId: string | null;
+  incomingCommentSenderName: string | null;
+  incomingCommentUnread: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // A friend left a comment on this transaction. Render a trace under the
+  // summary that deep-links to that DM message. All three ids must be present
+  // to build the link; otherwise fall back to the plain row.
+  const hasIncoming = Boolean(
+    incomingComment && incomingCommentMessageId && incomingCommentSenderId,
+  );
   return (
-    <>
+    <div className="rounded-2xl">
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="block w-full rounded-2xl px-3 py-2 text-left transition-colors hover:bg-muted active:bg-muted motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+        className={cn(
+          "block w-full rounded-2xl px-3 text-left transition-colors hover:bg-muted active:bg-muted motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
+          hasIncoming ? "pt-2 pb-1" : "py-2",
+        )}
       >
         <TransactionSummary transaction={transaction} />
       </button>
+      {hasIncoming ? (
+        <a
+          href={`/dm/${incomingCommentSenderId}?message=${incomingCommentMessageId}`}
+          aria-label={`${incomingCommentSenderName}님의 댓글: ${incomingComment} — DM에서 보기`}
+          className={cn(
+            "mx-3 mb-1.5 flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-[12px] transition-colors hover:bg-muted",
+            incomingCommentUnread ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          <MessageCircle className="size-3.5 shrink-0" aria-hidden />
+          {incomingCommentUnread ? (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full bg-primary"
+            />
+          ) : null}
+          <span className="shrink-0 font-medium">
+            {incomingCommentSenderName}
+          </span>
+          <span aria-hidden className="shrink-0 text-muted-foreground/50">
+            ·
+          </span>
+          <span className="truncate">{incomingComment}</span>
+        </a>
+      ) : null}
       <TransactionFormDialog
         open={open}
         onOpenChange={setOpen}
@@ -146,7 +212,7 @@ function OwnRow({
         initial={toFormInitial(transaction)}
         onSaved={() => setOpen(false)}
       />
-    </>
+    </div>
   );
 }
 

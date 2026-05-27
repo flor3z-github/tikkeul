@@ -376,18 +376,24 @@ export type Database = {
           user_a_id: string;
           user_b_id: string;
           created_at: string;
+          last_read_at_user_a: string | null;
+          last_read_at_user_b: string | null;
         };
         Insert: {
           id?: string;
           user_a_id: string;
           user_b_id: string;
           created_at?: string;
+          last_read_at_user_a?: string | null;
+          last_read_at_user_b?: string | null;
         };
         Update: {
           id?: string;
           user_a_id?: string;
           user_b_id?: string;
           created_at?: string;
+          last_read_at_user_a?: string | null;
+          last_read_at_user_b?: string | null;
         };
         Relationships: [];
       };

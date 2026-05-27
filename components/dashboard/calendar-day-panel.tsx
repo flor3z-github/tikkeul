@@ -74,6 +74,14 @@ type CalendarDayPanelProps = {
   /** Friend mode only: dm_messages.id corresponding to each lastComment. Lets
    *  the comment trace deep-link straight to that message in the DM thread. */
   lastCommentMessageIdByTx?: Record<string, string>;
+  /** Own mode only: most recent text comment a friend left on each of the
+   *  owner's transactions. Renders an incoming-comment trace under the row
+   *  that deep-links to the DM message. Empty in friend mode. */
+  incomingCommentByTx?: Record<string, string>;
+  incomingCommentMessageIdByTx?: Record<string, string>;
+  incomingCommentSenderIdByTx?: Record<string, string>;
+  incomingCommentSenderNameByTx?: Record<string, string>;
+  incomingCommentUnreadByTx?: Record<string, boolean>;
   /** Own-mode only: fixed expenses scheduled to fire on each YYYY-MM-DD in
    *  the visible cycle. Drives the calendar marker + the per-day section. */
   fixedExpensesByDay?: Record<string, CalendarFixedExpenseItem[]>;
@@ -100,6 +108,11 @@ export function CalendarDayPanel({
   lastEmojiByTx,
   lastCommentByTx,
   lastCommentMessageIdByTx,
+  incomingCommentByTx,
+  incomingCommentMessageIdByTx,
+  incomingCommentSenderIdByTx,
+  incomingCommentSenderNameByTx,
+  incomingCommentUnreadByTx,
   fixedExpensesByDay,
   focusTxId,
 }: CalendarDayPanelProps) {
@@ -349,6 +362,21 @@ export function CalendarDayPanel({
                       groups={groups ?? []}
                       isOwn={isOwn}
                       ownerUserId={ownerUserId}
+                      incomingComment={
+                        incomingCommentByTx?.[transaction.id] ?? null
+                      }
+                      incomingCommentMessageId={
+                        incomingCommentMessageIdByTx?.[transaction.id] ?? null
+                      }
+                      incomingCommentSenderId={
+                        incomingCommentSenderIdByTx?.[transaction.id] ?? null
+                      }
+                      incomingCommentSenderName={
+                        incomingCommentSenderNameByTx?.[transaction.id] ?? null
+                      }
+                      incomingCommentUnread={
+                        incomingCommentUnreadByTx?.[transaction.id] ?? false
+                      }
                       lastEmoji={lastEmojiByTx?.[transaction.id] ?? null}
                       lastComment={lastCommentByTx?.[transaction.id] ?? null}
                       lastCommentMessageId={
