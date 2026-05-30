@@ -109,7 +109,13 @@ self.addEventListener("notificationclick", (event) => {
         }
         return;
       }
-      await self.clients.openWindow(targetUrl);
+      // iOS standalone PWA cold-start: launching the home-screen app DIRECTLY
+      // into a deep, query-bearing URL via openWindow leaves WebKit's standalone
+      // history/session in a broken state — back-swipe shows a blank page and
+      // reload dies, forcing a full app kill. Booting at the manifest start_url
+      // ("/") is the only launch WebKit initializes cleanly; app/page.tsx then
+      // forwards `?next=` to the real target inside the now-healthy session.
+      await self.clients.openWindow(`/?next=${encodeURIComponent(targetUrl)}`);
     })(),
   );
 });
