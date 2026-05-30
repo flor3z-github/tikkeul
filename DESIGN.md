@@ -67,7 +67,7 @@ brand:
 ● 고정 13,000원   ● 소비 301,200원
 ```
 
-대시보드 `PageHeader`의 title은 모드 무관하게 브랜드명 "티끌"로 고정한다. 사이클 정보는 합계 카드 아래 MonthSwitcher 라벨(`5월` 또는 `5/20 – 6/19`)이 전담한다. 사용자가 설정에서 돈 들어오는 날을 달 중간(2~28일)으로 고르면(§12.5a, 내부적으로 `income_day` 모드) MonthSwitcher 라벨과 캘린더 그리드가 사이클 기준으로 바뀐다. 합계 카드의 "총 소비 / N원"이 핵심 숫자 자리를 유지한다.
+대시보드 `PageHeader`의 title은 모드 무관하게 브랜드명 "티끌"로 고정한다. 사이클 정보는 합계 카드 아래 MonthSwitcher 라벨(`5월` 또는 `5/20 – 6/19`)이 전담한다. 사용자가 설정에서 돈 들어오는 날을 달 중간(2~28일)으로 고르거나 급여 규정 보정으로 주기 경계가 달력 월에서 벗어나면(§12.5a, 파생 `income_day` 모드) MonthSwitcher 라벨과 캘린더 그리드가 사이클 기준으로 바뀐다. 합계 카드의 "총 소비 / N원"이 핵심 숫자 자리를 유지한다.
 
 ### 3.2 기능보다 명료함 우선
 
@@ -663,7 +663,7 @@ Dashboard에서 보여주지 않을 것:
 
 페이스 라인 표시 규칙:
 
-- 카피 좌측: `calendar` 모드에서는 "이번 달이 끝나기까지", `income_day` 모드에서는 "다음 급여일까지". "다음 급여일까지" 카피는 `income_day`(=달 중간 급여)에만 적용되고, 말일·1일 급여자는 `calendar`로 흡수되어 "이번 달이 끝나기까지" + "X월" MonthSwitcher 라벨 + 7×6 고정 그리드를 본다(의도된 정답).
+- 카피 좌측: 파생 `calendar` 모드에서는 "이번 달이 끝나기까지", `income_day` 모드에서는 "다음 급여일까지". 모드는 §12.5a대로 주기가 정확히 달력 월(`[1일, 다음달 1일)`)일 때만 `calendar`로 파생된다 — 이때 "이번 달이 끝나기까지" + "X월" MonthSwitcher 라벨 + 7×6 고정 그리드를 본다. 달 중간 급여, 말일, 또는 급여 규정 보정으로 경계가 이동한 주기는 모두 `income_day`로 파생되어 "다음 급여일까지" + 기간 라벨 + 가변 그리드를 본다(의도된 정답).
 - `남은 N일`은 사이클 마지막 날 − 오늘 (일 단위, 자정 기준). 오늘이 마지막 날이면 0.
 - `하루 X원 = floor(남은 돈 / 남은 일수)`.
 - 다음 조건 중 하나라도 충족되면 페이스 라인 자체를 숨긴다.
@@ -814,22 +814,40 @@ Settings에서는 다음만 관리한다.
 
 MVP에서는 노출하지 않는다.
 
-### 12.5a Budget Cycle
+### 12.5a Budget Cycle (Model B — 입금 앵커)
 
-예산 집계 주기는 사용자에게 **"돈 들어오는 날" 하나만 묻는다**(월급·용돈·입금 등 페르소나 무관한 범용 표현 — 직장인 한정 "월급날"은 쓰지 않는다). 내부적으로는 두 가지 데이터 모드(`cycle_mode`)로 매핑되며, 사용자에게 모드 용어는 노출하지 않는다.
+예산 집계 주기는 사용자에게 **"돈 들어오는 날" 하나만 묻되**(월급·용돈·입금 등 페르소나 무관한 범용 표현 — 직장인 한정 "월급날"은 쓰지 않는다), 내부적으로는 **실제 급여가 입금되는 날(예측)에 주기를 앵커링하는 Model B**로 동작한다. 예전의 `calendar`/`income_day` 2모드 매핑(사용자 모델)은 폐기됐다 — 두 값은 컬럼으로만 deprecate-보존되며, 주기 계산에는 더 이상 쓰이지 않는다.
 
-- **매월 1일 또는 말일 선택 → `calendar` 모드 (`startDay=1`)** — 말일에 받은 월급은 다음 달력 월의 생활비 재원이고 1일 월급은 그 달의 재원이므로, 두 경우 모두 추적 구간이 달력 월(1일~말일)과 일치한다. 가입 시 기본값이며 모든 기존 사용자에게 회귀 없이 적용된다.
-- **2일~28일 선택 → `income_day` 모드 (`startDay=N`)** — 10일·25일처럼 달 중간에 받는 사용자만 해당. 예) 25일 → 25일~다음 달 24일.
+사용자 설정 두 가지 (`user_settings`):
+
+- **급여일 `payday`** (smallint) — `0 = 말일`(`payment-day.ts`의 `0=말일` 관례를 공유), `1..28 = 그 날`. DB 기본값 1.
+- **급여 규정 `payroll_rule`** (text) — 급여일이 주말·공휴일과 겹칠 때 실제 입금 기준을 고른다: `prev`=이전 영업일(기본), `same`=보정 안 함(당일), `next`=다음 영업일.
+
+주기 계산 (순수 함수, `lib/utils/payday-cycle.ts`):
+
+- **영업일** = 토·일이 아니고 `holidays` 테이블에도 없는 날. 주말은 코드(`getDay()`)로, 공휴일만 테이블에 저장한다.
+- 월 M **명목 급여일** = `payday===0`이면 그달 마지막 날, 아니면 N일. **입금일** = `adjustToBusinessDay(명목일, payroll_rule, holidays)`(prev=직전 영업일로 당김 / next=다음 영업일로 밈 / same=그대로).
+- **주기 앵커** `anchor = 입금일 + (말일 ? +1일 : +0)` — 말일 급여는 다음 추적 구간의 재원이므로 입금일 다음 날이 앵커다(앵커는 주말일 수 있으며, 입금일이 아니라 주기 경계 마커일 뿐).
+- **주기** = `[anchor(월 M), anchor(월 M+1))`. 경계는 실제로 이동한다 — 예) 1월 주기가 12/31에 시작될 수 있다(의도된 동작).
+- **라벨 월**: `payday` 1·2~28 = 입금월 그대로. `말일` = +1월(다음 달). 예) 1월 말일 입금 → "2월"로 라벨.
+- 헬퍼 `getCycleRangeB`/`resolveDashboardParamsB`가 resolution 레이어를 담당하며, `formatCycleLabel`/`formatCycleLabelLong` 등 라벨 헬퍼는 `lib/utils/calendar.ts`에서 재사용한다.
+
+2026 검증 (규정 = `prev`): `payday=1` 1월 → 2/1(일)이 명목 다음달 앵커라 prev로 1/30 → 주기 `[2025-12-31, 2026-01-30)` 라벨 "1월"(1/1 신정·목 → prev → 12/31). `payday=20` 1월 → 1/20(화) 영업일 → `[1/20, 2/20)`. `payday=말일` 1월 → 1/31(토) → prev 1/30, +1일 = 1/31 → `[1/31, 2/28)` 라벨 "2월".
 
 UI 구성 (월 수입 입력 다음):
 
 - 라벨 "돈 들어오는 날" + 보조 설명 "월급·용돈처럼 돈이 들어오는 날에 맞춰 소비를 집계해요."
-- 단일 Select 하나 (옵션: "1일"~"28일" + "말일 (매월 마지막 날)"). 29/30/31은 노출하지 않는다 — 진짜 말일 급여자는 "말일"을 고르고, `income_day` startDay를 28 이하로만 만들어 짧은 달 clamp가 구조적으로 발생하지 않게 한다.
-- Select 아래 상시 안내 한 줄: `calendar` 케이스(1일·말일)는 평서문 "이번 달 소비를 1일부터 말일까지 모아서 보여드려요.", `income_day` 케이스(2~28)는 "이번 주기: 5월 25일 – 6월 24일" 형태의 실제 기간 프리뷰. RadioGroup·점선 박스·`startDay >= 29` 헬퍼 문구는 제거됐다.
+- 단일 Select 하나 (옵션: "1일"~"28일" + "말일 (매월 마지막 날)"). 29/30/31은 노출하지 않는다 — 진짜 말일 급여자는 "말일"을 고른다.
+- 그 아래 **급여 규정 Select 추가**: "이전 영업일"(기본)/"당일"/"다음 영업일" + 헬퍼 "급여일이 주말·공휴일과 겹칠 때 입금 기준을 골라주세요."
+- 두 Select 아래 상시 안내 한 줄: 주기가 정확히 달력 월(1일~말일)과 일치하면 평서문 "이번 달 소비를 1일부터 말일까지 모아서 보여드려요.", 그 외(이동·말일 케이스)는 "이번 주기: 5월 25일 – 6월 24일" 형태의 실제 입금앵커 기간 프리뷰(휴일 반영). 말일은 자연히 다음달 라벨로 표시된다.
 
-짧은 달 clamp 규칙은 `calendar.ts` `getCycleRange`의 `income_day` 경로에 레거시 호환용으로 남아 있으나, 신규 UI는 `income_day` startDay를 2~28로만 생성하므로 실제로 도달하지 않는다(말일 급여자는 `calendar`로 흡수). 레거시 `income_day` 29~31 행은 폼에서 "말일"로 표시되고, 저장 시 `calendar`/1로 조용히 업그레이드되어 과거의 말일-누락 버그에서 벗어난다. 매핑은 `lib/utils/calendar.ts`의 순수 함수 `paydayToCycle`/`cycleToPayday`/`PAYDAY_OPTIONS`가 단일 출처이며, `components/settings/settings-form.tsx`는 hidden `cycle_mode`/`cycle_start_day` 두 input으로 제출한다.
+`cycleMode`(`calendar`/`income_day`)는 더 이상 저장값이 아니라 **파생값**이다 — `getCycleRangeB`가 주기가 정확히 `[1일, 다음달 1일)`일 때만 `calendar`, 그 외 모든 이동·말일 주기는 `income_day`로 도출한다. 덕분에 하위 소비자(`spending-month-grid.tsx`의 가변행 그리드, 페이스 라인 카피 등)는 무변경으로 동작한다. 매핑은 `lib/utils/calendar.ts`의 순수 함수 `paydayCodeToDb`/`dbToPaydayCode`/`PAYDAY_OPTIONS`가 단일 출처이며(picker `PaydayCode` ↔ `payday` smallint), `components/settings/settings-form.tsx`는 hidden `payday`/`payroll_rule` 두 input으로 제출한다.
 
-친구 대시보드는 친구 본인의 사이클을 그대로 사용한다. 친구의 `monthly_income`은 노출하지 않으며, 사이클 정보(`cycle_mode`, `cycle_start_day`)만 `get_user_cycle` RPC로 가져온다. RPC는 friendship 관계가 있는 viewer에게만 row를 반환한다. 친구 모드 대시보드의 화면 동작 전체는 §12.8.5 참조.
+휴일은 **Supabase `holidays` 테이블**(컬럼 `d date` PK + `name text`)에 저장한다. 인증 유저 전체 읽기 가능(공휴일=비민감), 쓰기는 SQL editor/service role 전용(SELECT 정책만 존재). 주기가 연 경계를 넘으므로(1월 주기가 전년 12월 시작, 12월 말일 주기가 다음해 1월 종료) `getHolidays`는 앵커 연도 ±1년을 로드한다(`holidayRangeForAnchor`). 휴일 테이블은 **매년 직접 갱신**해야 한다(공휴일 INSERT). 조회 실패 시 빈 Set으로 graceful degrade하여 모든 날을 영업일로 취급한다.
+
+마이그레이션 백필은 **lossy·의도적**이다: 기존 `calendar` 모드 행(과거에 1일·말일 둘 다 흡수)은 일괄 `payday=1`이 되므로, 실제 말일 급여자는 설정에서 "말일"을 다시 골라야 한다(1일 급여자와 구분 불가). 레거시 `income_day` 2~28 → `payday=N`, 29~31 → `payday=0`(말일).
+
+친구 대시보드는 친구 본인의 사이클을 그대로 사용한다. 친구의 `monthly_income`은 노출하지 않으며, `get_user_cycle` RPC가 주는 `(payday, payroll_rule)` 2개 + 공개 `holidays`만으로 **JS(`payday-cycle.ts` 엔진)가 친구 주기를 직접 계산**한다(SQL 영업일 함수 불필요). RPC는 friendship 관계가 있는 viewer에게만 row를 반환하며 income은 영원히 비노출이다. 친구 모드 대시보드의 화면 동작 전체는 §12.8.5 참조.
 
 ### 12.7 Fixed Expenses
 
@@ -907,7 +925,7 @@ UI 구성 (월 수입 입력 다음):
 모든 함수는 `SECURITY DEFINER`로 정의하며 `authenticated` 역할에만 grant한다. SECURITY DEFINER가 RLS를 우회하므로 본문 안에서 friendship + 토글을 직접 체크한다.
 
 - `redeem_friend_code(p_code text) returns text` — 호출자가 viewer가 된다. `for update`로 코드 row를 잠가 동시 redemption을 막은 뒤 `friendships` 양방향 row를 `on conflict do nothing`으로 INSERT하고 코드를 사용 처리한다. 반환값은 정확히 `ok` / `invalid` / `self` / `unauthenticated` 4종이며, 어떤 케이스인지 외부에 누설하지 않기 위해 만료/존재하지 않음/이미 사용됨을 모두 `invalid`로 묶는다.
-- `get_user_cycle(target uuid) returns table(cycle_mode text, cycle_start_day smallint)` — 호출자가 본인이거나, `target = owner_id ∧ caller = viewer_id`인 friendship row가 있을 때만 한 줄을 반환한다. `monthly_income`은 시그니처에 포함되지 않으므로 RPC 자체가 노출 차단의 마지막 방어선 역할을 한다.
+- `get_user_cycle(target uuid) returns table(payday smallint, payroll_rule text)` — 호출자가 본인이거나, `target = owner_id ∧ caller = viewer_id`인 friendship row가 있을 때만 한 줄을 반환한다(Model B). 친구 주기는 이 `(payday, payroll_rule)` + 공개 `holidays`로 JS가 계산한다. `monthly_income`은 시그니처에 포함되지 않으므로 RPC 자체가 노출 차단의 마지막 방어선 역할을 한다(예전의 `cycle_mode`/`cycle_start_day` 반환은 폐기).
 - `get_friend_spending_total(target uuid, start_iso timestamptz, end_iso timestamptz) returns numeric` — 합계만 노출하는 경로용. friendship + `(show_spending_total OR show_spending_items)`을 체크하고, `deleted_at IS NULL` 행만 합산한다. **항목 토글이 꺼진 케이스에서 viewer가 row를 직접 SELECT 할 수 없도록 row 단위 RLS는 차단된 상태로 두고, 합계는 이 RPC를 통해서만 얻는다.**
 - `get_friend_fixed_total(target uuid) returns numeric` — 위와 동일한 패턴으로 고정지출 합계를 반환한다. `is_active = true` 행만 합산하고 `(show_fixed_total OR show_fixed_items)`을 체크한다.
 

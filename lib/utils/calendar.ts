@@ -45,10 +45,14 @@ export type ResolvedDashboardParams = {
 export const DEFAULT_CYCLE: CycleSettings = { mode: "calendar", startDay: 1 };
 
 // Payday picker options shown in Settings. '1'..'28' map to a real day-of-month;
-// 'last' is the end-of-month case (absorbed into calendar mode — see
-// paydayToCycle). 29/30/31 are intentionally NOT offered: a true month-end
-// payer picks 'last', and capping income_day startDay at 28 makes the
-// short-month clamp in getCycleRange structurally unreachable for new rows.
+// 'last' is the end-of-month case (말일). 29/30/31 are intentionally NOT offered:
+// a true month-end payer picks 'last' (stored as payday 0), keeping the picker
+// values aligned to the user_settings.payday smallint domain (0=말일, 1..28).
+//
+// These map to the Model B user_settings.payday column (0=말일, 1..28) via
+// paydayCodeToDb / dbToPaydayCode — NOT to cycle_mode/cycle_start_day. The
+// cycle is computed from payday + payroll_rule + public holidays in
+// lib/utils/payday-cycle.ts (getCycleRangeB / resolveDashboardParamsB).
 export type PaydayCode = string; // "1".."28" | "last"
 export const PAYDAY_OPTIONS: { value: PaydayCode; label: string }[] = [
   ...Array.from({ length: 28 }, (_, i) => {
@@ -58,36 +62,19 @@ export const PAYDAY_OPTIONS: { value: PaydayCode; label: string }[] = [
   { value: "last", label: "말일 (매월 마지막 날)" },
 ];
 
-// payday picker value -> persisted (cycle_mode, cycle_start_day).
-//  - '1' or 'last'  -> calendar (the calendar month IS the tracking window:
-//    a month-end paycheck funds the next calendar month, a 1st-of-month
-//    paycheck funds this one). startDay is meaningless in calendar mode but
-//    the column is NOT NULL + CHECK 1..31, so we always send 1.
-//  - '2'..'28'      -> income_day with that exact startDay (all <=28, so the
-//    short-month clamp never fires).
-export function paydayToCycle(code: PaydayCode): CycleSettings {
-  if (code === "last" || code === "1") {
-    return { mode: "calendar", startDay: 1 };
-  }
-  const n = Number(code);
-  if (Number.isInteger(n) && n >= 2 && n <= 28) {
-    return { mode: "income_day", startDay: n };
-  }
-  // Defensive fallback for any unexpected value.
-  return { mode: "calendar", startDay: 1 };
+// Payday picker value -> user_settings.payday smallint (Model B):
+// 'last' -> 0 (말일, shares payment-day.ts PAYMENT_DAY_END_OF_MONTH=0), else the
+// literal day 1..28. Replaces the old paydayToCycle calendar/income_day mapping.
+export function paydayCodeToDb(code: PaydayCode): number {
+  return code === "last" ? 0 : Number(code);
 }
 
-// persisted (cycle_mode, cycle_start_day) -> payday picker value, for the
-// initial Select state on load. Legacy income_day 29/30/31 rows (incl. the
-// month-end payers hurt by the old 31-clamp bug) surface as 'last'; their DB
-// value is left untouched until the user saves, at which point paydayToCycle
-// quietly upgrades them to calendar/1.
-export function cycleToPayday(mode: CycleMode, startDay: number): PaydayCode {
-  if (mode === "calendar") return "1";
-  // income_day
-  if (startDay >= 2 && startDay <= 28) return String(startDay);
-  if (startDay >= 29) return "last"; // legacy month-end payers
-  return "1"; // income_day startDay === 1 is equivalent to calendar/1
+// Inverse of paydayCodeToDb, for the Select's initial value: 0 -> 'last', else
+// the day string. Replaces the old cycleToPayday mapping. Note: after the M2
+// backfill, legacy 말일 payers that were stored under calendar mode surface as
+// payday=1 -> '1일' (lossy, documented); they must re-select 말일 in Settings.
+export function dbToPaydayCode(payday: number): PaydayCode {
+  return payday === 0 ? "last" : String(payday);
 }
 
 export function parseYearMonth(ym: string): Date | null {
@@ -219,10 +206,17 @@ export function clampDayToMonth(
   return Math.min(Math.max(1, day), lastDay);
 }
 
-// Computes the cycle range (start inclusive, end exclusive) that contains
-// `anchor`. For calendar mode this is the calendar month of `anchor`. For
-// income_day mode this is [N of month, N of next month) with short-month
-// clamping on both ends.
+/**
+ * @deprecated Model B replaced this with
+ * lib/utils/payday-cycle.ts::getCycleRangeB (payday + payroll_rule + holidays).
+ * Kept (deprecate-preserve) as a rollback surface; has no callers once all
+ * Model B consumer edits land.
+ *
+ * Computes the cycle range (start inclusive, end exclusive) that contains
+ * `anchor`. For calendar mode this is the calendar month of `anchor`. For
+ * income_day mode this is [N of month, N of next month) with short-month
+ * clamping on both ends.
+ */
 export function getCycleRange(
   mode: CycleMode,
   startDay: number,
@@ -411,6 +405,12 @@ export function classifyDailyAmount(
   return "normal";
 }
 
+/**
+ * @deprecated Model B replaced this with
+ * lib/utils/payday-cycle.ts::resolveDashboardParamsB (payday + payroll_rule +
+ * holidays). Kept (deprecate-preserve) as a rollback surface; has no callers
+ * once all Model B consumer edits land.
+ */
 export function resolveDashboardParams(
   params: { ym?: string; day?: string },
   cycle: CycleSettings = DEFAULT_CYCLE,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 
@@ -18,12 +18,15 @@ import {
   formatRelativeKoreanDate,
   toISODate,
 } from "@/lib/utils/date";
-import { getCycleRange, type CycleMode } from "@/lib/utils/calendar";
+import { getCycleRangeB, type PayrollRule } from "@/lib/utils/payday-cycle";
 import { cn } from "@/lib/utils";
 
 type SearchSheetProps = {
-  cycleMode: CycleMode;
-  cycleStartDay: number;
+  payday: number;
+  payrollRule: PayrollRule;
+  // Serialized across the RSC→client boundary as a string[] (Sets aren't
+  // serializable); rebuilt into a Set inside the component.
+  holidays: string[];
 };
 
 const DEBOUNCE_MS = 300;
@@ -39,7 +42,11 @@ type FetchState =
     }
   | { status: "error"; error: string };
 
-export function SearchSheet({ cycleMode, cycleStartDay }: SearchSheetProps) {
+export function SearchSheet({
+  payday,
+  payrollRule,
+  holidays,
+}: SearchSheetProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [state, setState] = useState<FetchState>({ status: "idle" });
@@ -47,6 +54,7 @@ export function SearchSheet({ cycleMode, cycleStartDay }: SearchSheetProps) {
   const requestIdRef = useRef(0);
   const router = useRouter();
   const inputId = useId();
+  const holidaySet = useMemo(() => new Set(holidays), [holidays]);
 
   // Reset on open. The empty-query render path also covers "idle" so we don't
   // strictly need to clear `state`, but doing it here keeps the next open from
@@ -99,9 +107,54 @@ export function SearchSheet({ cycleMode, cycleStartDay }: SearchSheetProps) {
 
   function handleResultTap(item: SearchMemoResultItem) {
     const txDate = new Date(item.spent_at);
-    const range = getCycleRange(cycleMode, cycleStartDay, txDate);
+    // getCycleRangeB takes a NOMINAL month, not an arbitrary date — so to find
+    // the cycle CONTAINING txDate we probe the candidate nominal months around
+    // it (its own month, the prior month, and the next month — a tx can only
+    // fall in the cycle anchored to one of these, accounting for 말일 +1-day
+    // boundaries) and pick the range whose [start, end) brackets txDate. We
+    // compare on local-tz midnight to stay tz-consistent with the engine.
+    const txMidnight = new Date(
+      txDate.getFullYear(),
+      txDate.getMonth(),
+      txDate.getDate(),
+      0,
+      0,
+      0,
+      0,
+    ).getTime();
+    let anchorYm: string | null = null;
+    for (const delta of [0, -1, 1]) {
+      const nominalMonth = new Date(
+        txDate.getFullYear(),
+        txDate.getMonth() + delta,
+        1,
+        0,
+        0,
+        0,
+        0,
+      );
+      const range = getCycleRangeB(payday, payrollRule, holidaySet, nominalMonth);
+      if (
+        txMidnight >= range.start.getTime() &&
+        txMidnight < range.end.getTime()
+      ) {
+        anchorYm = range.anchorYm;
+        break;
+      }
+    }
     const params = new URLSearchParams();
-    params.set("ym", range.anchorYm);
+    // Defensive fallback: if no probed cycle bracketed txDate (should not
+    // happen), use the cycle anchored to txDate's own month.
+    params.set(
+      "ym",
+      anchorYm ??
+        getCycleRangeB(
+          payday,
+          payrollRule,
+          holidaySet,
+          new Date(txDate.getFullYear(), txDate.getMonth(), 1, 0, 0, 0, 0),
+        ).anchorYm,
+    );
     params.set("day", toISODate(txDate));
     params.set("focus", item.id);
     setOpen(false);

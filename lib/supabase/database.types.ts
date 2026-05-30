@@ -26,6 +26,10 @@ export type Database = {
         Row: {
           user_id: string;
           monthly_income: number;
+          // Model B: payday (0=말일, 1..28) + payroll_rule drive the budget
+          // cycle. cycle_mode/cycle_start_day are deprecated-preserved.
+          payday: number;
+          payroll_rule: "prev" | "same" | "next";
           cycle_mode: "calendar" | "income_day";
           cycle_start_day: number;
           friend_spending_notifications: boolean;
@@ -36,6 +40,8 @@ export type Database = {
         Insert: {
           user_id: string;
           monthly_income?: number;
+          payday?: number;
+          payroll_rule?: "prev" | "same" | "next";
           cycle_mode?: "calendar" | "income_day";
           cycle_start_day?: number;
           friend_spending_notifications?: boolean;
@@ -46,6 +52,8 @@ export type Database = {
         Update: {
           user_id?: string;
           monthly_income?: number;
+          payday?: number;
+          payroll_rule?: "prev" | "same" | "next";
           cycle_mode?: "calendar" | "income_day";
           cycle_start_day?: number;
           friend_spending_notifications?: boolean;
@@ -499,6 +507,21 @@ export type Database = {
         };
         Relationships: [];
       };
+      holidays: {
+        Row: {
+          d: string;
+          name: string | null;
+        };
+        Insert: {
+          d: string;
+          name?: string | null;
+        };
+        Update: {
+          d?: string;
+          name?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -509,8 +532,8 @@ export type Database = {
       get_user_cycle: {
         Args: { target: string };
         Returns: {
-          cycle_mode: "calendar" | "income_day";
-          cycle_start_day: number;
+          payday: number;
+          payroll_rule: "prev" | "same" | "next";
         }[];
       };
       delete_category: {

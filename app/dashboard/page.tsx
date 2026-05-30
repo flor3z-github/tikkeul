@@ -13,11 +13,12 @@ import { PageHeader } from "@/components/layout/header";
 import { LinkPending } from "@/components/layout/nav-progress";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { parseYearMonth } from "@/lib/utils/calendar";
 import {
-  type CycleSettings,
-  DEFAULT_CYCLE,
-  resolveDashboardParams,
-} from "@/lib/utils/calendar";
+  resolveDashboardParamsB,
+  type PayrollRule,
+} from "@/lib/utils/payday-cycle";
+import { getHolidays, holidayRangeForAnchor } from "@/lib/queries/holidays";
 import { getActiveFriendCode } from "@/lib/queries/friend-codes";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -76,7 +77,7 @@ export default async function DashboardPage({
       supabase
         .from("user_settings")
         .select(
-          "cycle_mode, cycle_start_day, monthly_income, friend_spending_notifications, transaction_interaction_notifications",
+          "payday, payroll_rule, monthly_income, friend_spending_notifications, transaction_interaction_notifications",
         )
         .eq("user_id", viewerId)
         .maybeSingle(),
@@ -127,6 +128,15 @@ export default async function DashboardPage({
   // viewingUserId. All independent — fired in parallel. Friend-only queries
   // are stubbed in own mode so the array shape stays stable.
   const profileTargets = Array.from(new Set([viewerId, ...friendIds]));
+  // Holidays for the viewed anchor year ±1 (cycles cross year boundaries — a
+  // Jan cycle can start in prior-year Dec, a Dec 말일 cycle can end in next-year
+  // Jan). Independent of viewingUserId, so it rides Round 2's parallel batch to
+  // avoid a serial RTT. Resolved BEFORE the cycle so resolveDashboardParamsB
+  // sees the full holiday set.
+  const anchorYear =
+    parseYearMonth(sp.ym ?? "")?.getFullYear() ?? new Date().getFullYear();
+  const { yearStart: holidayYearStart, yearEnd: holidayYearEnd } =
+    holidayRangeForAnchor(anchorYear);
   const [
     profileRowsRes,
     friendCycleRes,
@@ -134,6 +144,7 @@ export default async function DashboardPage({
     ownFixedRes,
     dmIndexRes,
     ownTxCountRes,
+    holidays,
   ] = await Promise.all([
     profileTargets.length > 0
       ? supabase
@@ -177,10 +188,15 @@ export default async function DashboardPage({
           .eq("user_id", viewerId)
           .is("deleted_at", null)
       : Promise.resolve({ count: 0 as number | null }),
+    getHolidays(holidayYearStart, holidayYearEnd, supabase),
   ]);
 
-  // Resolve cycle: own → from user_settings; friend → from get_user_cycle.
-  let cycle: CycleSettings = DEFAULT_CYCLE;
+  // Resolve cycle: own → from user_settings (payday + payroll_rule); friend →
+  // from get_user_cycle (returns the same two fields, never monthly_income).
+  // Model B: the cycle is computed in JS from payday + payroll_rule + the
+  // public-holiday set, so friend cycles need no extra DB exposure.
+  let payday = 1;
+  let rule: PayrollRule = "prev";
   let ownSettings: { hasSettings: boolean; monthlyIncome: number } = {
     hasSettings: false,
     monthlyIncome: 0,
@@ -188,10 +204,8 @@ export default async function DashboardPage({
   if (isOwn) {
     const ownRow = ownSettingsRes.data;
     if (ownRow) {
-      cycle = {
-        mode: ownRow.cycle_mode,
-        startDay: Number(ownRow.cycle_start_day ?? 1),
-      };
+      payday = Number(ownRow.payday ?? 1);
+      rule = (ownRow.payroll_rule ?? "prev") as PayrollRule;
       ownSettings = {
         hasSettings: true,
         monthlyIncome: Number(ownRow.monthly_income ?? 0),
@@ -199,19 +213,17 @@ export default async function DashboardPage({
     }
   } else {
     const row = ((friendCycleRes.data ?? []) as Array<{
-      cycle_mode: "calendar" | "income_day";
-      cycle_start_day: number | null;
+      payday: number;
+      payroll_rule: "prev" | "same" | "next";
     }>)[0];
     if (row) {
-      cycle = {
-        mode: row.cycle_mode,
-        startDay: Number(row.cycle_start_day ?? 1),
-      };
+      payday = Number(row.payday ?? 1);
+      rule = (row.payroll_rule ?? "prev") as PayrollRule;
     }
   }
 
   const { ym, day, cycleStart, cycleEnd, cycleMode, cycleLabel } =
-    resolveDashboardParams(sp, cycle);
+    resolveDashboardParamsB(sp, payday, rule, holidays);
   const startIso = cycleStart.toISOString();
   const endIso = cycleEnd.toISOString();
 
@@ -344,8 +356,9 @@ export default async function DashboardPage({
             />
             {isOwn ? (
               <SearchSheet
-                cycleMode={cycle.mode}
-                cycleStartDay={cycle.startDay}
+                payday={payday}
+                payrollRule={rule}
+                holidays={Array.from(holidays)}
               />
             ) : null}
             {isOwn ? (

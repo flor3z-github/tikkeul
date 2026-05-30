@@ -75,6 +75,15 @@ export function SpendingMonthGrid({
       ? cycleCells(cycleStart, cycleEnd)
       : calendarCells(ym);
 
+  // The primary month is the header-label month (ym === range.anchorYm, which
+  // already folds in labelMonthIndex — 말일 labels as the next month). A cycle
+  // can span two months (e.g. a 말일 cycle running 5/30–6/30 labeled 6월); cells
+  // outside the primary month render as "M/D" so the neighbor month is obvious.
+  // Calendar mode hides out-of-month cells entirely, so this only fires in
+  // cycle (income_day) mode.
+  const primaryYear = Number(ym.slice(0, 4));
+  const primaryMonth = Number(ym.slice(5, 7)) - 1;
+
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-7 gap-x-1 px-0.5 pb-1.5 text-[11px] font-medium text-muted-foreground">
@@ -109,10 +118,14 @@ export function SpendingMonthGrid({
           const state = classifyDailyAmount(amount, availableBudget);
           const isSelected = cell.inCycle && cell.iso === selectedDay;
           const hasFixedExpense = fixedExpenseDays?.has(cell.iso) === true;
+          const isOtherMonth =
+            cell.date.getFullYear() !== primaryYear ||
+            cell.date.getMonth() !== primaryMonth;
           return (
             <DayCell
               key={`${cell.iso}-${i}`}
               day={cell.date.getDate()}
+              month={isOtherMonth ? cell.date.getMonth() + 1 : undefined}
               amount={amount}
               state={state}
               inMonth={cell.inCycle}

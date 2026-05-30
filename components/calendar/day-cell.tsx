@@ -6,6 +6,9 @@ import type { DayState } from "@/lib/utils/calendar";
 
 type DayCellProps = {
   day: number;
+  /** When set (cell falls outside the primary/label month), the number renders
+   *  as "M/D" instead of just the day, so the neighbor month is obvious. */
+  month?: number;
   amount: number;
   state: DayState;
   inMonth: boolean;
@@ -26,6 +29,7 @@ const AMOUNT_TONE: Record<DayState, string> = {
 
 export function DayCell({
   day,
+  month,
   amount,
   state,
   inMonth,
@@ -75,11 +79,11 @@ export function DayCell({
       >
         <span
           className={cn(
-            "flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[13px] font-semibold leading-none tabular-nums",
+            "flex h-7 min-w-7 items-center justify-center whitespace-nowrap rounded-full px-1.5 text-[13px] font-semibold leading-none tabular-nums",
             isToday && !isSelected ? "bg-primary text-primary-foreground" : dayTone,
           )}
         >
-          {day}
+          {month ? `${month}/${day}` : day}
         </span>
         {hasAmount ? (
           <span

@@ -39,20 +39,22 @@ export async function saveSettingsAction(
     };
   }
 
-  const cycleModeRaw = String(formData.get("cycle_mode") ?? "calendar");
-  if (cycleModeRaw !== "calendar" && cycleModeRaw !== "income_day") {
-    return { ok: false, error: "예산 주기 모드가 올바르지 않아요." };
+  // Model B: payday (0=말일, 1..28) + payroll_rule. cycle_mode/cycle_start_day
+  // are no longer written (deprecated-preserved at their backfilled values).
+  const payday = Number(formData.get("payday") ?? 1);
+  if (!Number.isInteger(payday) || payday < 0 || payday > 28) {
+    return { ok: false, error: "급여일이 올바르지 않아요." };
   }
-  const cycleMode = cycleModeRaw as "calendar" | "income_day";
 
-  const cycleStartDay = Number(formData.get("cycle_start_day") ?? 1);
+  const payrollRuleRaw = String(formData.get("payroll_rule") ?? "prev");
   if (
-    !Number.isInteger(cycleStartDay) ||
-    cycleStartDay < 1 ||
-    cycleStartDay > 31
+    payrollRuleRaw !== "prev" &&
+    payrollRuleRaw !== "same" &&
+    payrollRuleRaw !== "next"
   ) {
-    return { ok: false, error: "시작일은 1~31일 사이여야 해요." };
+    return { ok: false, error: "급여 규정이 올바르지 않아요." };
   }
+  const payrollRule = payrollRuleRaw as "prev" | "same" | "next";
 
   const { error: settingsError } = await supabase
     .from("user_settings")
@@ -60,8 +62,8 @@ export async function saveSettingsAction(
       {
         user_id: user.id,
         monthly_income: monthlyIncome,
-        cycle_mode: cycleMode,
-        cycle_start_day: cycleStartDay,
+        payday,
+        payroll_rule: payrollRule,
       },
       { onConflict: "user_id" },
     );

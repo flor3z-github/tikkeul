@@ -10,7 +10,8 @@ import { SettingsExtras } from "@/components/settings/extras-section";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
-import { getCycleRange } from "@/lib/utils/calendar";
+import { getHolidays, holidayRangeForAnchor } from "@/lib/queries/holidays";
+import { getCurrentCycleB, type PayrollRule } from "@/lib/utils/payday-cycle";
 import { toISODate } from "@/lib/utils/date";
 
 export default async function SettingsPage() {
@@ -19,11 +20,14 @@ export default async function SettingsPage() {
   const userId = claimsData?.claims?.sub ?? null;
   if (!userId) redirect("/login");
 
-  const [settingsResult, profileResult] = await Promise.all([
+  // Cycles cross year boundaries, so load ±1 year of holidays around now.
+  const { yearStart, yearEnd } = holidayRangeForAnchor(new Date().getFullYear());
+
+  const [settingsResult, profileResult, holidays] = await Promise.all([
     supabase
       .from("user_settings")
       .select(
-        "monthly_income, cycle_mode, cycle_start_day, friend_spending_notifications, transaction_interaction_notifications",
+        "monthly_income, payday, payroll_rule, friend_spending_notifications, transaction_interaction_notifications",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -32,6 +36,7 @@ export default async function SettingsPage() {
       .select("display_name")
       .eq("id", userId)
       .maybeSingle(),
+    getHolidays(yearStart, yearEnd, supabase),
   ]);
 
   if (settingsResult.error) {
@@ -78,8 +83,11 @@ export default async function SettingsPage() {
       <SettingsForm
         initialIncome={Number(settingsResult.data?.monthly_income ?? 0)}
         initialNickname={profileResult.data?.display_name ?? ""}
-        initialCycleMode={settingsResult.data?.cycle_mode ?? "calendar"}
-        initialCycleStartDay={Number(settingsResult.data?.cycle_start_day ?? 1)}
+        initialPayday={Number(settingsResult.data?.payday ?? 1)}
+        initialPayrollRule={
+          (settingsResult.data?.payroll_rule ?? "prev") as PayrollRule
+        }
+        holidays={Array.from(holidays)}
       />
 
       {(() => {
@@ -87,11 +95,12 @@ export default async function SettingsPage() {
         // extras section can bound its calendar picker. The dashboard does
         // this same calc for the rendered cycle — here we always anchor on
         // today since settings has no month-switcher of its own.
-        const cycleMode = settingsResult.data?.cycle_mode ?? "calendar";
-        const cycleStartDay = Number(
-          settingsResult.data?.cycle_start_day ?? 1,
-        );
-        const range = getCycleRange(cycleMode, cycleStartDay, new Date());
+        const payday = Number(settingsResult.data?.payday ?? 1);
+        const rule = (settingsResult.data?.payroll_rule ?? "prev") as PayrollRule;
+        // Resolve the cycle CONTAINING today (not today's nominal-month cycle) —
+        // on edge days a prev/next/말일 adjustment moves the boundary across a
+        // month line, so anchoring on today's month would return the wrong cycle.
+        const range = getCurrentCycleB(payday, rule, holidays);
         const now = new Date();
         const todayMid = new Date(
           now.getFullYear(),
