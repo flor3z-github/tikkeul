@@ -2,6 +2,15 @@ import { withSerwist } from "@serwist/turbopack";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Pin the Turbopack workspace root to this project. Without this, Turbopack
+  // walks up the tree looking for a lockfile and can latch onto a stray
+  // C:\Users\<me>\package-lock.json (left behind by `npx supabase`), making it
+  // treat the entire home directory as the root — it then scans/watches all of
+  // it, and route compiles (e.g. /login) crawl. `pnpm dev`/`pnpm build` always
+  // run from the project root, so process.cwd() is the correct root here.
+  turbopack: {
+    root: process.cwd(),
+  },
   // Allow extra origins (e.g. a LAN IP for testing on a phone over Wi-Fi)
   // to load Next dev resources like /_next/webpack-hmr. Without this,
   // React Refresh fails silently on the cross-origin LAN URL and client
