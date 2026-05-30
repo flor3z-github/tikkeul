@@ -7,7 +7,6 @@ import { saveSettingsAction } from "@/app/settings/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -17,10 +16,13 @@ import {
 } from "@/components/ui/select";
 import {
   type CycleMode,
+  type PaydayCode,
+  PAYDAY_OPTIONS,
+  cycleToPayday,
+  paydayToCycle,
   formatCycleLabelLong,
   getCycleRange,
 } from "@/lib/utils/calendar";
-import { cn } from "@/lib/utils";
 import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import { NICKNAME_MAX_LENGTH } from "@/lib/utils/nickname";
 
@@ -40,8 +42,9 @@ export function SettingsForm({
   const [state, formAction, pending] = useActionState(saveSettingsAction, null);
   const [income, setIncome] = useState(formatNumber(initialIncome));
   const [nickname, setNickname] = useState(initialNickname);
-  const [cycleMode, setCycleMode] = useState<CycleMode>(initialCycleMode);
-  const [startDay, setStartDay] = useState<number>(initialCycleStartDay);
+  const [payday, setPayday] = useState<PaydayCode>(
+    cycleToPayday(initialCycleMode, initialCycleStartDay),
+  );
 
   useEffect(() => {
     if (!state) return;
@@ -52,11 +55,12 @@ export function SettingsForm({
     }
   }, [state]);
 
+  const mapped = useMemo(() => paydayToCycle(payday), [payday]);
   const cyclePreview = useMemo(() => {
-    if (cycleMode !== "income_day") return null;
-    const range = getCycleRange("income_day", startDay, new Date());
+    if (mapped.mode === "calendar") return null; // 평서문으로 따로 안내
+    const range = getCycleRange("income_day", mapped.startDay, new Date());
     return formatCycleLabelLong(range.start, range.end);
-  }, [cycleMode, startDay]);
+  }, [mapped]);
 
   return (
     <form action={formAction} className="space-y-6">
@@ -103,111 +107,48 @@ export function SettingsForm({
       </div>
 
       <fieldset className="space-y-3">
-        <Label>예산 주기</Label>
+        <Label htmlFor="payday">돈 들어오는 날</Label>
         <p className="text-xs text-muted-foreground">
-          소비를 어떤 기간으로 집계할지 선택해요.
+          월급·용돈처럼 돈이 들어오는 날에 맞춰 소비를 집계해요.
         </p>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <RadioGroup
-            value={cycleMode}
-            onValueChange={(value) => setCycleMode(value as CycleMode)}
-            className="divide-y divide-border"
-          >
-            <div
-              role="presentation"
-              onClick={() => setCycleMode("calendar")}
-              className="flex cursor-pointer items-start gap-3 p-4"
-            >
-              <RadioGroupItem
-                id="cycle-calendar"
-                value="calendar"
-                className="mt-0.5"
-              />
-              <span className="flex flex-col gap-0.5">
-                <span className="text-sm font-semibold">매월 1일 ~ 말일</span>
-                <span className="text-xs text-muted-foreground">
-                  달력 기준으로 집계해요
-                </span>
-              </span>
-            </div>
-            <div
-              role="presentation"
-              onClick={() => setCycleMode("income_day")}
-              className="flex cursor-pointer items-start gap-3 p-4"
-            >
-              <RadioGroupItem
-                id="cycle-income"
-                value="income_day"
-                className="mt-0.5"
-              />
-              <span className="flex flex-col gap-0.5">
-                <span className="text-sm font-semibold">
-                  매월 N일 ~ 다음달 N-1일
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  급여일에 맞춰 집계해요
-                </span>
-              </span>
-            </div>
-          </RadioGroup>
-
-          <div
-            className={cn(
-              "grid transition-[grid-template-rows,border-color] duration-200 ease-out motion-reduce:transition-none",
-              cycleMode === "income_day"
-                ? "border-t border-border"
-                : "border-t border-transparent",
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4">
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="text-sm font-medium">매월</p>
+            {mapped.mode === "calendar" ? (
+              <p className="text-xs text-muted-foreground">
+                이번 달 소비를 1일부터 말일까지 모아서 보여드려요.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                이번 주기: {cyclePreview}
+              </p>
             )}
-            style={{
-              gridTemplateRows: cycleMode === "income_day" ? "1fr" : "0fr",
-            }}
-            aria-hidden={cycleMode !== "income_day"}
-          >
-            <div className="overflow-hidden">
-              <div className="space-y-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <Label htmlFor="cycle_start_day" className="text-sm">
-                    시작일
-                  </Label>
-                  <Select
-                    value={String(startDay)}
-                    onValueChange={(value) => setStartDay(Number(value))}
-                    disabled={cycleMode !== "income_day"}
-                  >
-                    <SelectTrigger
-                      id="cycle_start_day"
-                      className="h-10 w-28 rounded-xl text-[14px]"
-                      tabIndex={cycleMode === "income_day" ? 0 : -1}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(
-                        (day) => (
-                          <SelectItem key={day} value={String(day)}>
-                            {day}일
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {cyclePreview && (
-                  <p className="text-xs text-muted-foreground">
-                    이번 주기: {cyclePreview}
-                  </p>
-                )}
-                {startDay >= 29 && (
-                  <p className="text-xs text-muted-foreground">
-                    짧은 달에는 말일을 기준으로 짧아져요. (예: 2월)
-                  </p>
-                )}
-              </div>
-            </div>
           </div>
-          <input type="hidden" name="cycle_start_day" value={startDay} />
+          <Select
+            value={payday}
+            onValueChange={(value) => setPayday(value ?? "1")}
+          >
+            <SelectTrigger
+              id="payday"
+              className="h-10 w-28 shrink-0 rounded-xl text-[14px]"
+            >
+              <SelectValue>
+                {(value) =>
+                  value === "last" ? "말일" : value ? `${value}일` : ""
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {PAYDAY_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <input type="hidden" name="cycle_mode" value={cycleMode} />
+        <input type="hidden" name="cycle_mode" value={mapped.mode} />
+        <input type="hidden" name="cycle_start_day" value={mapped.startDay} />
       </fieldset>
 
       <Button

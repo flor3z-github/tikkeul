@@ -44,6 +44,52 @@ export type ResolvedDashboardParams = {
 
 export const DEFAULT_CYCLE: CycleSettings = { mode: "calendar", startDay: 1 };
 
+// Payday picker options shown in Settings. '1'..'28' map to a real day-of-month;
+// 'last' is the end-of-month case (absorbed into calendar mode — see
+// paydayToCycle). 29/30/31 are intentionally NOT offered: a true month-end
+// payer picks 'last', and capping income_day startDay at 28 makes the
+// short-month clamp in getCycleRange structurally unreachable for new rows.
+export type PaydayCode = string; // "1".."28" | "last"
+export const PAYDAY_OPTIONS: { value: PaydayCode; label: string }[] = [
+  ...Array.from({ length: 28 }, (_, i) => {
+    const day = i + 1;
+    return { value: String(day), label: `${day}일` };
+  }),
+  { value: "last", label: "말일 (매월 마지막 날)" },
+];
+
+// payday picker value -> persisted (cycle_mode, cycle_start_day).
+//  - '1' or 'last'  -> calendar (the calendar month IS the tracking window:
+//    a month-end paycheck funds the next calendar month, a 1st-of-month
+//    paycheck funds this one). startDay is meaningless in calendar mode but
+//    the column is NOT NULL + CHECK 1..31, so we always send 1.
+//  - '2'..'28'      -> income_day with that exact startDay (all <=28, so the
+//    short-month clamp never fires).
+export function paydayToCycle(code: PaydayCode): CycleSettings {
+  if (code === "last" || code === "1") {
+    return { mode: "calendar", startDay: 1 };
+  }
+  const n = Number(code);
+  if (Number.isInteger(n) && n >= 2 && n <= 28) {
+    return { mode: "income_day", startDay: n };
+  }
+  // Defensive fallback for any unexpected value.
+  return { mode: "calendar", startDay: 1 };
+}
+
+// persisted (cycle_mode, cycle_start_day) -> payday picker value, for the
+// initial Select state on load. Legacy income_day 29/30/31 rows (incl. the
+// month-end payers hurt by the old 31-clamp bug) surface as 'last'; their DB
+// value is left untouched until the user saves, at which point paydayToCycle
+// quietly upgrades them to calendar/1.
+export function cycleToPayday(mode: CycleMode, startDay: number): PaydayCode {
+  if (mode === "calendar") return "1";
+  // income_day
+  if (startDay >= 2 && startDay <= 28) return String(startDay);
+  if (startDay >= 29) return "last"; // legacy month-end payers
+  return "1"; // income_day startDay === 1 is equivalent to calendar/1
+}
+
 export function parseYearMonth(ym: string): Date | null {
   const m = YM_RE.exec(ym);
   if (!m) return null;
