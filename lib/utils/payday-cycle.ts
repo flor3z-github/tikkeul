@@ -95,12 +95,13 @@ export function resolveDeposit(
 }
 
 /**
- * Cycle anchor (start marker) for the deposit of (year, monthIndex). A 말일
- * paycheck funds the NEXT tracking window, so its anchor is the day AFTER the
- * deposit (+1); every other payday anchors on the deposit day itself. The +1
- * may push the anchor onto a weekend/non-business day — intentional, anchors
- * are date-markers, not deposit days. e.g. 2026 Jan 말일 → deposit 1/30 (Fri)
- * → anchor 1/31 (Sat).
+ * Cycle anchor (start marker) for the deposit of (year, monthIndex). The anchor
+ * is the deposit day ITSELF for every payday, 말일 included — the budget cycle is
+ * [payday, next payday), so the day money arrives is day 1 of the cycle that
+ * paycheck funds, and a payday spend lands in the new cycle (not the prior one).
+ * (Previously 말일 anchored on deposit+1 to snap the cycle onto the calendar last
+ * day; that pushed the deposit day OUT of the cycle its paycheck funds — removed.)
+ * e.g. 2026 Jan 말일, prev → deposit 1/30 (Fri) = anchor 1/30.
  */
 export function resolveAnchor(
   year: number,
@@ -109,13 +110,7 @@ export function resolveAnchor(
   rule: PayrollRule,
   holidays: Set<string>,
 ): Date {
-  const deposit = resolveDeposit(year, monthIndex, payday, rule, holidays);
-  const offset = payday === PAYDAY_END_OF_MONTH ? 1 : 0;
-  return localMidnight(
-    deposit.getFullYear(),
-    deposit.getMonth(),
-    deposit.getDate() + offset,
-  );
+  return resolveDeposit(year, monthIndex, payday, rule, holidays);
 }
 
 /**
@@ -150,9 +145,9 @@ export function labelMonthIndex(payday: number): number {
  *   payday=1, Jan  → [2025-12-31, 2026-01-30) label '1월' (Feb nominal 2/1=Sun
  *                    → prev → 1/30; Jan nominal 1/1 신정 → prev → 2025-12-31)
  *   payday=20, Jan → [2026-01-20, 2026-02-20) label '1/20 – 2/19' (both biz days)
- *   payday=0(말일), Jan → [2026-01-31, 2026-02-28) label '2월'
- *                    (Jan deposit 1/31 Sat → prev 1/30, +1 = 1/31;
- *                     Feb deposit 2/28 Sat → prev 2/27, +1 = 2/28)
+ *   payday=0(말일), Jan → [2026-01-30, 2026-02-27) label '2월'
+ *                    (Jan deposit 1/31 Sat → prev → 1/30 = anchor;
+ *                     Feb deposit 2/28 Sat → prev → 2/27 = anchor)
  */
 export function getCycleRangeB(
   payday: number,
