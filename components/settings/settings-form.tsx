@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import { CalendarSync, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { saveSettingsAction } from "@/app/settings/actions";
@@ -29,10 +30,14 @@ type SettingsFormProps = {
   holidays: string[];
 };
 
-const PAYROLL_RULE_OPTIONS: { value: PayrollRule; label: string }[] = [
-  { value: "prev", label: "앞당겨서" },
-  { value: "same", label: "그대로" },
-  { value: "next", label: "미뤄서" },
+const PAYROLL_RULE_OPTIONS: {
+  value: PayrollRule;
+  label: string;
+  example?: string;
+}[] = [
+  { value: "prev", label: "앞당겨 들어와요", example: "예: 토요일이면 금요일" },
+  { value: "same", label: "날짜 그대로" },
+  { value: "next", label: "미뤄서 들어와요", example: "예: 토요일이면 월요일" },
 ];
 
 // 돈 들어오는 날 picker is grouped into 3 buckets that mirror the 3 distinct
@@ -66,6 +71,8 @@ export function SettingsForm({
   );
   const [payrollRule, setPayrollRule] =
     useState<PayrollRule>(initialPayrollRule);
+  // 급여 규정은 기본 접힘 — 주말·공휴일 보정이 필요한 사람만 펼친다(점진적 노출).
+  const [ruleOpen, setRuleOpen] = useState(false);
 
   useEffect(() => {
     if (!state) return;
@@ -227,41 +234,89 @@ export function SettingsForm({
             </div>
           </RadioGroup>
 
-          {/* 주말·공휴일 보정 — same box */}
-          <div className="flex items-center justify-between gap-3 border-t border-border py-4 pl-11 pr-4">
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <p className="text-sm font-medium">주말·공휴일과 겹치면</p>
+          {/* ── 하위 계층: 면을 낮춘(bg-muted) 종속 zone — 보정 + 프리뷰 ── */}
+          <div className="border-t border-border bg-muted/60">
+            {/* 주말·공휴일 보정 — 기본 접힘, 현재값 노출 + 펼치면 RadioGroup */}
+            <button
+              type="button"
+              onClick={() => setRuleOpen((open) => !open)}
+              aria-expanded={ruleOpen}
+              aria-controls="payroll-rule-panel"
+              className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
+            >
+              <span className="flex min-w-0 flex-1 items-center gap-3">
+                <CalendarSync
+                  aria-hidden
+                  className="size-5 shrink-0 text-muted-foreground"
+                />
+                <span className="text-sm font-medium text-muted-foreground">
+                  주말·공휴일 겹칠 때
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+                {payrollRuleLabel(payrollRule)}
+                <ChevronDown
+                  aria-hidden
+                  className={cn(
+                    "size-4 transition-transform duration-200 motion-reduce:transition-none",
+                    ruleOpen && "rotate-180",
+                  )}
+                />
+              </span>
+            </button>
+
+            <div
+              id="payroll-rule-panel"
+              className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
+              style={{ gridTemplateRows: ruleOpen ? "1fr" : "0fr" }}
+              aria-hidden={!ruleOpen}
+            >
+              <div className="overflow-hidden border-t border-border/50">
+                <RadioGroup
+                  value={payrollRule}
+                  onValueChange={(value) =>
+                    setPayrollRule((value ?? "prev") as PayrollRule)
+                  }
+                  className="gap-0"
+                >
+                  {PAYROLL_RULE_OPTIONS.map((opt, index) => (
+                    <div
+                      key={opt.value}
+                      role="presentation"
+                      onClick={() => setPayrollRule(opt.value)}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 py-3 pl-11 pr-4",
+                        index > 0 && "border-t border-border/50",
+                      )}
+                    >
+                      <RadioGroupItem
+                        id={`rule-${opt.value}`}
+                        value={opt.value}
+                        className="mt-0.5"
+                        tabIndex={ruleOpen ? 0 : -1}
+                      />
+                      <span className="space-y-0.5">
+                        <span className="block text-sm font-medium">
+                          {opt.label}
+                        </span>
+                        {opt.example ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {opt.example}
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            </div>
+
+            {/* cycle preview — tier-3, 가장 흐리게 */}
+            <div className="border-t border-border/50 px-4 py-3">
               <p className="text-xs text-muted-foreground">
-                돈이 실제로 들어오는 시점을 골라주세요.
+                이번 주기: {cyclePreview}
               </p>
             </div>
-            <Select
-              value={payrollRule}
-              onValueChange={(value) =>
-                setPayrollRule((value ?? "prev") as PayrollRule)
-              }
-            >
-              <SelectTrigger
-                id="payroll_rule"
-                className="h-10 w-28 shrink-0 rounded-xl text-[14px]"
-              >
-                <SelectValue>{(value) => payrollRuleLabel(value)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {PAYROLL_RULE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* cycle preview footer */}
-          <div className="border-t border-border bg-muted/30 px-4 py-3">
-            <p className="text-xs text-muted-foreground">
-              이번 주기: {cyclePreview}
-            </p>
           </div>
         </div>
 
