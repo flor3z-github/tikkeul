@@ -406,6 +406,26 @@ export function classifyDailyAmount(
 }
 
 /**
+ * Whether a calendar cell should render its day number as "M/D" (vs bare "D").
+ *
+ * Only fires in cycle (income_day) mode, where one cycle can span two months
+ * (e.g. a 말일 cycle 5/30–6/30). The month prefix marks just the boundaries:
+ * the cycle's first day (anchors the starting month) and every day-1 rollover.
+ * Calendar mode (single month) never carries a prefix → always false.
+ *
+ * Pure string comparison on "YYYY-MM-DD" — no `new Date(iso)` round-trip, so it
+ * can't drift across the UTC/KST boundary (see buildCycleMatrix's tz note).
+ */
+export function shouldShowMonthLabel(
+  iso: string,
+  cycleStartIso: string,
+  cycleMode: CycleMode,
+): boolean {
+  if (cycleMode !== "income_day") return false;
+  return iso.slice(8, 10) === "01" || iso === cycleStartIso;
+}
+
+/**
  * @deprecated Model B replaced this with
  * lib/utils/payday-cycle.ts::resolveDashboardParamsB (payday + payroll_rule +
  * holidays). Kept (deprecate-preserve) as a rollback surface; has no callers

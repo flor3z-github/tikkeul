@@ -10,6 +10,7 @@ import {
   parseISODate,
   parseYearMonth,
   resolveDashboardParams,
+  shouldShowMonthLabel,
 } from "@/lib/utils/calendar";
 import { toISODate } from "@/lib/utils/date";
 
@@ -234,5 +235,63 @@ describe("formatKoreanLongDate", () => {
 
   it("returns empty string for invalid input", () => {
     expect(formatKoreanLongDate("garbage")).toBe("");
+  });
+});
+
+describe("shouldShowMonthLabel", () => {
+  // 말일 cycle 5/30–6/30 (income_day): boundaries are 5/30 (cycle start) and
+  // 6/1 (month rollover). Everything else is a bare day.
+  const cycleStart = "2026-05-30";
+
+  it("labels the cycle's first day", () => {
+    expect(shouldShowMonthLabel("2026-05-30", cycleStart, "income_day")).toBe(
+      true,
+    );
+  });
+
+  it("labels every day-1 rollover", () => {
+    expect(shouldShowMonthLabel("2026-06-01", cycleStart, "income_day")).toBe(
+      true,
+    );
+  });
+
+  it("leaves interior days bare (e.g. 5/31, 6/2)", () => {
+    expect(shouldShowMonthLabel("2026-05-31", cycleStart, "income_day")).toBe(
+      false,
+    );
+    expect(shouldShowMonthLabel("2026-06-02", cycleStart, "income_day")).toBe(
+      false,
+    );
+  });
+
+  it("matches the documented 5/30·31·6/1·2·3 sequence", () => {
+    const seq = [
+      "2026-05-30",
+      "2026-05-31",
+      "2026-06-01",
+      "2026-06-02",
+      "2026-06-03",
+    ];
+    expect(
+      seq.map((iso) => shouldShowMonthLabel(iso, cycleStart, "income_day")),
+    ).toEqual([true, false, true, false, false]);
+  });
+
+  it("never labels in calendar mode, even on the 1st or the start day", () => {
+    expect(shouldShowMonthLabel("2026-06-01", "2026-06-01", "calendar")).toBe(
+      false,
+    );
+    expect(shouldShowMonthLabel("2026-06-15", "2026-06-01", "calendar")).toBe(
+      false,
+    );
+  });
+
+  it("handles a 그외 cycle (payday 20) where the start day is not the 1st", () => {
+    // 1/20–2/20: only 1/20 (start) and 2/1 (rollover) get a label.
+    const start = "2026-01-20";
+    expect(shouldShowMonthLabel("2026-01-20", start, "income_day")).toBe(true);
+    expect(shouldShowMonthLabel("2026-02-01", start, "income_day")).toBe(true);
+    expect(shouldShowMonthLabel("2026-01-21", start, "income_day")).toBe(false);
+    expect(shouldShowMonthLabel("2026-02-20", start, "income_day")).toBe(false);
   });
 });

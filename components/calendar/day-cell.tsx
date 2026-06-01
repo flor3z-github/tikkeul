@@ -6,8 +6,9 @@ import type { DayState } from "@/lib/utils/calendar";
 
 type DayCellProps = {
   day: number;
-  /** When set (cell falls outside the primary/label month), the number renders
-   *  as "M/D" instead of just the day, so the neighbor month is obvious. */
+  /** When set (cell sits on a month boundary — first day of the cycle or a
+   *  day-1 rollover), the number renders as "M/D" instead of just the day, so
+   *  the month change is obvious. */
   month?: number;
   amount: number;
   state: DayState;

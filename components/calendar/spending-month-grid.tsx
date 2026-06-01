@@ -5,8 +5,10 @@ import {
   buildCycleMatrix,
   buildMonthMatrix,
   classifyDailyAmount,
+  shouldShowMonthLabel,
   type CycleMode,
 } from "@/lib/utils/calendar";
+import { toISODate } from "@/lib/utils/date";
 
 type SpendingMonthGridProps = {
   ym: string;
@@ -75,14 +77,13 @@ export function SpendingMonthGrid({
       ? cycleCells(cycleStart, cycleEnd)
       : calendarCells(ym);
 
-  // The primary month is the header-label month (ym === range.anchorYm, which
-  // already folds in labelMonthIndex — 말일 labels as the next month). A cycle
-  // can span two months (e.g. a 말일 cycle running 5/30–6/30 labeled 6월); cells
-  // outside the primary month render as "M/D" so the neighbor month is obvious.
-  // Calendar mode hides out-of-month cells entirely, so this only fires in
-  // cycle (income_day) mode.
-  const primaryYear = Number(ym.slice(0, 4));
-  const primaryMonth = Number(ym.slice(5, 7)) - 1;
+  // In cycle (income_day) mode a single cycle can span two months (e.g. a 말일
+  // cycle running 5/30–6/30). We surface "M/D" only on month-boundary cells —
+  // the very first day cell (cycleStart, anchors the starting month) and every
+  // day-1 cell (where the month rolls over) — so the grid reads e.g.
+  // "5/30 · 31 · 6/1 · 2 · 3". Every other cell shows the bare day.
+  // Calendar mode (single month) never carries a month prefix.
+  const cycleStartIso = toISODate(cycleStart);
 
   return (
     <div className="space-y-2">
@@ -118,14 +119,16 @@ export function SpendingMonthGrid({
           const state = classifyDailyAmount(amount, availableBudget);
           const isSelected = cell.inCycle && cell.iso === selectedDay;
           const hasFixedExpense = fixedExpenseDays?.has(cell.iso) === true;
-          const isOtherMonth =
-            cell.date.getFullYear() !== primaryYear ||
-            cell.date.getMonth() !== primaryMonth;
+          const isMonthBoundary = shouldShowMonthLabel(
+            cell.iso,
+            cycleStartIso,
+            cycleMode,
+          );
           return (
             <DayCell
               key={`${cell.iso}-${i}`}
               day={cell.date.getDate()}
-              month={isOtherMonth ? cell.date.getMonth() + 1 : undefined}
+              month={isMonthBoundary ? cell.date.getMonth() + 1 : undefined}
               amount={amount}
               state={state}
               inMonth={cell.inCycle}
