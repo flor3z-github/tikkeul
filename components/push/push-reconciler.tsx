@@ -20,8 +20,20 @@ let reconciledThisLoad = false;
 // Invisible self-healer for the "flag on, but no live subscription" silent
 // failure: the server row gets pruned on a 404/410 (dead endpoint, PWA
 // reinstall, SW eviction) while user_settings still says notifications are on,
-// so the toggle shows ON and nothing ever arrives. On app entry we re-mint a
-// fresh subscription (forceFresh drops any stale local one) and re-register it.
+// so the toggle shows ON and nothing ever arrives. On app entry we re-register
+// the device's current subscription so its live endpoint is persisted again.
+//
+// forceFresh is deliberately FALSE here. pushManager.subscribe() is idempotent
+// for a given VAPID key, so reusing getSubscription() yields a STABLE endpoint
+// and the upsert merely refreshes last_seen_at in place — no new row. Passing
+// forceFresh=true (as this once did) runs unsubscribe()+subscribe() on EVERY
+// app open, minting a brand-new endpoint each time and piling up one
+// push_subscriptions row per open (observed: 60 rows / 14 days for one user,
+// all distinct endpoints, never re-seen). The self-heal still works without it:
+// if the server row was pruned, re-registering the reused subscription
+// re-inserts it. The only states reuse can't auto-recover — a local sub that is
+// silently dead at Apple, or a VAPID-key rotation — are rare (Apple seldom
+// 410s) / deploy-controlled, and both heal on the next settings re-toggle.
 export function PushReconciler({ vapidPublicKey, enabled }: Props) {
   useEffect(() => {
     if (reconciledThisLoad) return;
@@ -35,7 +47,7 @@ export function PushReconciler({ vapidPublicKey, enabled }: Props) {
     reconciledThisLoad = true;
     void (async () => {
       try {
-        const sub = await subscribeDevice(vapidPublicKey, true);
+        const sub = await subscribeDevice(vapidPublicKey, false);
         await registerPushSubscriptionAction({
           endpoint: sub.endpoint,
           p256dh: sub.p256dh,
