@@ -81,6 +81,13 @@ export async function redeemFriendCodeAction(
   }
 
   // Rate limit by recent attempts (uniform per user, regardless of validity).
+  // KNOWN LIMITATION (accepted): this count-then-insert is non-atomic across
+  // concurrent Server Action requests (separate connections), so parallel
+  // bursts can exceed REDEEM_LIMIT_PER_WINDOW (TOCTOU). Accepted because this
+  // is only a brute-force throttle — the redemption itself is atomic in the
+  // redeem_friend_code RPC (FOR UPDATE + ON CONFLICT), and the ~1B single-use
+  // code space with a 10-min TTL makes the race's few-x amplification moot. A
+  // true fix would fold this counter into the SECURITY DEFINER RPC (one txn).
   const windowStart = new Date(
     Date.now() - REDEEM_WINDOW_SECONDS * 1000,
   ).toISOString();
