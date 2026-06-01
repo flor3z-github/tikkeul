@@ -11,7 +11,8 @@
     "test:run": "TZ=Asia/Seoul vitest run",
     "test:utc": "TZ=UTC vitest run",
     "test:kst": "TZ=Asia/Seoul vitest run",
-    "gen:icons": "node scripts/gen-icons.mjs"
+    "gen:icons": "node scripts/gen-icons.mjs",
+    "gen:splash": "node scripts/gen-splash.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
