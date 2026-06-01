@@ -7,6 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "TZ=Asia/Seoul vitest",
+    "test:run": "TZ=Asia/Seoul vitest run",
+    "test:utc": "TZ=UTC vitest run",
+    "test:kst": "TZ=Asia/Seoul vitest run",
     "gen:icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
@@ -44,7 +48,9 @@
     "eslint-config-next": "16.2.6",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.7"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
