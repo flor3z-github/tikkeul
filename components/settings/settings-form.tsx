@@ -19,7 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { formatCycleLabelLong } from "@/lib/utils/calendar";
 import { cn } from "@/lib/utils";
 import { getCurrentCycleB, type PayrollRule } from "@/lib/utils/payday-cycle";
-import { formatNumber, parseAmountInput } from "@/lib/utils/money";
+import { formatAmountInput, formatNumber } from "@/lib/utils/money";
 import { NICKNAME_MAX_LENGTH } from "@/lib/utils/nickname";
 
 type SettingsFormProps = {
@@ -61,7 +61,9 @@ export function SettingsForm({
   holidays,
 }: SettingsFormProps) {
   const [state, formAction, pending] = useActionState(saveSettingsAction, null);
-  const [income, setIncome] = useState(formatNumber(initialIncome));
+  const [income, setIncome] = useState(
+    initialIncome ? formatNumber(initialIncome) : "",
+  );
   const [nickname, setNickname] = useState(initialNickname);
   const [group, setGroup] = useState<PaydayGroup>(
     initialPayday === 0 ? "last" : initialPayday >= 2 ? "mid" : "first",
@@ -123,9 +125,7 @@ export function SettingsForm({
             inputMode="numeric"
             autoComplete="off"
             value={income}
-            onChange={(event) =>
-              setIncome(formatNumber(parseAmountInput(event.target.value)))
-            }
+            onChange={(event) => setIncome(formatAmountInput(event.target.value))}
             placeholder="예: 3,000,000"
             className="h-12 rounded-2xl bg-card pr-10 text-[16px]"
           />

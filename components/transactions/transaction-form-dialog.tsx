@@ -51,7 +51,11 @@ import {
   type CategoryMutation,
 } from "@/components/transactions/category-picker-drawer";
 import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
-import { formatNumber, parseAmountInput } from "@/lib/utils/money";
+import {
+  formatAmountInput,
+  formatNumber,
+  parseAmountInput,
+} from "@/lib/utils/money";
 import type { TransactionVisibility } from "@/lib/queries/transactions";
 
 const QUICK_AMOUNTS: { value: number; label: string }[] = [
@@ -354,7 +358,7 @@ function TransactionFormBody({
   }
 
   function handleAmountChange(event: React.ChangeEvent<HTMLInputElement>) {
-    setAmountText(formatNumber(parseAmountInput(event.target.value)));
+    setAmountText(formatAmountInput(event.target.value));
     // Manual edits make the quick-add history unreliable — drop it.
     setQuickHistory([]);
   }

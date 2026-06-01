@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { X } from "lucide-react";
 
-import { formatNumber, parseAmountInput } from "@/lib/utils/money";
+import { formatAmountInput, parseAmountInput } from "@/lib/utils/money";
 
 type AmountInputProps = {
   value: string;
@@ -20,7 +20,7 @@ export function AmountInput({ value, onChange, autoFocus }: AmountInputProps) {
   const parsed = parseAmountInput(value);
 
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
-    onChange(formatNumber(parseAmountInput(event.target.value)));
+    onChange(formatAmountInput(event.target.value));
   }
 
   function focusInput() {

@@ -35,7 +35,11 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
-import { formatNumber, parseAmountInput } from "@/lib/utils/money";
+import {
+  formatAmountInput,
+  formatNumber,
+  parseAmountInput,
+} from "@/lib/utils/money";
 import { cn } from "@/lib/utils";
 
 const QUICK_AMOUNTS: { value: number; label: string }[] = [
@@ -226,7 +230,7 @@ function IncomeFormBody({
   }
 
   function handleAmountChange(event: React.ChangeEvent<HTMLInputElement>) {
-    setAmountText(formatNumber(parseAmountInput(event.target.value)));
+    setAmountText(formatAmountInput(event.target.value));
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
