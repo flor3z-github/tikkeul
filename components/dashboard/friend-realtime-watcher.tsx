@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -44,6 +44,14 @@ export function FriendRealtimeWatcher({
 }: Props) {
   const router = useRouter();
 
+  // Keep the latest nickname map in a ref so the realtime effect doesn't
+  // re-subscribe on every dashboard refresh — the parent re-creates this Map
+  // each RSC render, so it changes identity. The INSERT handler reads the ref.
+  const nicknameByIdRef = useRef(nicknameById);
+  useEffect(() => {
+    nicknameByIdRef.current = nicknameById;
+  }, [nicknameById]);
+
   useEffect(() => {
     const supabase = createClient();
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -80,7 +88,7 @@ export function FriendRealtimeWatcher({
               } | null;
               if (!row || row.sender_id === ownerUserId) return;
               const nickname =
-                nicknameById?.get(row.sender_id) ?? "친구";
+                nicknameByIdRef.current?.get(row.sender_id) ?? "친구";
               const trimmed = row.content.trim();
               const preview =
                 trimmed.length > TOAST_PREVIEW_LIMIT
@@ -125,7 +133,7 @@ export function FriendRealtimeWatcher({
       if (timer) clearTimeout(timer);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [ownerUserId, isOwn, nicknameById, router]);
+  }, [ownerUserId, isOwn, router]);
 
   return null;
 }
