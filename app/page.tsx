@@ -17,8 +17,10 @@ export default async function RootPage({
 
   // Push notifications cold-launch the PWA at start_url ("/") with the deep
   // target in `next` (see app/sw.ts) so iOS boots a clean standalone session.
-  // Forward only internal /dashboard deep-links to avoid an open redirect.
+  // Forward only internal /dashboard and /dm deep-links to avoid an open
+  // redirect. /dm/* is the DM thread target sent by notify-dm-message (friend
+  // reactions/comments); without it those notifications fall back to /dashboard.
   const target =
-    next && /^\/dashboard(?:[/?#]|$)/.test(next) ? next : "/dashboard";
+    next && /^\/(dashboard|dm)(?:[/?#]|$)/.test(next) ? next : "/dashboard";
   redirect(target);
 }
