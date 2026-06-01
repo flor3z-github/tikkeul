@@ -266,15 +266,19 @@ function currentLabelYm(
 /**
  * Model B replacement for resolveDashboardParams.
  *
- * `params.ym` is the LABEL month (what MonthSwitcher steps via
- * addMonths(ym, ±1)). We:
- *   1. Resolve the LABEL month (from ?ym, or the cycle currently containing
- *      `now`).
- *   2. Convert LABEL → NOMINAL month by subtracting labelMonthIndex(payday).
- *   3. getCycleRangeB(nominal) → its anchorYm === the original label, so the
- *      navigation round-trip is exact even for 말일 (+1-month label).
- *   4. Validate ?day within [start, end) with a today-in-cycle fallback
- *      (identical logic to the legacy resolveDashboardParams).
+ * Two anchoring paths:
+ *   A. `?day` present (push-notification deep link) → anchor on the cycle that
+ *      CONTAINS that day via findContainingCycle. `day` is the source of truth,
+ *      so the deep-linked row is always inside [start, end). See the inline
+ *      comment for why the deep link's `?ym` cannot be trusted here.
+ *   B. `?day` absent (MonthSwitcher) → `?ym` is the LABEL month (what the
+ *      switcher steps via addMonths(ym, ±1)). Resolve it (or the cycle currently
+ *      containing `now`), convert LABEL → NOMINAL by subtracting
+ *      labelMonthIndex(payday), then getCycleRangeB(nominal) — its anchorYm ===
+ *      the original label, so the navigation round-trip is exact even for 말일
+ *      (+1-month label).
+ * Both paths then validate ?day within [start, end) with a today-in-cycle
+ * fallback (identical logic to the legacy resolveDashboardParams).
  */
 export function resolveDashboardParamsB(
   params: { ym?: string; day?: string },
@@ -283,21 +287,40 @@ export function resolveDashboardParamsB(
   holidays: Set<string>,
   now: Date = new Date(),
 ): ResolvedDashboardParams {
-  const parsedYm = params.ym ? parseYearMonth(params.ym) : null;
-  const labelYm =
-    parsedYm == null
-      ? currentLabelYm(payday, rule, holidays, now)
-      : formatYearMonth(parsedYm);
+  const parsedDay = params.day ? parseISODate(params.day) : null;
 
-  const labelDate = parseYearMonth(labelYm) ?? now;
-  // LABEL → NOMINAL: subtract the 말일 +1-month offset.
-  const nominalDate = localMidnight(
-    labelDate.getFullYear(),
-    labelDate.getMonth() - labelMonthIndex(payday),
-    1,
-  );
+  // A deep link (push notification) carries `day` as the source of truth for
+  // which transaction to surface. notify-friend-spending emits the tx's CALENDAR
+  // month as `ym` (spent_at.slice(0,7)) next to the exact `day`. For a payday
+  // cycle that straddles a month boundary, that calendar `ym` can resolve to a
+  // cycle which does NOT contain `day` — a tx dated before the payday belongs to
+  // the PREVIOUS cycle — so anchoring on `ym` would drop the day override below
+  // AND fetch the wrong window ("해당 소비내역을 찾을 수 없어요"). When a valid `day`
+  // is present, anchor on the cycle that CONTAINS it so the deep-linked row is
+  // always inside [start, end). (When the day already falls in the ym-cycle this
+  // yields the identical range, so MonthSwitcher navigation — which never sends
+  // `day` — is unaffected.) Mirrors the legacy resolveDashboardParams day-anchor
+  // fix, ported onto the Model B engine.
+  let range: CycleRange;
+  if (parsedDay != null) {
+    range = findContainingCycle(payday, rule, holidays, parsedDay);
+  } else {
+    const parsedYm = params.ym ? parseYearMonth(params.ym) : null;
+    const labelYm =
+      parsedYm == null
+        ? currentLabelYm(payday, rule, holidays, now)
+        : formatYearMonth(parsedYm);
 
-  const range = getCycleRangeB(payday, rule, holidays, nominalDate, now);
+    const labelDate = parseYearMonth(labelYm) ?? now;
+    // LABEL → NOMINAL: subtract the 말일 +1-month offset.
+    const nominalDate = localMidnight(
+      labelDate.getFullYear(),
+      labelDate.getMonth() - labelMonthIndex(payday),
+      1,
+    );
+
+    range = getCycleRangeB(payday, rule, holidays, nominalDate, now);
+  }
 
   const todayInCycle =
     now.getTime() >= range.start.getTime() &&
@@ -305,15 +328,13 @@ export function resolveDashboardParamsB(
   const fallbackDay = todayInCycle ? toISODate(now) : toISODate(range.start);
 
   let day = fallbackDay;
-  if (params.day) {
-    const parsedDay = parseISODate(params.day);
-    if (
-      parsedDay &&
-      parsedDay.getTime() >= range.start.getTime() &&
-      parsedDay.getTime() < range.end.getTime()
-    ) {
-      day = params.day;
-    }
+  if (
+    params.day &&
+    parsedDay &&
+    parsedDay.getTime() >= range.start.getTime() &&
+    parsedDay.getTime() < range.end.getTime()
+  ) {
+    day = params.day;
   }
 
   return {
