@@ -417,27 +417,41 @@ export function resolveDashboardParams(
   now: Date = new Date(),
 ): ResolvedDashboardParams {
   const parsedYm = params.ym ? parseYearMonth(params.ym) : null;
-  // For income_day, treat `?ym=YYYY-MM` as "the cycle whose start lives in
-  // that month". Anchor on the (clamped) start-day so `addMonths(ym, ±1)`
-  // from MonthSwitcher round-trips deterministically.
+  const parsedDay = params.day ? parseISODate(params.day) : null;
+  // A deep link (push notification) carries `day` as the source of truth for
+  // which transaction to surface. In income_day mode the Edge function emits a
+  // calendar-month `ym` (spent_at.slice(0,7)) that can resolve to a cycle which
+  // does NOT contain that day: a tx dated before cycle_start_day belongs to the
+  // *previous* income-day cycle. Anchoring on `ym` would then drop the day
+  // override below AND fetch the wrong cycle window, so the notification lands
+  // on a day with no matching row ("해당 소비내역을 찾을 수 없어요"). Anchor on
+  // the day itself whenever one is present so the resolved cycle always
+  // contains it (when the day already falls inside the ym-cycle this yields the
+  // identical range, so normal navigation is unaffected).
+  //
+  // For income_day with only `?ym=YYYY-MM` (MonthSwitcher), treat it as "the
+  // cycle whose start lives in that month": anchor on the (clamped) start-day so
+  // `addMonths(ym, ±1)` round-trips deterministically.
   const anchor =
-    parsedYm == null
-      ? now
-      : cycle.mode === "income_day"
-        ? new Date(
-            parsedYm.getFullYear(),
-            parsedYm.getMonth(),
-            clampDayToMonth(
+    parsedDay != null
+      ? parsedDay
+      : parsedYm == null
+        ? now
+        : cycle.mode === "income_day"
+          ? new Date(
               parsedYm.getFullYear(),
               parsedYm.getMonth(),
-              cycle.startDay,
-            ),
-            0,
-            0,
-            0,
-            0,
-          )
-        : parsedYm;
+              clampDayToMonth(
+                parsedYm.getFullYear(),
+                parsedYm.getMonth(),
+                cycle.startDay,
+              ),
+              0,
+              0,
+              0,
+              0,
+            )
+          : parsedYm;
   const range = getCycleRange(cycle.mode, cycle.startDay, anchor, now);
 
   const todayInCycle =
@@ -446,15 +460,13 @@ export function resolveDashboardParams(
   const fallbackDay = todayInCycle ? toISODate(now) : toISODate(range.start);
 
   let day = fallbackDay;
-  if (params.day) {
-    const parsedDay = parseISODate(params.day);
-    if (
-      parsedDay &&
-      parsedDay.getTime() >= range.start.getTime() &&
-      parsedDay.getTime() < range.end.getTime()
-    ) {
-      day = params.day;
-    }
+  if (
+    params.day &&
+    parsedDay &&
+    parsedDay.getTime() >= range.start.getTime() &&
+    parsedDay.getTime() < range.end.getTime()
+  ) {
+    day = params.day;
   }
 
   return {
