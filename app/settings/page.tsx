@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getHolidays, holidayRangeForAnchor } from "@/lib/queries/holidays";
 import { getCurrentCycleB, type PayrollRule } from "@/lib/utils/payday-cycle";
 import { toISODate } from "@/lib/utils/date";
+import { AppVersionFooter } from "@/components/settings/app-version-footer";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -150,6 +151,8 @@ export default async function SettingsPage() {
           </Button>
         </form>
       </div>
+
+      <AppVersionFooter />
     </AppShell>
   );
 }

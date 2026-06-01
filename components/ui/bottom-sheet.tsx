@@ -10,6 +10,7 @@ import {
   DrawerNestedRoot,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { cn } from "@/lib/utils";
 
 /**
  * Project-standard bottom sheet wrapper.
@@ -49,6 +50,13 @@ type BottomSheetProps = {
   description: string;
   /** Pass `true` to render vaul's built-in close (X) button at top-right. */
   showCloseButton?: boolean;
+  /**
+   * Extra classes merged onto the sheet's `DrawerContent`. Use to give the
+   * sheet a FIXED height (e.g. `h-[85dvh]`) so its top edge stays put and
+   * inner content scrolls instead of the sheet growing upward as content
+   * expands. Omit for the default content-sized height.
+   */
+  contentClassName?: string;
   children: ReactNode;
 };
 
@@ -59,13 +67,17 @@ export function BottomSheet({
   subtitle,
   description,
   showCloseButton = false,
+  contentClassName,
   children,
 }: BottomSheetProps) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent
         showCloseButton={showCloseButton}
-        className="border-white/10 bg-background px-5 pb-8 pt-2"
+        className={cn(
+          "max-h-[90dvh] border-white/10 bg-background px-5 pb-8 pt-2",
+          contentClassName,
+        )}
       >
         <DrawerHeader className="px-0 pb-3 pt-2 text-left">
           <DrawerTitle className="text-[22px] font-bold leading-tight tracking-[-0.025em]">
@@ -104,13 +116,17 @@ export function BottomSheetNested({
   subtitle,
   description,
   showCloseButton = false,
+  contentClassName,
   children,
 }: BottomSheetProps) {
   return (
     <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
       <DrawerContent
         showCloseButton={showCloseButton}
-        className="border-white/10 bg-background px-5 pb-8 pt-2"
+        className={cn(
+          "max-h-[90dvh] border-white/10 bg-background px-5 pb-8 pt-2",
+          contentClassName,
+        )}
       >
         <DrawerHeader className="px-0 pb-3 pt-2 text-left">
           <DrawerTitle className="text-[22px] font-bold leading-tight tracking-[-0.025em]">

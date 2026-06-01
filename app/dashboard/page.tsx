@@ -6,6 +6,7 @@ import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-wa
 import { RefreshOnRestore } from "@/components/dm/refresh-on-restore";
 import { DashboardFriendHeader } from "@/components/dashboard/dashboard-friend-header";
 import { NotificationNudgeCard } from "@/components/dashboard/notification-nudge-card";
+import { ReleaseNotesPopup } from "@/components/dashboard/release-notes-popup";
 import { PushReconciler } from "@/components/push/push-reconciler";
 import { AppShell } from "@/components/layout/app-shell";
 import { PwaInstallBanner } from "@/components/pwa/install-banner";
@@ -470,6 +471,7 @@ export default async function DashboardPage({
           </Suspense>
 
           {lifetimeTxCount > 0 ? <LongPressGuide /> : null}
+          {lifetimeTxCount > 0 ? <ReleaseNotesPopup /> : null}
         </>
       ) : (
         // Friend mode: group blocks under "소비" / "고정지출" headings so

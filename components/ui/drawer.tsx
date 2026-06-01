@@ -209,7 +209,7 @@ function DrawerContent({
             content longer than that has to scroll inside this wrapper or
             it would overflow the viewport. min-h-0 is required for a
             flex child to actually shrink and let overflow take effect. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {children}
         </div>
         {showCloseButton ? (
