@@ -10,6 +10,7 @@ import {
   CATEGORY_COLORS,
   CATEGORY_ICON_SLUGS,
 } from "@/lib/utils/category-icon";
+import { nowInSeoul } from "@/lib/utils/date";
 
 export type TransactionActionResult =
   | { ok: true }
@@ -277,7 +278,9 @@ function normalizeOccurredOn(value: string): string {
   // transaction form does.
   const [, ys, ms, ds] = INCOME_DATE_RE.exec(value)!;
   const target = new Date(Number(ys), Number(ms) - 1, Number(ds));
-  const now = new Date();
+  // KST wall-clock today — `new Date()` would be UTC on Vercel, wrongly
+  // rejecting an entry dated *today* (KST) during 00:00-09:00 KST as "future".
+  const now = nowInSeoul();
   const todayEnd = new Date(
     now.getFullYear(),
     now.getMonth(),
