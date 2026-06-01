@@ -7,6 +7,7 @@ import {
   NavProgressProvider,
 } from "@/components/layout/nav-progress";
 import { Toaster } from "@/components/ui/sonner";
+import { SwDeepLinkListener } from "@/components/pwa/sw-deep-link-listener";
 import { SerwistProvider } from "./serwist";
 
 const APP_NAME = "티끌";
@@ -98,6 +99,7 @@ export default function RootLayout({
           <NavProgressBar />
           <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
         </NavProgressProvider>
+        <SwDeepLinkListener />
         <Toaster richColors position="top-center" />
         <Analytics />
         <SpeedInsights />

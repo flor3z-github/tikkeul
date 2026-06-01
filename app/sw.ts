@@ -104,9 +104,23 @@ self.addEventListener("notificationclick", (event) => {
       const existing = allClients.find((client) => client.url.startsWith(origin));
       if (existing) {
         await existing.focus();
+        // iOS standalone PWA: WindowClient.navigate() is a no-op on WebKit, so
+        // the focused window never leaves its current route (usually the
+        // dashboard) — the warm-tap deep link silently fails. navigate() is
+        // still attempted first as a best-effort for engines that honor it
+        // (Chromium / Samsung Internet); the postMessage below is the reliable
+        // path for iOS, where the page navigates itself via a client-side
+        // router.push. See components/pwa/sw-deep-link-listener.tsx. A
+        // duplicate push to the same route on engines where navigate() already
+        // worked is a harmless no-op.
         if ("navigate" in existing && typeof existing.navigate === "function") {
-          await existing.navigate(targetUrl);
+          try {
+            await existing.navigate(targetUrl);
+          } catch {
+            // ignore — the postMessage below is the reliable path
+          }
         }
+        existing.postMessage({ type: "tikkeul-deep-link", url: targetUrl });
         return;
       }
       // iOS standalone PWA cold-start: launching the home-screen app DIRECTLY
