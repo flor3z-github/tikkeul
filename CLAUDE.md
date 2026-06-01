@@ -26,10 +26,13 @@ pnpm dev            # next dev (Turbopack + Serwist SW route)
 pnpm build          # next build
 pnpm start          # next start
 pnpm lint           # eslint (flat config; eslint-config-next core-web-vitals + typescript)
+pnpm test           # vitest watch (TZ=Asia/Seoul)
+pnpm test:run       # vitest run once (TZ=Asia/Seoul) — the CI-style invocation
+pnpm test:utc       # vitest run once under TZ=UTC (catches UTC/KST drift)
 pnpm gen:icons      # regenerate /public/icons/{icon-192,icon-512,apple-touch-icon}.png from inline SVG
 ```
 
-There is no test suite. Type-checking happens via `next build` (or your editor) — there is no separate `tsc` script.
+**Run the tests after every change.** The suite is Vitest over the pure `lib/utils/*` functions (date/calendar/payday-cycle/deep-link/payment-day) — `*.test.ts` colocated next to the source. After any edit that touches util logic (or its callers), run `pnpm test:run` and, when the change is date/timezone-sensitive, `pnpm test:utc` as well — several regressions here are TZ-only. When you change a util's behavior, **add or update its `*.test.ts` first** (pin the regression), then make it pass. There is no React component / e2e suite, so for UI-only changes the tests prove "no util regression," not "the screen renders right" — say so and defer visual confirmation to the iOS Safari PWA target. Type-checking still happens via `next build` (or your editor) — there is no separate `tsc` script.
 
 ### Required env (`.env.local`)
 
@@ -135,4 +138,10 @@ If a request conflicts with `DESIGN.md`, surface the conflict to the user rather
 
 ### Delegating to subagents
 
-For non-trivial changes, split work across subagents: a read-only **locator** to find exact `file:line`, then a separate **editor** to apply it (run sequentially — the editor consumes the locator's findings). Prefer `caveman:cavecrew-investigator` (locate) + `caveman:cavecrew-builder` (1–2 file surgical edit) when present — their output is token-compressed. **If the caveman agents aren't available in this environment, use the generic `general-purpose` Agent for both roles.** When a step needs MCP tools the caveman agents lack (e.g. context7 docs lookups), use a full-tools agent (`general-purpose`/`claude`) for that step.
+**Default to delegating — reach for agents across all three phases (investigate → build → verify), not just big refactors.** Keeping search/read-heavy work off the main thread preserves its context, and the caveman agents return token-compressed output. Use the main thread for orchestration, decisions, and the final synthesis; push the legwork down.
+
+- **Investigate** — "where is X / what calls Y / map this dir" → `caveman:cavecrew-investigator` (read-only locator, returns a `file:line` table). For broad multi-location sweeps where you only need the conclusion, use `Explore`.
+- **Build** — a bounded 1–2 file edit → `caveman:cavecrew-investigator` (locate exact `file:line`) **then** `caveman:cavecrew-builder` (apply), run sequentially so the editor consumes the locator's findings. Don't send the builder a 3+ file scope — split it or do it on the main thread.
+- **Verify** — review a diff/branch/file → `caveman:cavecrew-reviewer` (one finding per line, severity-tagged). Running the test suite (`pnpm test:run`) is the main thread's job, not an agent's.
+
+**Fallbacks:** if the caveman agents aren't available in this environment, use the generic `general-purpose` Agent for the locate/edit/review roles. When a step needs MCP tools the caveman agents lack (e.g. context7 docs lookups), use a full-tools agent (`general-purpose`/`claude`) for that step. Run independent agents in parallel (one message, multiple Agent calls); chain them only when a later step consumes an earlier one's output.
