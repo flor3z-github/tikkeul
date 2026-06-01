@@ -6,6 +6,7 @@ import {
   formatRelativeKoreanDate,
   monthEnd,
   monthStart,
+  nowInSeoul,
   toISODate,
   todayISODate,
 } from "@/lib/utils/date";
@@ -73,6 +74,31 @@ describe("korean date formatters", () => {
 
   it("returns empty string for invalid input", () => {
     expect(formatKoreanFullDate("garbage")).toBe("");
+  });
+});
+
+describe("nowInSeoul", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns KST wall-clock components regardless of host TZ", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T18:00:00Z")); // = 2026-06-01 03:00 KST
+    const n = nowInSeoul();
+    expect(n.getFullYear()).toBe(2026);
+    expect(n.getMonth()).toBe(5); // June (0-indexed)
+    expect(n.getDate()).toBe(1);
+    expect(n.getHours()).toBe(3);
+    expect(toISODate(n)).toBe("2026-06-01");
+  });
+
+  it("maps the KST midnight boundary to the new day", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T15:00:00Z")); // = 2026-06-01 00:00 KST
+    const n = nowInSeoul();
+    expect(toISODate(n)).toBe("2026-06-01");
+    expect(n.getHours()).toBe(0);
   });
 });
 

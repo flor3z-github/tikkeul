@@ -12,7 +12,7 @@ import { signOutAction } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
 import { getHolidays, holidayRangeForAnchor } from "@/lib/queries/holidays";
 import { getCurrentCycleB, type PayrollRule } from "@/lib/utils/payday-cycle";
-import { toISODate } from "@/lib/utils/date";
+import { toISODate, nowInSeoul } from "@/lib/utils/date";
 import { AppVersionFooter } from "@/components/settings/app-version-footer";
 
 export default async function SettingsPage() {
@@ -101,8 +101,8 @@ export default async function SettingsPage() {
         // Resolve the cycle CONTAINING today (not today's nominal-month cycle) —
         // on edge days a prev/next/말일 adjustment moves the boundary across a
         // month line, so anchoring on today's month would return the wrong cycle.
-        const range = getCurrentCycleB(payday, rule, holidays);
-        const now = new Date();
+        const now = nowInSeoul();
+        const range = getCurrentCycleB(payday, rule, holidays, now);
         const todayMid = new Date(
           now.getFullYear(),
           now.getMonth(),

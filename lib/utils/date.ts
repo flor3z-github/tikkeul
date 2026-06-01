@@ -17,6 +17,40 @@ export function todayISODate(): string {
   return toISODate(new Date());
 }
 
+/**
+ * Current wall-clock time in Asia/Seoul as a host-local Date.
+ *
+ * Vercel functions run in UTC, but the cycle/date engine reads only `now`'s
+ * local-accessor components (getFullYear/getMonth/getDate/getHours...). Calling
+ * `new Date()` server-side therefore yields UTC components and mis-resolves the
+ * cycle during 00:00-09:00 KST. This returns a Date whose local components equal
+ * the current Asia/Seoul wall clock regardless of the host timezone.
+ */
+export function nowInSeoul(): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value);
+  let hour = get("hour");
+  if (hour === 24) hour = 0; // some engines emit "24" for midnight with hour12:false
+  return new Date(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    hour,
+    get("minute"),
+    get("second"),
+  );
+}
+
 const koreanShortDateFormatter = new Intl.DateTimeFormat("ko-KR", {
   month: "long",
   day: "numeric",

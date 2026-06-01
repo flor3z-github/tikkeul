@@ -30,7 +30,7 @@ import { SpendingCalendarSection } from "./_sections/spending-calendar-section";
 import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
 import { SearchSheet } from "@/components/dashboard/search-sheet";
 import { LongPressGuide } from "@/components/onboarding/long-press-guide";
-import { toISODate } from "@/lib/utils/date";
+import { toISODate, nowInSeoul } from "@/lib/utils/date";
 
 // PPR is enabled globally via `cacheComponents: true` in next.config.ts; no
 // per-route opt-in needed in Next 16. The dashboard's loading.tsx provides
@@ -224,7 +224,7 @@ export default async function DashboardPage({
   }
 
   const { ym, day, cycleStart, cycleEnd, cycleMode, cycleLabel } =
-    resolveDashboardParamsB(sp, payday, rule, holidays);
+    resolveDashboardParamsB(sp, payday, rule, holidays, nowInSeoul());
   const startIso = cycleStart.toISOString();
   const endIso = cycleEnd.toISOString();
 

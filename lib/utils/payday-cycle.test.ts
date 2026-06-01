@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { resolveDashboardParamsB } from "@/lib/utils/payday-cycle";
-import { toISODate } from "@/lib/utils/date";
+import { nowInSeoul, toISODate } from "@/lib/utils/date";
 
 // Fixed reference "now" so todayInCycle / fallback math is deterministic.
 const NOW = new Date(2026, 5, 1, 12, 0, 0); // 2026-06-01 local
@@ -114,5 +114,33 @@ describe("resolveDashboardParamsB — ym-only navigation (MonthSwitcher)", () =>
     expect(toISODate(r.cycleStart)).toBe("2026-05-25");
     expect(r.ym).toBe("2026-05");
     expect(r.day).toBe("2026-06-01");
+  });
+});
+
+describe("resolveDashboardParamsB — UTC-host cycle resolution (nowInSeoul)", () => {
+  // Production regression pin for the Vercel-UTC 00:00-09:00 KST bug. The RSC
+  // call sites now pass `nowInSeoul()` as `now` instead of relying on the
+  // engine's `new Date()` default. Under TZ=UTC (the `pnpm test:utc` runner =
+  // production's actual timezone), `new Date()` would yield 2026-05-31 wall
+  // components at this instant → the May cycle. `nowInSeoul()` instead yields
+  // the KST wall clock (2026-06-01 03:00) → the June cycle. So WITHOUT the fix
+  // this test resolves May under TZ=UTC; WITH it, June on both TZ=UTC and KST.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("[regression] empty params + nowInSeoul resolves the June cycle (not the prior May cycle) on a UTC host", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T18:00:00Z")); // = 2026-06-01 03:00 KST
+    const r = resolveDashboardParamsB({}, 1, "same", NONE, nowInSeoul());
+    // payday=1/"same"/no holidays → cycle is exactly [1st, 1st-of-next).
+    expect(toISODate(r.cycleStart)).toBe("2026-06-01");
+    expect(toISODate(r.cycleEnd)).toBe("2026-07-01");
+    expect(r.ym).toBe("2026-06");
+    expect(r.day).toBe("2026-06-01");
+    // Explicitly NOT the previous (May) cycle — what `new Date()` would yield
+    // under TZ=UTC at this instant.
+    expect(toISODate(r.cycleStart)).not.toBe("2026-05-01");
+    expect(r.day).not.toBe("2026-05-31");
   });
 });
