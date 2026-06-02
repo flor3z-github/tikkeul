@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { parseAmountInput } from "@/lib/utils/money";
 import { isValidNickname, NICKNAME_MAX_LENGTH } from "@/lib/utils/nickname";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,9 +12,13 @@ type FlagResult =
   | { ok: true; anyEnabled: boolean }
   | { ok: false; error: string };
 
-export async function saveSettingsAction(
-  _prev: ActionResult | null,
-  formData: FormData,
+// Settings auto-saves per field (no submit button — see settings-form.tsx).
+// Each field has its own action so a blur on one field never re-validates the
+// others (e.g. editing income must not be blocked by a momentarily-empty
+// nickname). Mirrors the notification-flag actions below.
+
+export async function saveNicknameAction(
+  nickname: string,
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const {
@@ -23,15 +26,7 @@ export async function saveSettingsAction(
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const monthlyIncome = parseAmountInput(
-    String(formData.get("monthly_income") ?? "0"),
-  );
-
-  if (monthlyIncome < 0) {
-    return { ok: false, error: "0원 이상으로 입력해주세요." };
-  }
-
-  const nicknameRaw = String(formData.get("nickname") ?? "").trim();
+  const nicknameRaw = nickname.trim();
   if (!isValidNickname(nicknameRaw)) {
     return {
       ok: false,
@@ -39,46 +34,87 @@ export async function saveSettingsAction(
     };
   }
 
-  // Model B: payday (0=말일, 1..28) + payroll_rule. cycle_mode/cycle_start_day
-  // are no longer written (deprecated-preserved at their backfilled values).
-  const payday = Number(formData.get("payday") ?? 1);
-  if (!Number.isInteger(payday) || payday < 0 || payday > 28) {
-    return { ok: false, error: "급여일이 올바르지 않아요." };
-  }
-
-  const payrollRuleRaw = String(formData.get("payroll_rule") ?? "prev");
-  if (
-    payrollRuleRaw !== "prev" &&
-    payrollRuleRaw !== "same" &&
-    payrollRuleRaw !== "next"
-  ) {
-    return { ok: false, error: "급여 규정이 올바르지 않아요." };
-  }
-  const payrollRule = payrollRuleRaw as "prev" | "same" | "next";
-
-  const { error: settingsError } = await supabase
-    .from("user_settings")
-    .upsert(
-      {
-        user_id: user.id,
-        monthly_income: monthlyIncome,
-        payday,
-        payroll_rule: payrollRule,
-      },
-      { onConflict: "user_id" },
-    );
-
-  if (settingsError) {
-    return { ok: false, error: settingsError.message };
-  }
-
-  const { error: profileError } = await supabase
+  const { error } = await supabase
     .from("profiles")
     .update({ display_name: nicknameRaw })
     .eq("id", user.id);
 
-  if (profileError) {
-    return { ok: false, error: profileError.message };
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/friends");
+  return { ok: true };
+}
+
+export async function saveIncomeAction(income: number): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!Number.isFinite(income) || income < 0) {
+    return { ok: false, error: "0원 이상으로 입력해주세요." };
+  }
+  const monthlyIncome = Math.trunc(income);
+
+  // Partial upsert: only monthly_income. On a first-time insert the other
+  // user_settings columns fall back to their DB defaults (payday=1,
+  // payroll_rule='prev'); on update the untouched columns are preserved.
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      { user_id: user.id, monthly_income: monthlyIncome },
+      { onConflict: "user_id" },
+    );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+export async function saveCycleAction(
+  payday: number,
+  payrollRule: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // Model B: payday (0=말일, 1..28) + payroll_rule. cycle_mode/cycle_start_day
+  // are no longer written (deprecated-preserved at their backfilled values).
+  if (!Number.isInteger(payday) || payday < 0 || payday > 28) {
+    return { ok: false, error: "급여일이 올바르지 않아요." };
+  }
+  if (
+    payrollRule !== "prev" &&
+    payrollRule !== "same" &&
+    payrollRule !== "next"
+  ) {
+    return { ok: false, error: "급여 규정이 올바르지 않아요." };
+  }
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      {
+        user_id: user.id,
+        payday,
+        payroll_rule: payrollRule as "prev" | "same" | "next",
+      },
+      { onConflict: "user_id" },
+    );
+
+  if (error) {
+    return { ok: false, error: error.message };
   }
 
   revalidatePath("/dashboard");

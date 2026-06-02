@@ -1,10 +1,13 @@
 "use client";
-
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { CalendarSync, ChevronDown, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CalendarSync, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
-import { saveSettingsAction } from "@/app/settings/actions";
+import {
+  saveCycleAction,
+  saveIncomeAction,
+  saveNicknameAction,
+} from "@/app/settings/actions";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -26,7 +29,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { formatCycleLabelLong } from "@/lib/utils/calendar";
 import { cn } from "@/lib/utils";
 import { getCurrentCycleB, type PayrollRule } from "@/lib/utils/payday-cycle";
-import { formatAmountInput, formatNumber } from "@/lib/utils/money";
+import {
+  formatAmountInput,
+  formatNumber,
+  parseAmountInput,
+} from "@/lib/utils/money";
 import { NICKNAME_MAX_LENGTH } from "@/lib/utils/nickname";
 
 type SettingsFormProps = {
@@ -36,6 +43,8 @@ type SettingsFormProps = {
   initialPayrollRule: PayrollRule;
   holidays: string[];
 };
+
+type ActionResult = { ok: true } | { ok: false; error: string };
 
 const PAYROLL_RULE_OPTIONS: {
   value: PayrollRule;
@@ -65,8 +74,80 @@ const MID_DAY_OPTIONS = Array.from({ length: 27 }, (_, i) => i + 2); // 2..28
 const SECTION_HEADING = "px-1 text-[15px] font-semibold tracking-[-0.01em]";
 
 function payrollRuleLabel(value: string | null): string {
+  return PAYROLL_RULE_OPTIONS.find((opt) => opt.value === value)?.label ?? "";
+}
+
+// Map a stored payday (0=말일, 1, 2..28) back to the picker's group/midDay so
+// a failed cycle save can revert the UI to the last-saved selection.
+function groupForPayday(payday: number): PaydayGroup {
+  return payday === 0 ? "last" : payday >= 2 ? "mid" : "first";
+}
+
+type SaveStatus = "idle" | "saving" | "saved";
+
+// Per-field auto-save: drives a transient "저장 중…/저장됨 ✓" indicator and
+// surfaces failures as a toast. The caller decides what to do with the field
+// value on failure (text fields keep it, the cycle row reverts) via the
+// returned boolean / onError.
+function useAutoSave() {
+  const [status, setStatus] = useState<SaveStatus>("idle");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const save = useCallback(
+    async (
+      action: () => Promise<ActionResult>,
+      onError?: () => void,
+    ): Promise<boolean> => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+      setStatus("saving");
+      let res: ActionResult;
+      try {
+        res = await action();
+      } catch {
+        res = { ok: false, error: "저장에 실패했어요." };
+      }
+      if (res.ok) {
+        setStatus("saved");
+        timer.current = setTimeout(() => setStatus("idle"), 1500);
+        return true;
+      }
+      setStatus("idle");
+      toast.error(res.error);
+      onError?.();
+      return false;
+    },
+    [],
+  );
+
+  return { status, save };
+}
+
+function SaveIndicator({ status }: { status: SaveStatus }) {
+  if (status === "idle") return null;
   return (
-    PAYROLL_RULE_OPTIONS.find((opt) => opt.value === value)?.label ?? ""
+    <span
+      aria-live="polite"
+      className="flex items-center gap-1 text-xs text-muted-foreground"
+    >
+      {status === "saving" ? (
+        "저장 중…"
+      ) : (
+        <>
+          <Check className="size-3.5 text-emerald-600" aria-hidden />
+          저장됨
+        </>
+      )}
+    </span>
   );
 }
 
@@ -77,13 +158,12 @@ export function SettingsForm({
   initialPayrollRule,
   holidays,
 }: SettingsFormProps) {
-  const [state, formAction, pending] = useActionState(saveSettingsAction, null);
   const [income, setIncome] = useState(
     initialIncome ? formatNumber(initialIncome) : "",
   );
   const [nickname, setNickname] = useState(initialNickname);
   const [group, setGroup] = useState<PaydayGroup>(
-    initialPayday === 0 ? "last" : initialPayday >= 2 ? "mid" : "first",
+    groupForPayday(initialPayday),
   );
   const [midDay, setMidDay] = useState<number>(
     initialPayday >= 2 && initialPayday <= 28 ? initialPayday : 25,
@@ -93,18 +173,21 @@ export function SettingsForm({
   // 급여 규정은 기본 접힘 — 주말·공휴일 보정이 필요한 사람만 펼친다(점진적 노출).
   const [ruleOpen, setRuleOpen] = useState(false);
   // 돈 들어오는 날 picker는 1 depth 뒤(drawer)로 보낸다 — 랜딩에서 큰 radio
-  // 카드를 걷어내 설정 화면을 짧게 유지한다. picker는 부모 폼 state를 직접
-  // 바꾸므로 hidden input이 항상 최신이고, 저장은 여전히 폼의 단일 버튼이 한다.
+  // 카드를 걷어내 설정 화면을 짧게 유지한다.
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  useEffect(() => {
-    if (!state) return;
-    if (state.ok) {
-      toast.success("저장됐어요.");
-    } else {
-      toast.error(state.error);
-    }
-  }, [state]);
+  // Last-saved baselines — auto-save fires only when the live value diverges
+  // from these, and they advance on each successful save. (Seeded from props
+  // at mount only; no prop→state sync effect, which would clobber editing when
+  // a save's revalidatePath refreshes this RSC.)
+  const [savedNickname, setSavedNickname] = useState(initialNickname.trim());
+  const [savedIncome, setSavedIncome] = useState(initialIncome);
+  const [savedPayday, setSavedPayday] = useState(initialPayday);
+  const [savedRule, setSavedRule] = useState<PayrollRule>(initialPayrollRule);
+
+  const nicknameSave = useAutoSave();
+  const incomeSave = useAutoSave();
+  const cycleSave = useAutoSave();
 
   // Rebuild the holiday Set once (it crosses the RSC boundary as string[]).
   const holidaySet = useMemo(() => new Set(holidays), [holidays]);
@@ -121,13 +204,61 @@ export function SettingsForm({
     group === "first" ? "1일" : group === "last" ? "말일" : `${midDay}일`;
   const cycleSummary = `${dayLabel} · ${PAYROLL_RULE_SHORT[payrollRule]}`;
 
+  // Text fields auto-save on blur. On failure the typed value is KEPT (the
+  // standard auto-save behavior) so the user can fix-and-reblur rather than
+  // being forced to retype.
+  async function handleNicknameBlur() {
+    const trimmed = nickname.trim();
+    if (trimmed === savedNickname) return;
+    const ok = await nicknameSave.save(() => saveNicknameAction(trimmed));
+    if (ok) setSavedNickname(trimmed);
+  }
+
+  async function handleIncomeBlur() {
+    const parsed = parseAmountInput(income);
+    if (parsed === savedIncome) return;
+    const ok = await incomeSave.save(() => saveIncomeAction(parsed));
+    if (ok) setSavedIncome(parsed);
+  }
+
+  // The cycle commits when the picker drawer closes (확인 or backdrop). Unlike
+  // the text fields, a failed cycle save REVERTS the selection — the collapsed
+  // row is a value summary, so it must never display an unsaved state.
+  function revertCycle() {
+    setGroup(groupForPayday(savedPayday));
+    if (savedPayday >= 2 && savedPayday <= 28) setMidDay(savedPayday);
+    setPayrollRule(savedRule);
+  }
+
+  async function commitCycle() {
+    if (paydayDb === savedPayday && payrollRule === savedRule) return;
+    const nextPayday = paydayDb;
+    const nextRule = payrollRule;
+    const ok = await cycleSave.save(
+      () => saveCycleAction(nextPayday, nextRule),
+      revertCycle,
+    );
+    if (ok) {
+      setSavedPayday(nextPayday);
+      setSavedRule(nextRule);
+    }
+  }
+
+  function handlePickerOpenChange(open: boolean) {
+    setPickerOpen(open);
+    if (!open) void commitCycle();
+  }
+
   return (
     <>
-      <form action={formAction} className="space-y-8">
+      <div>
         <section className="space-y-4">
           <h2 className={SECTION_HEADING}>내 정보</h2>
           <div className="space-y-2">
-            <Label htmlFor="nickname">닉네임</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="nickname">닉네임</Label>
+              <SaveIndicator status={nicknameSave.status} />
+            </div>
             <p className="text-xs text-muted-foreground">
               친구가 보는 이름이에요.
             </p>
@@ -138,16 +269,20 @@ export function SettingsForm({
               maxLength={NICKNAME_MAX_LENGTH}
               value={nickname}
               onChange={(event) => setNickname(event.target.value)}
+              onBlur={handleNicknameBlur}
               placeholder="닉네임을 입력해주세요"
               className="h-12 rounded-2xl bg-card text-[16px]"
             />
           </div>
         </section>
 
-        <section className="space-y-4">
+        <section className="mt-10 space-y-4 border-t border-border pt-6">
           <h2 className={SECTION_HEADING}>예산</h2>
           <div className="space-y-2">
-            <Label htmlFor="monthly_income">월 수입</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="monthly_income">월 수입</Label>
+              <SaveIndicator status={incomeSave.status} />
+            </div>
             <p className="text-xs text-muted-foreground">
               매달 들어오는 실수령 금액을 입력해주세요.
             </p>
@@ -161,6 +296,7 @@ export function SettingsForm({
                 onChange={(event) =>
                   setIncome(formatAmountInput(event.target.value))
                 }
+                onBlur={handleIncomeBlur}
                 placeholder="예: 3,000,000"
                 className="h-12 rounded-2xl bg-card pr-10 text-[16px]"
               />
@@ -173,39 +309,40 @@ export function SettingsForm({
             </div>
           </div>
 
-          {/* 돈 들어오는 날 — 값 요약 row, 탭하면 picker drawer를 연다. */}
-          <button
-            type="button"
-            onClick={() => setPickerOpen(true)}
-            aria-haspopup="dialog"
-            className="flex h-12 w-full items-center justify-between gap-3 rounded-2xl bg-card px-4 text-left text-[14px] transition-colors hover:bg-muted/60 active:bg-muted"
-          >
-            <span>돈 들어오는 날</span>
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {cycleSummary}
-              </span>
-              <ChevronRight className="size-4" aria-hidden />
-            </span>
-          </button>
-
-          <input type="hidden" name="payday" value={paydayDb} />
-          <input type="hidden" name="payroll_rule" value={payrollRule} />
+          {/* 돈 들어오는 날 — 라벨 위 / 값 박스 아래. 닉네임·월 수입과 같은
+              label-above 그리드라 헤더 없는 박스가 떠 보이지 않는다. 박스는
+              값+chevron만 띄우는 select 트리거 형태고, 탭하면 picker drawer를
+              연다(라벨 클릭도 button을 트리거). 저장 인디케이터는 라벨 우측
+              transient — 다른 필드와 동일, 빈 자리 예약 없음. */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="payday-trigger">돈 들어오는 날</Label>
+              <SaveIndicator status={cycleSave.status} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              월급·용돈이 들어오는 날에 맞춰 집계해요.
+            </p>
+            <button
+              id="payday-trigger"
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              aria-haspopup="dialog"
+              className="flex h-12 w-full items-center justify-between gap-3 rounded-2xl bg-card px-4 text-left text-[14px] transition-colors hover:bg-muted/60 active:bg-muted"
+            >
+              <span className="font-medium">{cycleSummary}</span>
+              <ChevronRight
+                className="size-4 text-muted-foreground"
+                aria-hidden
+              />
+            </button>
+          </div>
         </section>
-
-        <Button
-          type="submit"
-          disabled={pending}
-          className="h-12 w-full rounded-full text-[15px] font-semibold"
-        >
-          {pending ? "저장 중…" : "저장하기"}
-        </Button>
-      </form>
+      </div>
 
       {/* 돈 들어오는 날 picker — 랜딩에서 1 depth 뒤로 보낸 본문. 선택은 즉시
-          부모 state(group/midDay/payrollRule)에 반영되고, "확인"은 단지 닫는다
-          (별도 저장 없음 — 폼의 저장하기가 영속화). */}
-      <Drawer open={pickerOpen} onOpenChange={setPickerOpen}>
+          부모 state(group/midDay/payrollRule)에 반영되고, drawer가 닫힐 때
+          자동저장된다("확인"도 단지 닫는다). */}
+      <Drawer open={pickerOpen} onOpenChange={handlePickerOpenChange}>
         <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-4">
           <DrawerHeader className="px-0 pb-3 pt-2 text-left">
             <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
@@ -395,7 +532,7 @@ export function SettingsForm({
 
           <Button
             type="button"
-            onClick={() => setPickerOpen(false)}
+            onClick={() => handlePickerOpenChange(false)}
             className="mt-4 h-12 w-full rounded-full text-[15px] font-semibold"
           >
             확인

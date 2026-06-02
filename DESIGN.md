@@ -792,19 +792,19 @@ Dashboard에서 보여주지 않을 것:
 
 ### 12.5 Settings
 
-Settings는 주제별 섹션으로 묶는다. 위→아래 순서:
+Settings는 주제별 섹션으로 묶는다. **저장 버튼이 없다 — 필드별 자동저장**(알림 토글과 같은 즉시-저장 패턴). 위→아래 순서:
 
-- **내 정보** — 닉네임(친구가 보는 이름. 가입 시 한국어 자동 닉네임이 시드되며, 최대 20자, 공백/탭/줄바꿈 금지. 빈값이면 친구 화면에서 "이름 없음"으로 폴백 §12.8.7).
-- **예산** — 월 수입 · 예산 주기(§12.5a). 한 폼·저장 버튼 하나로 닉네임까지 함께 저장한다(즉시-액션 항목은 폼 밖 별도 섹션). 「돈 들어오는 날」 picker(§12.5a의 큰 radio 카드)는 랜딩에 펼치지 않고 **값 요약 row→drawer(1 depth)**로 접어, 자주 안 바꾸는 설정이 화면을 길게 만들지 않도록 한다. picker는 부모 폼 state를 갱신하고 hidden `payday`/`payroll_rule` input으로 흘려보내므로 저장은 여전히 폼의 단일 버튼이 한다(드로어에 별도 저장 없음, 카테고리 picker drawer 패턴 §12.3).
-- **수입·지출 관리** — 월 고정지출(활성 항목 합계 표시 + `/fixed-expenses` 진입 링크 카드) · 추가 수입 등록(현재 주기에 입금 기록, drawer).
-- **알림** — 친구 소비 알림 · 반응/댓글 알림. 둘 다 푸시이며 `user_settings`의 독립 플래그 2개다(§14, migration 0035).
+- **내 정보** — 닉네임(친구가 보는 이름. 가입 시 한국어 자동 닉네임이 시드되며, 최대 20자, 공백/탭/줄바꿈 금지. 빈값이면 친구 화면에서 "이름 없음"으로 폴백 §12.8.7). blur 시 자동저장.
+- **예산** — 월 수입(blur 시 자동저장) · 예산 주기(§12.5a). 「돈 들어오는 날」 picker(§12.5a의 큰 radio 카드)는 랜딩에 펼치지 않고 **값 요약 row→drawer(1 depth)**로 접어, 자주 안 바꾸는 설정이 화면을 길게 만들지 않도록 한다. picker는 부모 state를 갱신하고 **drawer가 닫힐 때 자동저장**한다("확인"도 닫기일 뿐, 별도 저장 버튼 없음 — 카테고리 picker drawer 패턴 §12.3).
+- **알림** — 친구 소비 알림 · 반응/댓글 알림. 둘 다 푸시이며 `user_settings`의 독립 플래그 2개다(§14, migration 0035). 토글 즉시 저장.
 - **기타** — 기능 안내 다시 보기(롱프레스 가이드 플래그 리셋).
 - **계정** — 로그아웃 · 앱 버전 표기.
 
+**자동저장 모델**: 필드별 서버 액션(`saveNicknameAction`/`saveIncomeAction`/`saveCycleAction`)이 각자 자기 필드만 검증·upsert한다 — 한 필드 blur가 다른 필드를 재검증하지 않으므로, 닉네임을 비운 채 수입을 고쳐도 막히지 않는다. 성공은 해당 필드 옆 "저장됨 ✓" 마이크로 표시(약 1.5s 후 소멸), 실패는 toast. **에러 시 동작은 비대칭이다**: 텍스트 필드(닉네임·수입)는 입력값을 **유지**해 사용자가 고쳐 재-blur하게 하고(재타이핑 강요 금지), 주기 picker는 편집 텍스트가 아니라 값 요약 row라서 직전-저장값으로 **복원**한다(저장 안 된 상태를 거짓 표시하지 않게).
+
 친구 진입점은 설정이 아니라 대시보드 헤더의 친구 칩/omnibox 시트다(§12.8). 설정 닉네임 섹션에는 친구 수·친구 링크를 두지 않는다 — 진입점 중복을 피한다. 레거시 `/friends` 라우트는 `/dashboard`로 리다이렉트되는 북마크 호환 스텁이다.
 
-월 고정지출은 더 이상 단일 숫자 입력 필드가 아니다.
-별도 화면 `/fixed-expenses`에서 항목별로 관리한다. 자세한 내용은 §12.7 참조.
+추가 수입 등록과 월 고정지출은 설정에 두지 않는다(진입점 중복 제거). 추가 수입은 대시보드 FAB 롱프레스 메뉴 + 소비 요약의 수입 라인에서 등록하고, 월 고정지출은 하단 탭 nav → `/fixed-expenses`에서 항목별로 관리한다(§12.7).
 
 카테고리 관리는 Settings가 아니라 **소비 폼의 카테고리 picker drawer**에서 한다(§12.3). 별도 Settings 항목이나 `/settings/categories` 라우트는 두지 않는다.
 
@@ -843,7 +843,7 @@ UI 구성 (월 수입 입력 다음):
 - **계층 표현(상위/하위)**: 같은 카드 안에서 "언제 들어와?"(radio 3개)는 `bg-card`로 떠 있는 **상위**, "주말·공휴일 겹칠 때" 보정 + 주기 프리뷰는 `bg-muted/60`로 면을 낮춘 **하위(종속) zone**이다. 카드를 2장으로 쪼개지 않는다 — 분리는 "동등한 두 설정"으로 읽히지만, 보정은 위 선택에 딸린 종속 컨트롤이므로 면 깊이(plane recession)로 위상차를 표현한다. 하위 행은 좌측에 `CalendarSync` 아이콘(muted, radio 동그라미와 구분되는 "선택지 아닌 보정 컨트롤" 신호) + 라벨 톤다운으로 한 단계 가라앉힌다. 프리뷰는 zone 맨 아래 tier-3로 가장 흐리게.
 - 그 아래 상시 안내 한 줄(이번 주기 프리뷰): 주기가 정확히 달력 월(1일~말일)과 일치하면 평서문 "이번 달 소비를 1일부터 말일까지 모아서 보여드려요.", 그 외(이동·말일 케이스)는 "이번 주기: 5월 25일 – 6월 24일" 형태의 실제 입금앵커 기간 프리뷰(휴일 반영). 말일은 자연히 다음달 라벨로 표시된다.
 
-`cycleMode`(`calendar`/`income_day`)는 더 이상 저장값이 아니라 **파생값**이다 — `getCycleRangeB`가 주기가 정확히 `[1일, 다음달 1일)`일 때만 `calendar`, 그 외 모든 이동·말일 주기는 `income_day`로 도출한다. 덕분에 하위 소비자(`spending-month-grid.tsx`의 가변행 그리드, 페이스 라인 카피 등)는 무변경으로 동작한다. 매핑은 `lib/utils/calendar.ts`의 순수 함수 `paydayCodeToDb`/`dbToPaydayCode`/`PAYDAY_OPTIONS`가 단일 출처이며(picker `PaydayCode` ↔ `payday` smallint), `components/settings/settings-form.tsx`는 hidden `payday`/`payroll_rule` 두 input으로 제출한다.
+`cycleMode`(`calendar`/`income_day`)는 더 이상 저장값이 아니라 **파생값**이다 — `getCycleRangeB`가 주기가 정확히 `[1일, 다음달 1일)`일 때만 `calendar`, 그 외 모든 이동·말일 주기는 `income_day`로 도출한다. 덕분에 하위 소비자(`spending-month-grid.tsx`의 가변행 그리드, 페이스 라인 카피 등)는 무변경으로 동작한다. 매핑은 `lib/utils/calendar.ts`의 순수 함수 `paydayCodeToDb`/`dbToPaydayCode`/`PAYDAY_OPTIONS`가 단일 출처이며(picker `PaydayCode` ↔ `payday` smallint), `components/settings/settings-form.tsx`는 picker 선택을 `payday` smallint + `payroll_rule`로 변환해 drawer가 닫힐 때 `saveCycleAction(payday, payrollRule)`로 자동저장한다(폼 제출 없음, §12.5).
 
 휴일은 **Supabase `holidays` 테이블**(컬럼 `d date` PK + `name text`)에 저장한다. 인증 유저 전체 읽기 가능(공휴일=비민감), 쓰기는 SQL editor/service role 전용(SELECT 정책만 존재). 주기가 연 경계를 넘으므로(1월 주기가 전년 12월 시작, 12월 말일 주기가 다음해 1월 종료) `getHolidays`는 앵커 연도 ±1년을 로드한다(`holidayRangeForAnchor`). 휴일 테이블은 **매년 직접 갱신**해야 한다(공휴일 INSERT). 조회 실패 시 빈 Set으로 graceful degrade하여 모든 날을 영업일로 취급한다.
 

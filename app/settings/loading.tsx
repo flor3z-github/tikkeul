@@ -33,7 +33,6 @@ export default function SettingsLoading() {
           <Skeleton className="h-12 w-full rounded-2xl" />
           <Skeleton className="h-12 w-full rounded-2xl" />
         </div>
-        <Skeleton className="h-12 w-full rounded-full" />
       </div>
     </AppShell>
   );
