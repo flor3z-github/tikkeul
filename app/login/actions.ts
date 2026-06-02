@@ -85,7 +85,13 @@ export async function signUpAction(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  // New accounts land on the first-run onboarding step (nickname → income →
+  // payday). Email-confirm is OFF, so signUp returns a live session and this
+  // redirect fires directly; if it's ever enabled the user arrives via
+  // signInAction → /dashboard instead and the dashboard CTA is the backstop.
+  // Onboarding self-guards: it redirects to /dashboard once a settings row
+  // exists, so a returning user can't get stuck here.
+  redirect("/onboarding");
 }
 
 export async function signOutAction() {

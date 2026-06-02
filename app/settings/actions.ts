@@ -123,6 +123,82 @@ export async function saveCycleAction(
   return { ok: true };
 }
 
+// First-run onboarding: save display_name (profiles) + monthly_income + payday
+// + payroll_rule (user_settings) in one server round-trip. Unlike the per-field
+// actions above (which intentionally write partial rows), onboarding writes the
+// settings columns together so we never create a half-filled user_settings row
+// — e.g. payday set but income still 0, which would flip the dashboard into the
+// worse "0원이에요" state. Validation mirrors saveNicknameAction +
+// saveIncomeAction + saveCycleAction.
+export async function saveOnboardingAction(
+  nickname: string,
+  income: number,
+  payday: number,
+  payrollRule: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const nicknameRaw = nickname.trim();
+  if (!isValidNickname(nicknameRaw)) {
+    return {
+      ok: false,
+      error: `닉네임은 1~${NICKNAME_MAX_LENGTH}자로 입력해주세요.`,
+    };
+  }
+  // Stricter than saveIncomeAction's `< 0`: onboarding requires a funded
+  // income (> 0). A 0 here would create a row that flips the dashboard into
+  // the "0원이에요" state — the exact thing this flow exists to prevent. The
+  // client already gates the button on > 0; this is the server-side defense.
+  if (!Number.isFinite(income) || income <= 0) {
+    return { ok: false, error: "월 수입을 입력해주세요." };
+  }
+  if (!Number.isInteger(payday) || payday < 0 || payday > 28) {
+    return { ok: false, error: "급여일이 올바르지 않아요." };
+  }
+  if (
+    payrollRule !== "prev" &&
+    payrollRule !== "same" &&
+    payrollRule !== "next"
+  ) {
+    return { ok: false, error: "급여 규정이 올바르지 않아요." };
+  }
+
+  // profiles (display_name) first, then user_settings. Two tables = not a
+  // single transaction, but display_name is already trigger-seeded, so a
+  // partial failure still leaves a valid nickname and the upsert is idempotent
+  // on retry.
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ display_name: nicknameRaw })
+    .eq("id", user.id);
+  if (profileError) {
+    return { ok: false, error: profileError.message };
+  }
+
+  const { error } = await supabase.from("user_settings").upsert(
+    {
+      user_id: user.id,
+      monthly_income: Math.trunc(income),
+      payday,
+      payroll_rule: payrollRule as "prev" | "same" | "next",
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/settings");
+  revalidatePath("/friends");
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Friend-spending push notifications
 // ---------------------------------------------------------------------------
