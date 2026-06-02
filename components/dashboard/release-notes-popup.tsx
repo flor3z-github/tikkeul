@@ -37,6 +37,14 @@ export function ReleaseNotesPopup() {
       // writes its flag to "1" on dismiss; until then (brand-new users on
       // their first session) stay silent and let the guide run first.
       if (window.localStorage.getItem(LONG_PRESS_GUIDE_FLAG) !== "1") return;
+      // The open decision is gated on localStorage, which can only be read on
+      // the client — doing it during render would hydration-mismatch (server
+      // always renders closed). So it MUST live in a mount effect, and the one
+      // extra render to open is intentional, not the cascading-render
+      // anti-pattern the rule targets. (LongPressGuide dodges the rule only
+      // because its setOpen sits inside a setTimeout it needs for paint timing;
+      // we have no such delay, so an honest disable is clearer than a fake one.)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpen(true);
     } catch {
       // localStorage blocked (private mode) — skip the popup entirely.
