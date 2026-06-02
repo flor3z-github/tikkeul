@@ -71,7 +71,7 @@ const PAYROLL_RULE_SHORT: Record<PayrollRule, string> = {
 type PaydayGroup = "first" | "mid" | "last";
 const MID_DAY_OPTIONS = Array.from({ length: 27 }, (_, i) => i + 2); // 2..28
 
-const SECTION_HEADING = "px-1 text-[15px] font-semibold tracking-[-0.01em]";
+const SECTION_HEADING = "text-[15px] font-semibold tracking-[-0.01em]";
 
 function payrollRuleLabel(value: string | null): string {
   return PAYROLL_RULE_OPTIONS.find((opt) => opt.value === value)?.label ?? "";
