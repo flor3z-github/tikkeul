@@ -388,9 +388,11 @@ export function SettingsForm({
               </div>
 
               {/* 며칠 picker — nested right under 특정일, revealed only for 'mid' */}
+              {/* compositor-only reveal — same pattern as the payroll panel: grid
+                  row snaps, inner content slides+fades via transform/opacity. */}
               <div
                 className={cn(
-                  "grid transition-[grid-template-rows,border-color] duration-200 ease-out motion-reduce:transition-none",
+                  "grid",
                   group === "mid"
                     ? "border-t border-border"
                     : "border-t border-transparent",
@@ -399,7 +401,14 @@ export function SettingsForm({
                 aria-hidden={group !== "mid"}
               >
                 <div className="overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 bg-muted/60 py-3 pl-11 pr-4">
+                  <div
+                    className={cn(
+                      "flex items-center justify-between gap-3 bg-muted/60 py-3 pl-11 pr-4 transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none",
+                      group === "mid"
+                        ? "translate-y-0 opacity-100"
+                        : "-translate-y-1 opacity-0",
+                    )}
+                  >
                     <Label htmlFor="payday-day" className="text-sm">
                       며칠에 들어오나요
                     </Label>
@@ -475,9 +484,16 @@ export function SettingsForm({
                 </span>
               </button>
 
+              {/* Compositor-only reveal (60fps on iOS Safari). The grid row snaps
+                  open/closed instantly — one reflow, the content below jumps to its
+                  final spot — and the panel content slides+fades in via
+                  transform/opacity (GPU-composited, layer size held constant).
+                  Animating grid-template-rows here re-uploaded the layer texture
+                  every frame and dropped the open to ~30fps. See memory
+                  ios-reveal-animations-composite-bound. */}
               <div
                 id="payroll-rule-panel"
-                className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
+                className="grid"
                 style={{ gridTemplateRows: ruleOpen ? "1fr" : "0fr" }}
                 aria-hidden={!ruleOpen}
               >
@@ -487,7 +503,12 @@ export function SettingsForm({
                     onValueChange={(value) =>
                       setPayrollRule((value ?? "prev") as PayrollRule)
                     }
-                    className="gap-0"
+                    className={cn(
+                      "gap-0 transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none",
+                      ruleOpen
+                        ? "translate-y-0 opacity-100"
+                        : "-translate-y-1 opacity-0",
+                    )}
                   >
                     {PAYROLL_RULE_OPTIONS.map((opt, index) => (
                       <div
