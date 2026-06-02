@@ -8,7 +8,7 @@ import { IncomeFormDialog } from "@/components/income/income-form-dialog";
 import { LONG_PRESS_GUIDE_FLAG } from "@/components/onboarding/long-press-guide";
 import { Button } from "@/components/ui/button";
 
-type SettingsExtrasProps = {
+type AddIncomeButtonProps = {
   /** YYYY-MM-DD. Inclusive start of the viewer's *current* cycle, used to
    *  bound the income drawer's calendar picker. */
   cycleStart: string;
@@ -26,13 +26,37 @@ function parseYmd(value: string): Date {
   return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
 
-export function SettingsExtras({
+export function AddIncomeButton({
   cycleStart,
   cycleEnd,
   defaultDate,
-}: SettingsExtrasProps) {
+}: AddIncomeButtonProps) {
   const [open, setOpen] = useState(false);
 
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => setOpen(true)}
+        className="h-12 w-full justify-start rounded-2xl text-[14px]"
+      >
+        <Plus className="mr-2 size-4" aria-hidden />
+        추가 수입 등록
+      </Button>
+
+      <IncomeFormDialog
+        open={open}
+        onOpenChange={setOpen}
+        cycleStart={parseYmd(cycleStart)}
+        cycleEnd={parseYmd(cycleEnd)}
+        defaultDate={defaultDate}
+      />
+    </>
+  );
+}
+
+export function GuideResetButton() {
   function resetGuide() {
     try {
       window.localStorage.removeItem(LONG_PRESS_GUIDE_FLAG);
@@ -43,38 +67,14 @@ export function SettingsExtras({
   }
 
   return (
-    <section className="space-y-3">
-      <h2 className="px-1 text-[15px] font-semibold tracking-[-0.01em]">
-        기능
-      </h2>
-      <div className="space-y-2">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => setOpen(true)}
-          className="h-12 w-full justify-start rounded-2xl text-[14px]"
-        >
-          <Plus className="mr-2 size-4" aria-hidden />
-          추가 수입 등록
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={resetGuide}
-          className="h-12 w-full justify-start rounded-2xl text-[14px] text-muted-foreground"
-        >
-          <Hand className="mr-2 size-4" aria-hidden />
-          기능 안내 다시 보기
-        </Button>
-      </div>
-
-      <IncomeFormDialog
-        open={open}
-        onOpenChange={setOpen}
-        cycleStart={parseYmd(cycleStart)}
-        cycleEnd={parseYmd(cycleEnd)}
-        defaultDate={defaultDate}
-      />
-    </section>
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={resetGuide}
+      className="h-12 w-full justify-start rounded-2xl text-[14px] text-muted-foreground"
+    >
+      <Hand className="mr-2 size-4" aria-hidden />
+      기능 안내 다시 보기
+    </Button>
   );
 }

@@ -21,11 +21,17 @@ export default function SettingsLoading() {
         }
         title="설정"
       />
-      <div className="mt-4 space-y-6">
+      <div className="mt-4 space-y-8">
+        {/* 내 정보 */}
         <div className="space-y-3">
-          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-20" />
           <Skeleton className="h-12 w-full rounded-2xl" />
-          <Skeleton className="h-3 w-2/3" />
+        </div>
+        {/* 예산 */}
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-12 w-full rounded-2xl" />
+          <Skeleton className="h-12 w-full rounded-2xl" />
         </div>
         <Skeleton className="h-12 w-full rounded-full" />
       </div>

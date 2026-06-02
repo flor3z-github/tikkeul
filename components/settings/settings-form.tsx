@@ -1,11 +1,18 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { CalendarSync, ChevronDown } from "lucide-react";
+import { CalendarSync, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { saveSettingsAction } from "@/app/settings/actions";
 import { Button } from "@/components/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,12 +47,22 @@ const PAYROLL_RULE_OPTIONS: {
   { value: "next", label: "미뤄서 들어와요", example: "예: 토요일이면 월요일" },
 ];
 
+// Compact rule label for the collapsed 돈 들어오는 날 row summary (the verbose
+// PAYROLL_RULE_OPTIONS labels are for the expanded picker).
+const PAYROLL_RULE_SHORT: Record<PayrollRule, string> = {
+  prev: "이전 영업일",
+  same: "날짜 그대로",
+  next: "다음 영업일",
+};
+
 // 돈 들어오는 날 picker is grouped into 3 buckets that mirror the 3 distinct
 // label/cycle behaviors: 1일 (월초, 「N월」), 특정일 2..28 (range label), 말일
 // (월말, 「N+1월」). They map back to user_settings.payday: first->1, last->0,
 // mid->the chosen day. payday 29..31 is never offered (true 말일 = 'last').
 type PaydayGroup = "first" | "mid" | "last";
 const MID_DAY_OPTIONS = Array.from({ length: 27 }, (_, i) => i + 2); // 2..28
+
+const SECTION_HEADING = "px-1 text-[15px] font-semibold tracking-[-0.01em]";
 
 function payrollRuleLabel(value: string | null): string {
   return (
@@ -75,6 +92,10 @@ export function SettingsForm({
     useState<PayrollRule>(initialPayrollRule);
   // 급여 규정은 기본 접힘 — 주말·공휴일 보정이 필요한 사람만 펼친다(점진적 노출).
   const [ruleOpen, setRuleOpen] = useState(false);
+  // 돈 들어오는 날 picker는 1 depth 뒤(drawer)로 보낸다 — 랜딩에서 큰 radio
+  // 카드를 걷어내 설정 화면을 짧게 유지한다. picker는 부모 폼 state를 직접
+  // 바꾸므로 hidden input이 항상 최신이고, 저장은 여전히 폼의 단일 버튼이 한다.
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     if (!state) return;
@@ -96,241 +117,291 @@ export function SettingsForm({
     return formatCycleLabelLong(range.start, range.end);
   }, [paydayDb, payrollRule, holidaySet]);
 
+  const dayLabel =
+    group === "first" ? "1일" : group === "last" ? "말일" : `${midDay}일`;
+  const cycleSummary = `${dayLabel} · ${PAYROLL_RULE_SHORT[payrollRule]}`;
+
   return (
-    <form action={formAction} className="space-y-6">
-      <div className="space-y-2">
-        <Label htmlFor="nickname">닉네임</Label>
-        <p className="text-xs text-muted-foreground">친구가 보는 이름이에요.</p>
-        <Input
-          id="nickname"
-          name="nickname"
-          autoComplete="off"
-          maxLength={NICKNAME_MAX_LENGTH}
-          value={nickname}
-          onChange={(event) => setNickname(event.target.value)}
-          placeholder="닉네임을 입력해주세요"
-          className="h-12 rounded-2xl bg-card text-[16px]"
-        />
-      </div>
+    <>
+      <form action={formAction} className="space-y-8">
+        <section className="space-y-4">
+          <h2 className={SECTION_HEADING}>내 정보</h2>
+          <div className="space-y-2">
+            <Label htmlFor="nickname">닉네임</Label>
+            <p className="text-xs text-muted-foreground">
+              친구가 보는 이름이에요.
+            </p>
+            <Input
+              id="nickname"
+              name="nickname"
+              autoComplete="off"
+              maxLength={NICKNAME_MAX_LENGTH}
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              placeholder="닉네임을 입력해주세요"
+              className="h-12 rounded-2xl bg-card text-[16px]"
+            />
+          </div>
+        </section>
 
-      <div className="space-y-2">
-        <Label htmlFor="monthly_income">월 수입</Label>
-        <p className="text-xs text-muted-foreground">
-          매달 들어오는 실수령 금액을 입력해주세요.
-        </p>
-        <div className="relative">
-          <Input
-            id="monthly_income"
-            name="monthly_income"
-            inputMode="numeric"
-            autoComplete="off"
-            value={income}
-            onChange={(event) => setIncome(formatAmountInput(event.target.value))}
-            placeholder="예: 3,000,000"
-            className="h-12 rounded-2xl bg-card pr-10 text-[16px]"
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-muted-foreground"
-          >
-            원
-          </span>
-        </div>
-      </div>
-
-      <fieldset className="space-y-3">
-        <Label>돈 들어오는 날</Label>
-        <p className="text-xs text-muted-foreground">
-          월급·용돈처럼 돈이 들어오는 날에 맞춰 소비를 집계해요.
-        </p>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <RadioGroup
-            value={group}
-            onValueChange={(value) => setGroup(value as PaydayGroup)}
-            className="gap-0"
-          >
-            <div
-              role="presentation"
-              onClick={() => setGroup("first")}
-              className="cursor-pointer p-4"
-            >
-              <span className="flex items-center gap-3">
-                <RadioGroupItem id="payday-first" value="first" />
-                <span className="text-sm font-semibold">1일</span>
+        <section className="space-y-4">
+          <h2 className={SECTION_HEADING}>예산</h2>
+          <div className="space-y-2">
+            <Label htmlFor="monthly_income">월 수입</Label>
+            <p className="text-xs text-muted-foreground">
+              매달 들어오는 실수령 금액을 입력해주세요.
+            </p>
+            <div className="relative">
+              <Input
+                id="monthly_income"
+                name="monthly_income"
+                inputMode="numeric"
+                autoComplete="off"
+                value={income}
+                onChange={(event) =>
+                  setIncome(formatAmountInput(event.target.value))
+                }
+                placeholder="예: 3,000,000"
+                className="h-12 rounded-2xl bg-card pr-10 text-[16px]"
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-muted-foreground"
+              >
+                원
               </span>
-              <span className="mt-1 block pl-7 text-xs text-muted-foreground">
-                매월 1일에 들어와요. 달력 기준으로 집계해요.
-              </span>
-            </div>
-
-            <div
-              role="presentation"
-              onClick={() => setGroup("mid")}
-              className="cursor-pointer border-t border-border p-4"
-            >
-              <span className="flex items-center gap-3">
-                <RadioGroupItem id="payday-mid" value="mid" />
-                <span className="text-sm font-semibold">특정일</span>
-              </span>
-              <span className="mt-1 block pl-7 text-xs text-muted-foreground">
-                급여일처럼 매월 정해진 날에 들어와요.
-              </span>
-            </div>
-
-            {/* 며칠 picker — nested right under 특정일, revealed only for 'mid' */}
-            <div
-              className={cn(
-                "grid transition-[grid-template-rows,border-color] duration-200 ease-out motion-reduce:transition-none",
-                group === "mid"
-                  ? "border-t border-border"
-                  : "border-t border-transparent",
-              )}
-              style={{ gridTemplateRows: group === "mid" ? "1fr" : "0fr" }}
-              aria-hidden={group !== "mid"}
-            >
-              <div className="overflow-hidden">
-                <div className="flex items-center justify-between gap-3 bg-muted/60 py-3 pl-11 pr-4">
-                  <Label htmlFor="payday-day" className="text-sm">
-                    며칠에 들어오나요
-                  </Label>
-                  <Select
-                    value={String(midDay)}
-                    onValueChange={(value) => setMidDay(Number(value ?? "25"))}
-                    disabled={group !== "mid"}
-                  >
-                    <SelectTrigger
-                      id="payday-day"
-                      className="h-10 w-28 shrink-0 rounded-xl text-[14px]"
-                      tabIndex={group === "mid" ? 0 : -1}
-                    >
-                      <SelectValue>
-                        {(value) => (value ? `${value}일` : "")}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MID_DAY_OPTIONS.map((day) => (
-                        <SelectItem key={day} value={String(day)}>
-                          {day}일
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <div
-              role="presentation"
-              onClick={() => setGroup("last")}
-              className="cursor-pointer border-t border-border p-4"
-            >
-              <span className="flex items-center gap-3">
-                <RadioGroupItem id="payday-last" value="last" />
-                <span className="text-sm font-semibold">말일</span>
-              </span>
-              <span className="mt-1 block pl-7 text-xs text-muted-foreground">
-                매월 마지막 날에 들어와요.
-              </span>
-            </div>
-          </RadioGroup>
-
-          {/* ── 하위 계층: 면을 낮춘(bg-muted) 종속 zone — 보정 + 프리뷰 ── */}
-          <div className="border-t border-border bg-muted/60">
-            {/* 주말·공휴일 보정 — 기본 접힘, 현재값 노출 + 펼치면 RadioGroup */}
-            <button
-              type="button"
-              onClick={() => setRuleOpen((open) => !open)}
-              aria-expanded={ruleOpen}
-              aria-controls="payroll-rule-panel"
-              className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
-            >
-              <span className="flex min-w-0 flex-1 items-center gap-3">
-                <CalendarSync
-                  aria-hidden
-                  className="size-5 shrink-0 text-muted-foreground"
-                />
-                <span className="text-sm font-medium text-muted-foreground">
-                  주말·공휴일 겹칠 때
-                </span>
-              </span>
-              <span className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
-                {payrollRuleLabel(payrollRule)}
-                <ChevronDown
-                  aria-hidden
-                  className={cn(
-                    "size-4 transition-transform duration-200 motion-reduce:transition-none",
-                    ruleOpen && "rotate-180",
-                  )}
-                />
-              </span>
-            </button>
-
-            <div
-              id="payroll-rule-panel"
-              className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
-              style={{ gridTemplateRows: ruleOpen ? "1fr" : "0fr" }}
-              aria-hidden={!ruleOpen}
-            >
-              <div className="overflow-hidden border-t border-border/50">
-                <RadioGroup
-                  value={payrollRule}
-                  onValueChange={(value) =>
-                    setPayrollRule((value ?? "prev") as PayrollRule)
-                  }
-                  className="gap-0"
-                >
-                  {PAYROLL_RULE_OPTIONS.map((opt, index) => (
-                    <div
-                      key={opt.value}
-                      role="presentation"
-                      onClick={() => setPayrollRule(opt.value)}
-                      className={cn(
-                        "flex cursor-pointer items-start gap-3 py-3 pl-11 pr-4",
-                        index > 0 && "border-t border-border/50",
-                      )}
-                    >
-                      <RadioGroupItem
-                        id={`rule-${opt.value}`}
-                        value={opt.value}
-                        className="mt-0.5"
-                        tabIndex={ruleOpen ? 0 : -1}
-                      />
-                      <span className="space-y-0.5">
-                        <span className="block text-sm font-medium">
-                          {opt.label}
-                        </span>
-                        {opt.example ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {opt.example}
-                          </span>
-                        ) : null}
-                      </span>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-            </div>
-
-            {/* cycle preview — tier-3, 가장 흐리게 */}
-            <div className="border-t border-border/50 px-4 py-3">
-              <p className="text-xs text-muted-foreground">
-                이번 주기: {cyclePreview}
-              </p>
             </div>
           </div>
-        </div>
 
-        <input type="hidden" name="payday" value={paydayDb} />
-        <input type="hidden" name="payroll_rule" value={payrollRule} />
-      </fieldset>
+          {/* 돈 들어오는 날 — 값 요약 row, 탭하면 picker drawer를 연다. */}
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            aria-haspopup="dialog"
+            className="flex h-12 w-full items-center justify-between gap-3 rounded-2xl bg-card px-4 text-left text-[14px] transition-colors hover:bg-muted/60 active:bg-muted"
+          >
+            <span>돈 들어오는 날</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {cycleSummary}
+              </span>
+              <ChevronRight className="size-4" aria-hidden />
+            </span>
+          </button>
 
-      <Button
-        type="submit"
-        disabled={pending}
-        className="h-12 w-full rounded-full text-[15px] font-semibold"
-      >
-        {pending ? "저장 중…" : "저장하기"}
-      </Button>
-    </form>
+          <input type="hidden" name="payday" value={paydayDb} />
+          <input type="hidden" name="payroll_rule" value={payrollRule} />
+        </section>
+
+        <Button
+          type="submit"
+          disabled={pending}
+          className="h-12 w-full rounded-full text-[15px] font-semibold"
+        >
+          {pending ? "저장 중…" : "저장하기"}
+        </Button>
+      </form>
+
+      {/* 돈 들어오는 날 picker — 랜딩에서 1 depth 뒤로 보낸 본문. 선택은 즉시
+          부모 state(group/midDay/payrollRule)에 반영되고, "확인"은 단지 닫는다
+          (별도 저장 없음 — 폼의 저장하기가 영속화). */}
+      <Drawer open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-4">
+          <DrawerHeader className="px-0 pb-3 pt-2 text-left">
+            <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
+              돈 들어오는 날
+            </DrawerTitle>
+            <DrawerDescription className="text-[13px] text-muted-foreground">
+              월급·용돈처럼 돈이 들어오는 날에 맞춰 소비를 집계해요.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
+            <RadioGroup
+              value={group}
+              onValueChange={(value) => setGroup(value as PaydayGroup)}
+              className="gap-0"
+            >
+              <div
+                role="presentation"
+                onClick={() => setGroup("first")}
+                className="cursor-pointer p-4"
+              >
+                <span className="flex items-center gap-3">
+                  <RadioGroupItem id="payday-first" value="first" />
+                  <span className="text-sm font-semibold">1일</span>
+                </span>
+                <span className="mt-1 block pl-7 text-xs text-muted-foreground">
+                  매월 1일에 들어와요. 달력 기준으로 집계해요.
+                </span>
+              </div>
+
+              <div
+                role="presentation"
+                onClick={() => setGroup("mid")}
+                className="cursor-pointer border-t border-border p-4"
+              >
+                <span className="flex items-center gap-3">
+                  <RadioGroupItem id="payday-mid" value="mid" />
+                  <span className="text-sm font-semibold">특정일</span>
+                </span>
+                <span className="mt-1 block pl-7 text-xs text-muted-foreground">
+                  급여일처럼 매월 정해진 날에 들어와요.
+                </span>
+              </div>
+
+              {/* 며칠 picker — nested right under 특정일, revealed only for 'mid' */}
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows,border-color] duration-200 ease-out motion-reduce:transition-none",
+                  group === "mid"
+                    ? "border-t border-border"
+                    : "border-t border-transparent",
+                )}
+                style={{ gridTemplateRows: group === "mid" ? "1fr" : "0fr" }}
+                aria-hidden={group !== "mid"}
+              >
+                <div className="overflow-hidden">
+                  <div className="flex items-center justify-between gap-3 bg-muted/60 py-3 pl-11 pr-4">
+                    <Label htmlFor="payday-day" className="text-sm">
+                      며칠에 들어오나요
+                    </Label>
+                    <Select
+                      value={String(midDay)}
+                      onValueChange={(value) => setMidDay(Number(value ?? "25"))}
+                      disabled={group !== "mid"}
+                    >
+                      <SelectTrigger
+                        id="payday-day"
+                        className="h-10 w-28 shrink-0 rounded-xl text-[14px]"
+                        tabIndex={group === "mid" ? 0 : -1}
+                      >
+                        <SelectValue>
+                          {(value) => (value ? `${value}일` : "")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MID_DAY_OPTIONS.map((day) => (
+                          <SelectItem key={day} value={String(day)}>
+                            {day}일
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                role="presentation"
+                onClick={() => setGroup("last")}
+                className="cursor-pointer border-t border-border p-4"
+              >
+                <span className="flex items-center gap-3">
+                  <RadioGroupItem id="payday-last" value="last" />
+                  <span className="text-sm font-semibold">말일</span>
+                </span>
+                <span className="mt-1 block pl-7 text-xs text-muted-foreground">
+                  매월 마지막 날에 들어와요.
+                </span>
+              </div>
+            </RadioGroup>
+
+            {/* ── 하위 계층: 면을 낮춘(bg-muted) 종속 zone — 보정 + 프리뷰 ── */}
+            <div className="border-t border-border bg-muted/60">
+              {/* 주말·공휴일 보정 — 기본 접힘, 현재값 노출 + 펼치면 RadioGroup */}
+              <button
+                type="button"
+                onClick={() => setRuleOpen((open) => !open)}
+                aria-expanded={ruleOpen}
+                aria-controls="payroll-rule-panel"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                  <CalendarSync
+                    aria-hidden
+                    className="size-5 shrink-0 text-muted-foreground"
+                  />
+                  <span className="text-sm font-medium text-muted-foreground">
+                    주말·공휴일 겹칠 때
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+                  {payrollRuleLabel(payrollRule)}
+                  <ChevronDown
+                    aria-hidden
+                    className={cn(
+                      "size-4 transition-transform duration-200 motion-reduce:transition-none",
+                      ruleOpen && "rotate-180",
+                    )}
+                  />
+                </span>
+              </button>
+
+              <div
+                id="payroll-rule-panel"
+                className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
+                style={{ gridTemplateRows: ruleOpen ? "1fr" : "0fr" }}
+                aria-hidden={!ruleOpen}
+              >
+                <div className="overflow-hidden border-t border-border/50">
+                  <RadioGroup
+                    value={payrollRule}
+                    onValueChange={(value) =>
+                      setPayrollRule((value ?? "prev") as PayrollRule)
+                    }
+                    className="gap-0"
+                  >
+                    {PAYROLL_RULE_OPTIONS.map((opt, index) => (
+                      <div
+                        key={opt.value}
+                        role="presentation"
+                        onClick={() => setPayrollRule(opt.value)}
+                        className={cn(
+                          "flex cursor-pointer items-start gap-3 py-3 pl-11 pr-4",
+                          index > 0 && "border-t border-border/50",
+                        )}
+                      >
+                        <RadioGroupItem
+                          id={`rule-${opt.value}`}
+                          value={opt.value}
+                          className="mt-0.5"
+                          tabIndex={ruleOpen ? 0 : -1}
+                        />
+                        <span className="space-y-0.5">
+                          <span className="block text-sm font-medium">
+                            {opt.label}
+                          </span>
+                          {opt.example ? (
+                            <span className="block text-xs text-muted-foreground">
+                              {opt.example}
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+              </div>
+
+              {/* cycle preview — tier-3, 가장 흐리게 */}
+              <div className="border-t border-border/50 px-4 py-3">
+                <p className="text-xs text-muted-foreground">
+                  이번 주기: {cyclePreview}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            onClick={() => setPickerOpen(false)}
+            className="mt-4 h-12 w-full rounded-full text-[15px] font-semibold"
+          >
+            확인
+          </Button>
+        </DrawerContent>
+      </Drawer>
+    </>
   );
 }
