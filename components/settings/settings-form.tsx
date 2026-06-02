@@ -175,6 +175,10 @@ export function SettingsForm({
   // 돈 들어오는 날 picker는 1 depth 뒤(drawer)로 보낸다 — 랜딩에서 큰 radio
   // 카드를 걷어내 설정 화면을 짧게 유지한다.
   const [pickerOpen, setPickerOpen] = useState(false);
+  // "저장" 탭에서만 commit. backdrop/스와이프/ESC 닫힘과 구분하는 의도 플래그.
+  // (trigger·확인 둘 다 onOpenChange를 우회해 setPickerOpen을 직접 부르므로,
+  // 닫힘이 저장 의도인지 vaul만으로는 알 수 없다.)
+  const committingRef = useRef(false);
 
   // Last-saved baselines — auto-save fires only when the live value diverges
   // from these, and they advance on each successful save. (Seeded from props
@@ -221,9 +225,11 @@ export function SettingsForm({
     if (ok) setSavedIncome(parsed);
   }
 
-  // The cycle commits when the picker drawer closes (확인 or backdrop). Unlike
-  // the text fields, a failed cycle save REVERTS the selection — the collapsed
-  // row is a value summary, so it must never display an unsaved state.
+  // The cycle commits ONLY when "저장" is tapped. A backdrop tap / swipe-down /
+  // ESC dismiss DISCARDS the unsaved selection (reverts the live values to the
+  // last-saved baseline) — the collapsed row is a value summary, so it must
+  // never display an abandoned edit. A failed save also REVERTS (revertCycle as
+  // the onError callback).
   function revertCycle() {
     setGroup(groupForPayday(savedPayday));
     if (savedPayday >= 2 && savedPayday <= 28) setMidDay(savedPayday);
@@ -244,9 +250,26 @@ export function SettingsForm({
     }
   }
 
+  // "저장" 탭 — 의도 플래그를 세우고 commit 시작 후 닫는다. trigger와 동일하게
+  // onOpenChange를 우회하므로, vaul이 close에서 onOpenChange를 재발화하더라도
+  // 아래 가드가 그 1회를 삼킨다.
+  function confirmCycle() {
+    committingRef.current = true;
+    void commitCycle();
+    setPickerOpen(false);
+  }
+
   function handlePickerOpenChange(open: boolean) {
-    setPickerOpen(open);
-    if (!open) void commitCycle();
+    if (open) {
+      setPickerOpen(true);
+      return;
+    }
+    setPickerOpen(false);
+    if (committingRef.current) {
+      committingRef.current = false; // confirmCycle이 이미 저장 시작 — 재발화 무시
+      return;
+    }
+    revertCycle(); // backdrop/스와이프/ESC → 미저장 편집 폐기
   }
 
   return (
@@ -325,7 +348,10 @@ export function SettingsForm({
             <button
               id="payday-trigger"
               type="button"
-              onClick={() => setPickerOpen(true)}
+              onClick={() => {
+                committingRef.current = false; // 새 편집 세션 시작 — 가드 리셋
+                setPickerOpen(true);
+              }}
               aria-haspopup="dialog"
               className="flex h-12 w-full items-center justify-between gap-3 rounded-2xl bg-card px-4 text-left text-[14px] transition-colors hover:bg-muted/60 active:bg-muted"
             >
@@ -340,8 +366,8 @@ export function SettingsForm({
       </div>
 
       {/* 돈 들어오는 날 picker — 랜딩에서 1 depth 뒤로 보낸 본문. 선택은 즉시
-          부모 state(group/midDay/payrollRule)에 반영되고, drawer가 닫힐 때
-          자동저장된다("확인"도 단지 닫는다). */}
+          부모 state(group/midDay/payrollRule)에 반영되지만 draft일 뿐 —
+          "저장" 탭에서만 commit, backdrop/스와이프/ESC 닫힘은 변경을 폐기한다. */}
       <Drawer open={pickerOpen} onOpenChange={handlePickerOpenChange}>
         <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-4">
           <DrawerHeader className="px-0 pb-3 pt-2 text-left">
@@ -553,10 +579,10 @@ export function SettingsForm({
 
           <Button
             type="button"
-            onClick={() => handlePickerOpenChange(false)}
+            onClick={confirmCycle}
             className="mt-4 h-12 w-full rounded-full text-[15px] font-semibold"
           >
-            확인
+            저장
           </Button>
         </DrawerContent>
       </Drawer>
