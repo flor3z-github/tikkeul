@@ -193,9 +193,16 @@ export async function saveOnboardingAction(
     return { ok: false, error: error.message };
   }
 
-  revalidatePath("/dashboard");
-  revalidatePath("/settings");
-  revalidatePath("/friends");
+  // Intentionally NO revalidatePath here (unlike the sibling per-field actions).
+  // revalidatePath called from a Server Action clears the ENTIRE client router
+  // cache and re-renders the CURRENT route — here that's /onboarding, whose
+  // server guard `if (settingsRes.data) redirect("/dashboard")` would then fire
+  // on the row we just created, bouncing the user to the dashboard BEFORE the
+  // post-save install step can show. We don't need revalidation anyway: the
+  // user lands on /dashboard via an explicit client navigation (a fresh
+  // dynamic, cookie-bound render that reflects this write), and no /dashboard
+  // /settings/friends segment is prefetched during the signup→onboarding flow.
+  // Do not "restore" these revalidatePath calls to match the sibling actions.
   return { ok: true };
 }
 

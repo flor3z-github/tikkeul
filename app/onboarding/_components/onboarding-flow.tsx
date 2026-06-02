@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronLeft } from "lucide-react";
+import { ChevronDown, ChevronLeft, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { saveOnboardingAction } from "@/app/settings/actions";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { AppShell } from "@/components/layout/app-shell";
+import { IosInstallSteps } from "@/components/pwa/ios-install-steps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,6 +82,12 @@ export function OnboardingFlow({
   initialNickname: string;
 }) {
   const router = useRouter();
+  const { status: installStatus, promptInstall } = usePwaInstall();
+  // Settings come first (saved to the account in the DB), THEN install. On iOS
+  // the home-screen PWA has a separate cookie jar from Safari, so installing
+  // forces a re-login; doing settings first means they're already persisted
+  // server-side when the user re-opens the installed app.
+  const [phase, setPhase] = useState<"settings" | "install">("settings");
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
@@ -106,9 +114,24 @@ export function OnboardingFlow({
     if (step > 1) setStep((s) => s - 1);
   }
 
+  // Settings done (saved or skipped) → offer install, unless there's genuinely
+  // nothing to prompt (already installed, or dismissed within the cooldown),
+  // in which case go straight to the dashboard. Everything else — including a
+  // not-yet-resolved "loading" status (the hook resolves within a frame of
+  // mount, well before the user finishes the wizard) — goes to the install
+  // screen, which always offers 웹으로 계속하기 so there's no dead end.
+  function finishSettings() {
+    if (installStatus === "installed" || installStatus === "dismissed") {
+      router.push("/dashboard");
+    } else {
+      setPhase("install");
+    }
+  }
+
   function skip() {
-    // Save nothing — the dashboard CTA backstops anyone who skips.
-    router.push("/dashboard");
+    // Save nothing — the dashboard CTA backstops anyone who skips. Still offer
+    // install on the way out.
+    finishSettings();
   }
 
   async function handleSubmit() {
@@ -129,7 +152,70 @@ export function OnboardingFlow({
     } finally {
       setSubmitting(false);
     }
-    if (ok) router.push("/dashboard");
+    if (ok) finishSettings();
+  }
+
+  async function handleNativeInstall() {
+    const outcome = await promptInstall();
+    if (outcome === "accepted") {
+      toast.success("앱을 설치했어요");
+      router.push("/dashboard");
+    }
+    // On cancel the user stays on this screen and can tap 웹으로 계속하기.
+  }
+
+  // Install phase: shown only after settings, and only when there's actually
+  // something to prompt (finishSettings already filtered installed/dismissed).
+  if (phase === "install") {
+    return (
+      <AppShell>
+        <div className="flex min-h-[78dvh] flex-col">
+          <div className="flex flex-1 flex-col pt-8">
+            <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Download className="size-8" aria-hidden />
+            </div>
+            <h1 className="mt-6 text-[24px] font-bold leading-tight tracking-[-0.03em]">
+              앱으로 설치하면 더 편해요
+            </h1>
+            <p className="mt-2 text-[14px] text-muted-foreground">
+              홈 화면에서 바로 열고, 더 빠르게 확인할 수 있어요.
+            </p>
+
+            {installStatus === "ios" ? (
+              <IosInstallSteps className="mt-8" />
+            ) : installStatus === "unsupported" ? (
+              <p className="mt-8 rounded-2xl bg-card p-4 text-sm text-muted-foreground ring-1 ring-foreground/10">
+                브라우저 우측 상단(또는 더보기) 메뉴를 열고{" "}
+                <span className="font-medium text-foreground">
+                  &lsquo;앱 설치&rsquo; 또는 &lsquo;홈 화면에 추가&rsquo;
+                </span>
+                를 선택해 주세요.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-8 space-y-3">
+            {installStatus === "promptable" ? (
+              <Button
+                type="button"
+                onClick={handleNativeInstall}
+                className="h-12 w-full rounded-full text-[15px] font-semibold"
+              >
+                지금 설치하기
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant={installStatus === "promptable" ? "ghost" : "default"}
+              onClick={() => router.push("/dashboard")}
+              className="h-12 w-full rounded-full text-[15px] font-semibold"
+            >
+              웹으로 계속하기
+            </Button>
+          </div>
+        </div>
+      </AppShell>
+    );
   }
 
   const copy = STEP_COPY[step - 1];

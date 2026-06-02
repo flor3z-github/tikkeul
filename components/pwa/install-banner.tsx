@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Share, Plus, X } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { IosInstallSteps } from "@/components/pwa/ios-install-steps";
 
 export function PwaInstallBanner() {
   const { status, promptInstall, dismiss } = usePwaInstall();
@@ -93,44 +94,7 @@ export function PwaInstallBanner() {
               Safari에서 아래 순서대로 진행해 주세요.
             </DrawerDescription>
           </DrawerHeader>
-          <ol className="space-y-4 px-4 pb-4 text-sm text-foreground">
-            <li className="flex items-start gap-3">
-              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                1
-              </span>
-              <span className="flex-1">
-                Safari 하단(또는 상단)의{" "}
-                <Share
-                  className="inline size-4 align-text-bottom"
-                  aria-label="공유"
-                />{" "}
-                공유 버튼을 탭하세요.
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                2
-              </span>
-              <span className="flex-1">
-                메뉴에서{" "}
-                <span className="inline-flex items-center gap-1 font-medium">
-                  <Plus className="size-4" aria-hidden />
-                  &lsquo;홈 화면에 추가&rsquo;
-                </span>
-                를 선택하세요.
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                3
-              </span>
-              <span className="flex-1">
-                우측 상단의{" "}
-                <span className="font-medium">&lsquo;추가&rsquo;</span>를 누르면
-                홈 화면에 티끌 앱이 추가돼요.
-              </span>
-            </li>
-          </ol>
+          <IosInstallSteps className="px-4 pb-4" />
           <div className="px-4 pb-2">
             <Button
               type="button"
