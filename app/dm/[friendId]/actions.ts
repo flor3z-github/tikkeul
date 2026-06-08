@@ -91,6 +91,40 @@ export async function sendMessageAction(
   return { ok: true };
 }
 
+// Mark the caller-side of a thread as read and bust the Router Cache for the
+// two surfaces that render the unread state: the /dm index badge and the
+// dashboard header dot. Both are server-computed from get_my_dm_index, and
+// neither can self-refresh on a *read* — read is a dm_threads UPDATE, which is
+// not in the supabase_realtime publication, and iOS PWA swipe-back doesn't fire
+// RefreshOnRestore's pageshow.persisted (the open realtime WebSocket disqualifies
+// the page from bfcache). revalidatePath invalidates those routes' client Router
+// Cache so the next back-navigation refetches the read-cleared counts instead of
+// serving the staleTimes:30 pre-read snapshot. Called from the chat client on
+// mount and on every realtime message arrival (covers messages that land while
+// the user is actively viewing the thread).
+export async function markThreadReadAction(
+  threadId: string,
+): Promise<DmActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!UUID_RE.test(threadId)) {
+    return { ok: false, error: "잘못된 스레드예요." };
+  }
+
+  const { error } = await supabase.rpc("mark_dm_thread_read", {
+    p_thread_id: threadId,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dm");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 export async function deleteMessageAction(
   messageId: string,
 ): Promise<DmActionResult> {

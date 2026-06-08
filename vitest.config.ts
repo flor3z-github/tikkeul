@@ -19,6 +19,9 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts"],
+    // Colocated unit tests live next to the source: the pure date/money utils
+    // under lib/, plus a few server-action contract tests under app/ (mocked
+    // Supabase + next/cache — change-detectors, not behavior proofs).
+    include: ["lib/**/*.test.ts", "app/**/*.test.ts"],
   },
 });

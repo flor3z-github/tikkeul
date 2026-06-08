@@ -34,7 +34,11 @@ import {
 } from "@/lib/utils/date";
 import { formatKRW } from "@/lib/utils/money";
 
-import { deleteMessageAction, sendMessageAction } from "../actions";
+import {
+  deleteMessageAction,
+  markThreadReadAction,
+  sendMessageAction,
+} from "../actions";
 
 const MESSAGE_MAX_LENGTH = 500;
 // Same-sender messages sent within this many milliseconds of each other are
@@ -340,6 +344,17 @@ export function DmChat({
     [mergedMessages, viewerId],
   );
 
+  // Mark the thread read on enter. Moved out of the page's RSC render so the
+  // action can call revalidatePath: this busts the /dm index + dashboard
+  // Router Cache so back-navigation (swipe or button) refetches the read-
+  // cleared unread counts instead of the staleTimes:30 pre-read snapshot.
+  // Keyed on threadId only — fires once per thread open. While-viewing
+  // arrivals are re-marked by the realtime handler below (not here), so this
+  // effect can't loop on the action's own refresh.
+  useEffect(() => {
+    void markThreadReadAction(threadId);
+  }, [threadId]);
+
   // Realtime subscription: any insert/update/delete on this thread triggers
   // a debounced server-component refresh. RLS already restricts the channel
   // to thread members. Three hundred ms matches the dashboard watcher.
@@ -351,7 +366,13 @@ export function DmChat({
 
     const schedule = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => router.refresh(), 300);
+      timer = setTimeout(() => {
+        // A message landed while the thread is open. Re-mark read so messages
+        // that arrive during active viewing don't resurface as unread after
+        // the user leaves; the action also re-busts the /dm + /dashboard cache.
+        void markThreadReadAction(threadId);
+        router.refresh();
+      }, 300);
     };
 
     void (async () => {
