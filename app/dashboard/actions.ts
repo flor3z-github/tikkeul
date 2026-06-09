@@ -11,6 +11,7 @@ import {
   CATEGORY_ICON_SLUGS,
 } from "@/lib/utils/category-icon";
 import { nowInSeoul } from "@/lib/utils/date";
+import { isValidPaymentDay } from "@/lib/utils/payment-day";
 
 export type TransactionActionResult =
   | { ok: true }
@@ -504,6 +505,97 @@ export async function deleteFixedOverrideAction(input: {
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/**
+ * Schedule a previously-undated fixed expense from the dashboard calendar:
+ * set its `payment_day` (so it surfaces on the grid) and, optionally, this
+ * cycle's amount as an override. The amount is per-cycle only ("이번 달만") —
+ * the recurring base amount is left untouched, mirroring the override flow.
+ *
+ * `payment_day` is a base property surfaced on /fixed-expenses too, so this
+ * revalidates the same set as updateFixedExpenseAction (NOT dashboard-only,
+ * or /fixed-expenses would keep showing the item as "날짜 미정").
+ */
+export async function scheduleUndatedFixedAction(input: {
+  fixedExpenseId: string;
+  cycleAnchor: string;
+  paymentDay: number;
+  amount: number | null;
+}): Promise<TransactionActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!input.fixedExpenseId) return { ok: false, error: "대상이 없어요." };
+  if (!CYCLE_ANCHOR_RE.test(input.cycleAnchor)) {
+    return { ok: false, error: "주기 정보가 올바르지 않아요." };
+  }
+  // The whole point is leaving the "날짜 미정" state — isValidPaymentDay treats
+  // null as valid (unspecified), so reject null explicitly before that check.
+  if (input.paymentDay === null || input.paymentDay === undefined) {
+    return { ok: false, error: "날짜를 선택해주세요." };
+  }
+  if (!isValidPaymentDay(input.paymentDay)) {
+    return { ok: false, error: "결제일이 올바르지 않아요." };
+  }
+  if (input.amount !== null) {
+    if (!Number.isFinite(input.amount) || input.amount < 0) {
+      return { ok: false, error: "금액은 0원 이상이어야 해요." };
+    }
+  }
+
+  // Verify ownership before mutating either table. RLS fences both, but the
+  // friendly error path needs the row first anyway.
+  const { data: owned, error: ownErr } = await supabase
+    .from("fixed_expenses")
+    .select("id")
+    .eq("id", input.fixedExpenseId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (ownErr) return { ok: false, error: ownErr.message };
+  if (!owned) return { ok: false, error: "고정지출을 찾을 수 없어요." };
+
+  // 1) Date — base property, surfaces the item on the grid. Nothing is
+  // committed yet, so a failure here needs no revalidate.
+  const { error: dateErr } = await supabase
+    .from("fixed_expenses")
+    .update({ payment_day: input.paymentDay })
+    .eq("id", input.fixedExpenseId)
+    .eq("user_id", user.id);
+  if (dateErr) return { ok: false, error: dateErr.message };
+
+  // 2) Amount — this cycle only. Skip when left blank ("금액 미입력").
+  let amountError: string | null = null;
+  if (input.amount !== null) {
+    const amount = Math.round(input.amount);
+    const { error: amtErr } = await supabase
+      .from("fixed_expense_overrides")
+      .upsert(
+        {
+          user_id: user.id,
+          fixed_expense_id: input.fixedExpenseId,
+          cycle_anchor: input.cycleAnchor,
+          amount,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "fixed_expense_id,cycle_anchor" },
+      );
+    if (amtErr) amountError = amtErr.message;
+  }
+
+  // The date write already committed regardless of the override result — always
+  // revalidate so the grid stops showing the item as "날짜 미정", THEN surface
+  // any amount error (the item is scheduled either way, just without an
+  // override for this cycle).
+  revalidatePath("/fixed-expenses");
+  revalidatePath("/dashboard");
+  revalidatePath("/settings");
+
+  if (amountError) return { ok: false, error: amountError };
   return { ok: true };
 }
 

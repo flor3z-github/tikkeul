@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -18,6 +18,10 @@ import {
   FixedOverrideDialog,
   type FixedOverrideTarget,
 } from "@/components/dashboard/fixed-override-dialog";
+import {
+  UndatedFixedDialog,
+  type UndatedFixedTarget,
+} from "@/components/dashboard/undated-fixed-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { SpendingMonthGrid } from "@/components/calendar/spending-month-grid";
 import { MonthSwitcher } from "@/app/dashboard/_components/month-switcher";
@@ -138,6 +142,27 @@ export function CalendarDayPanel({
   const [overrideTarget, setOverrideTarget] =
     useState<FixedOverrideTarget | null>(null);
   const overrideOpen = overrideTarget !== null;
+
+  // Undated fixed expenses (no payment_day) — scheduled in place from the
+  // calendar. Tapping the nudge opens the schedule sheet directly when there's
+  // exactly one; otherwise it toggles an inline list whose rows open the sheet.
+  const undatedItems = useMemo(
+    () => undatedFixedExpenses ?? [],
+    [undatedFixedExpenses],
+  );
+  const [scheduleTarget, setScheduleTarget] =
+    useState<UndatedFixedTarget | null>(null);
+  const scheduleOpen = scheduleTarget !== null;
+  const [undatedListOpen, setUndatedListOpen] = useState(false);
+
+  const openSchedule = useCallback((item: CalendarFixedExpenseItem) => {
+    setScheduleTarget({
+      fixedExpenseId: item.id,
+      name: item.name,
+      planName: item.plan_name,
+      baseAmount: item.baseAmount,
+    });
+  }, []);
 
   // Friend-mode interaction state — exclusive (only one row open at a time).
   // The parent owns the draft so we can decide whether outside-click should
@@ -399,17 +424,69 @@ export function CalendarDayPanel({
         </section>
       ) : null}
 
-      {isOwn && (undatedFixedExpenses?.length ?? 0) > 0 ? (
-        <Link
-          href="/fixed-expenses"
-          className="mt-3 block rounded-2xl border border-dashed border-border px-4 py-3 text-[13px] text-muted-foreground transition-colors active:bg-muted"
-        >
-          날짜 미정 고정지출{" "}
-          <span className="font-semibold text-foreground">
-            {undatedFixedExpenses!.length}개
-          </span>{" "}
-          — 날짜를 정하면 여기서 이번 달 금액을 조정할 수 있어요.
-        </Link>
+      {isOwn && undatedItems.length > 0 ? (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (undatedItems.length === 1) {
+                openSchedule(undatedItems[0]);
+              } else {
+                setUndatedListOpen((prev) => !prev);
+              }
+            }}
+            aria-expanded={undatedItems.length > 1 ? undatedListOpen : undefined}
+            className="flex w-full items-center gap-2 rounded-2xl border border-dashed border-border px-4 py-3 text-left text-[13px] text-muted-foreground transition-colors active:bg-muted"
+          >
+            <span className="flex-1">
+              날짜 미정 고정지출{" "}
+              <span className="font-semibold text-foreground">
+                {undatedItems.length}개
+              </span>{" "}
+              — 날짜를 정하면 여기서 이번 달 금액을 조정할 수 있어요.
+            </span>
+            {undatedItems.length > 1 ? (
+              <ChevronDown
+                aria-hidden
+                className={cn(
+                  "size-4 shrink-0 transition-transform duration-200",
+                  undatedListOpen && "rotate-180",
+                )}
+              />
+            ) : null}
+          </button>
+          {undatedItems.length > 1 && undatedListOpen ? (
+            <Card className="mt-2 rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
+              <CardContent className="p-2">
+                <ul className="space-y-0.5">
+                  {undatedItems.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => openSchedule(item)}
+                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors active:bg-muted"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[15px] font-medium leading-tight">
+                            {item.name}
+                          </p>
+                          {item.plan_name ? (
+                            <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
+                              {item.plan_name}
+                            </p>
+                          ) : null}
+                        </div>
+                        <span className="shrink-0 text-[13px] font-medium text-muted-foreground">
+                          날짜 미정
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
       ) : null}
 
       <section className="mt-6 space-y-3">
@@ -530,6 +607,17 @@ export function CalendarDayPanel({
           }}
           cycleAnchor={ym}
           target={overrideTarget}
+        />
+      ) : null}
+
+      {isOwn ? (
+        <UndatedFixedDialog
+          open={scheduleOpen}
+          onOpenChange={(open) => {
+            if (!open) setScheduleTarget(null);
+          }}
+          cycleAnchor={ym}
+          target={scheduleTarget}
         />
       ) : null}
     </>

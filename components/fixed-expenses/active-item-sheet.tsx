@@ -42,13 +42,24 @@ export function ActiveItemSheet({
   onOpenChange,
 }: ActiveItemSheetProps) {
   const open = item !== null;
-  // Retain the last non-null payload for each independent input so the body
-  // stays mounted while vaul plays the close animation. Without these the
-  // body unmounts the moment the parent clears `item`, the drawer collapses
-  // to header height mid-close, and the slide-down looks like an instant cut.
-  const displayItem = useStableNonNull(item);
-  const displayPlan = useStableNonNull(plan);
-  const displayCatalogDefaultAmount = useStableNonNull(catalogDefaultAmount);
+  // Retain item + its plan + its catalog default as ONE atomic snapshot so the
+  // body stays mounted while vaul plays the close animation. Retaining the
+  // three as INDEPENDENT useStableNonNull values is a bug: opening a catalog
+  // item (plan non-null) then a manual item (plan null) would keep the catalog
+  // item's plan — the manual item's null plan/null default fall back to the
+  // retained catalog values, so the header shows the previous service's name
+  // and the split chips its price. Bundling ties plan/catalogDefaultAmount to
+  // the currently-open item; a manual item correctly clears them. useMemo keeps
+  // the object reference stable (an inline literal would trip useStableNonNull's
+  // identity check every render and loop).
+  const snapshot = useMemo(
+    () => (item ? { item, plan, catalogDefaultAmount } : null),
+    [item, plan, catalogDefaultAmount],
+  );
+  const stable = useStableNonNull(snapshot);
+  const displayItem = stable?.item ?? null;
+  const displayPlan = stable?.plan ?? null;
+  const displayCatalogDefaultAmount = stable?.catalogDefaultAmount ?? null;
 
   const title = displayPlan
     ? displayPlan.service_name
