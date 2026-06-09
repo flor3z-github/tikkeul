@@ -58,8 +58,8 @@ export function UndatedFixedDialog({
             날짜·금액 정하기
           </DrawerTitle>
           <DrawerDescription className="text-[13px] text-muted-foreground">
-            날짜를 정하면 달력에 표시돼요. 금액은 이번 달만 적용되고, 다음 달은
-            기본 금액으로 돌아가요.
+            날짜를 정하면 달력에 표시돼요. 금액은 기본값이 채워져 있고, 이번 달만
+            다르게 바꿀 수 있어요.
           </DrawerDescription>
         </DrawerHeader>
         {target ? (
@@ -87,11 +87,14 @@ function UndatedFixedBody({
   onSaved: () => void;
 }) {
   const [paymentDay, setPaymentDay] = useState<number | null>(null);
-  // Start blank: the amount is a per-cycle override ("이번 달만"), so it's only
-  // meaningful when this month differs from the base. Prefilling the base would
-  // create a redundant override equal to the base and contradict the "비워두고
-  // 나중에" hint. The base is shown in the subtitle for reference.
-  const [amountText, setAmountText] = useState("");
+  // Prefill the base amount so the common "이번 달도 기본 금액" case is a single
+  // tap — the user doesn't retype it. A redundant override (= base) is avoided
+  // at save time: if the value still equals the base we send null, so no
+  // override row is written and the cycle simply shows the base. A base-less
+  // ("금액 미입력") item still starts blank.
+  const [amountText, setAmountText] = useState(() =>
+    target.baseAmount != null ? formatNumber(target.baseAmount) : "",
+  );
   const [pending, startTransition] = useTransition();
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
@@ -117,12 +120,16 @@ function UndatedFixedBody({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit || paymentDay === null) return;
+    // Skip the override when blank OR unchanged from the base — both leave the
+    // cycle showing the base amount, so no override row is needed.
+    const overrideAmount =
+      amountIsEmpty || amountValue === target.baseAmount ? null : amountValue;
     startTransition(async () => {
       const result = await scheduleUndatedFixedAction({
         fixedExpenseId: target.fixedExpenseId,
         cycleAnchor,
         paymentDay,
-        amount: amountIsEmpty ? null : amountValue,
+        amount: overrideAmount,
       });
       if (result.ok) {
         toast.success("날짜를 정했어요.");
@@ -215,10 +222,6 @@ function UndatedFixedBody({
           ))}
         </div>
       </div>
-      <p className="px-1 text-[12px] text-muted-foreground">
-        금액을 모르면 비워두고 나중에 입력할 수 있어요.
-      </p>
-
       <Button
         type="submit"
         disabled={!canSubmit}
