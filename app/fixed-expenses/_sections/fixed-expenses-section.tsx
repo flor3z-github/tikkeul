@@ -57,7 +57,7 @@ export async function FixedExpensesSection() {
     subscription_plan_id: row.subscription_plan_id,
     name: row.name,
     plan_name: row.plan_name,
-    amount: Number(row.amount),
+    amount: row.amount == null ? null : Number(row.amount),
     category: row.category,
     is_active: row.is_active,
     payment_day: row.payment_day ?? null,

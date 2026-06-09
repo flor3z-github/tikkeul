@@ -41,7 +41,10 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
   const trimmedName = name.trim();
   const trimmedPlanName = planName.trim();
-  const canSubmit = trimmedName.length > 0 && amountValue > 0 && !pending;
+  // Amount is optional ("금액 미입력") — only the name is required. Empty input
+  // is stored as null so it can be filled in later.
+  const amountIsEmpty = amountText.trim().length === 0;
+  const canSubmit = trimmedName.length > 0 && !pending;
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,7 +53,7 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
       const result = await addManualFixedExpenseAction({
         name: trimmedName,
         plan_name: trimmedPlanName.length > 0 ? trimmedPlanName : null,
-        amount: amountValue,
+        amount: amountIsEmpty ? null : amountValue,
         payment_day: paymentDay,
       });
       if (result.ok) {
@@ -104,9 +107,12 @@ function ManualAddBody({ onSaved }: { onSaved: () => void }) {
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-muted-foreground">
-          매달 결제 금액
+          매달 결제 금액 <span className="text-muted-foreground/70">(선택)</span>
         </label>
         <AmountInput value={amountText} onChange={setAmountText} />
+        <p className="px-1 text-[12px] text-muted-foreground">
+          금액을 모르면 비워두고 나중에 입력할 수 있어요.
+        </p>
       </div>
 
       <div className="space-y-2">

@@ -415,6 +415,98 @@ export async function deleteIncomeAdjustmentAction(
   return { ok: true };
 }
 
+// -- Per-cycle fixed-expense amount override ---------------------------------
+//
+// "이번 달 실제 금액" for a single fixed expense, scoped to one budget cycle.
+// Keyed by cycle_anchor "YYYY-MM" (the anchorYm the dashboard already computes).
+// The base fixed_expenses.amount is untouched; with no override row the
+// effective amount falls back to base (next cycle auto-reverts). Revert = delete.
+// Friend visibility is served by the get_fixed_effective_items /
+// get_friend_fixed_total RPCs, never by these writes (owner-only).
+
+const CYCLE_ANCHOR_RE = /^\d{4}-\d{2}$/;
+
+export async function upsertFixedOverrideAction(input: {
+  fixedExpenseId: string;
+  cycleAnchor: string;
+  amount: number;
+}): Promise<TransactionActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!input.fixedExpenseId) return { ok: false, error: "대상이 없어요." };
+  if (!CYCLE_ANCHOR_RE.test(input.cycleAnchor)) {
+    return { ok: false, error: "주기 정보가 올바르지 않아요." };
+  }
+  if (!Number.isFinite(input.amount) || input.amount < 0) {
+    return { ok: false, error: "금액은 0원 이상이어야 해요." };
+  }
+  const amount = Math.round(input.amount);
+
+  // Verify the fixed expense belongs to the caller before writing an override
+  // for it. RLS already fences user_id = auth.uid() on the override row, but
+  // the FK alone does not check ownership of the referenced expense.
+  const { data: owned, error: ownErr } = await supabase
+    .from("fixed_expenses")
+    .select("id")
+    .eq("id", input.fixedExpenseId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (ownErr) return { ok: false, error: ownErr.message };
+  if (!owned) return { ok: false, error: "고정지출을 찾을 수 없어요." };
+
+  const { error } = await supabase
+    .from("fixed_expense_overrides")
+    .upsert(
+      {
+        user_id: user.id,
+        fixed_expense_id: input.fixedExpenseId,
+        cycle_anchor: input.cycleAnchor,
+        amount,
+        // True instant (nowInSeoul() is a wall-clock-shifted Date, wrong for a
+        // timestamptz). updated_at is not read for logic — kept accurate anyway.
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "fixed_expense_id,cycle_anchor" },
+    );
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function deleteFixedOverrideAction(input: {
+  fixedExpenseId: string;
+  cycleAnchor: string;
+}): Promise<TransactionActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!input.fixedExpenseId) return { ok: false, error: "대상이 없어요." };
+  if (!CYCLE_ANCHOR_RE.test(input.cycleAnchor)) {
+    return { ok: false, error: "주기 정보가 올바르지 않아요." };
+  }
+
+  const { error } = await supabase
+    .from("fixed_expense_overrides")
+    .delete()
+    .eq("fixed_expense_id", input.fixedExpenseId)
+    .eq("cycle_anchor", input.cycleAnchor)
+    .eq("user_id", user.id);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 // -- Custom categories ------------------------------------------------------
 //
 // Per-user custom spending categories (create/update/delete). Seeds

@@ -142,7 +142,6 @@ export default async function DashboardPage({
     profileRowsRes,
     friendCycleRes,
     permsRowRes,
-    ownFixedRes,
     dmIndexRes,
     ownTxCountRes,
     holidays,
@@ -168,13 +167,6 @@ export default async function DashboardPage({
           .eq("viewer_id", viewerId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    isOwn
-      ? supabase
-          .from("fixed_expenses")
-          .select("amount")
-          .eq("user_id", viewerId)
-          .eq("is_active", true)
-      : Promise.resolve({ data: [] as { amount: number }[] }),
     isOwn
       ? supabase.rpc("get_my_dm_index")
       : Promise.resolve({ data: null }),
@@ -284,10 +276,43 @@ export default async function DashboardPage({
   }));
   const viewingNickname = nicknameById.get(viewingUserId) ?? "";
 
-  // Own-mode fixed-expense total, hoisted from sections so both Summary and
-  // Calendar receive the same prefetched number.
-  const ownFixedExpense = (ownFixedRes.data ?? []).reduce(
-    (sum, row) => sum + Number(row.amount ?? 0),
+  // Own-mode effective fixed expenses for the displayed cycle (amount =
+  // override ?? base). Runs in round 3 because it needs the resolved cycle's
+  // anchorYm (`ym`). Hoisted from the sections so the Summary card, the budget
+  // math, and the Calendar/day-panel markers all use the same prefetched,
+  // override-aware numbers. Friend mode never fetches this — friend fixed
+  // visibility flows through FriendFixedSection's perm-gated RPCs.
+  const ownFixedEffectiveRes = isOwn
+    ? await supabase.rpc("get_fixed_effective_items", {
+        target: viewerId,
+        cycle_anchor: ym,
+      })
+    : {
+        data: [] as {
+          id: string;
+          subscription_plan_id: string | null;
+          name: string;
+          plan_name: string | null;
+          amount: number | null;
+          base_amount: number | null;
+          category: string | null;
+          payment_day: number | null;
+          is_overridden: boolean;
+        }[],
+      };
+  const ownFixedEffectiveItems = (ownFixedEffectiveRes.data ?? []).map(
+    (row) => ({
+      id: row.id,
+      name: row.name,
+      plan_name: row.plan_name,
+      amount: row.amount == null ? null : Number(row.amount),
+      base_amount: row.base_amount == null ? null : Number(row.base_amount),
+      payment_day: row.payment_day,
+      is_overridden: row.is_overridden,
+    }),
+  );
+  const ownFixedExpense = ownFixedEffectiveItems.reduce(
+    (sum, row) => sum + (row.amount ?? 0),
     0,
   );
 
@@ -463,6 +488,7 @@ export default async function DashboardPage({
               targetUserId={undefined}
               ownSettings={ownSettings}
               ownFixedExpense={ownFixedExpense}
+              ownFixedEffectiveItems={ownFixedEffectiveItems}
               ownExtraIncome={ownExtraIncome}
               showSpendingItems={perms.spendingItems}
               hasFriends={friendIds.length > 0}
@@ -532,6 +558,7 @@ export default async function DashboardPage({
                     target={viewingUserId}
                     showTotal={perms.fixedTotal}
                     showItems={perms.fixedItems}
+                    cycleAnchor={ym}
                   />
                 </section>
               ) : null}

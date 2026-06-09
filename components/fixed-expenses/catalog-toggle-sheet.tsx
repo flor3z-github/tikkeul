@@ -59,7 +59,9 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
   const [paymentDay, setPaymentDay] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
-  const canSubmit = amountValue > 0 && !pending;
+  // Amount is optional ("금액 미입력") — clearing it stores null to fill later.
+  const amountIsEmpty = amountText.trim().length === 0;
+  const canSubmit = !pending;
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,7 +70,7 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
     startTransition(async () => {
       const result = await activateCatalogPlanAction({
         planId: plan.id,
-        amount: amountValue,
+        amount: amountIsEmpty ? null : amountValue,
         payment_day: paymentDay,
       });
       if (result.ok) {
@@ -94,7 +96,8 @@ function CatalogToggleBody({ plan, onSaved }: BodyProps) {
         />
         <p className="text-xs text-muted-foreground">
           기본 금액은 {formatNumber(plan.default_amount)}원이에요. 함께 쓰는
-          사람이 있으면 위에서 나눠주세요.
+          사람이 있으면 위에서 나눠주세요. 금액을 모르면 비워두고 나중에 입력할
+          수 있어요.
         </p>
       </div>
 

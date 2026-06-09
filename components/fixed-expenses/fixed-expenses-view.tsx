@@ -113,10 +113,10 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
     return [...active].sort((a, b) => {
       const cmp = comparePaymentDayUpcoming(today, a.payment_day, b.payment_day);
       if (cmp !== 0) return cmp;
-      return b.amount - a.amount;
+      return (b.amount ?? 0) - (a.amount ?? 0);
     });
   }, [items]);
-  const total = activeItems.reduce((sum, it) => sum + it.amount, 0);
+  const total = activeItems.reduce((sum, it) => sum + (it.amount ?? 0), 0);
 
   // Catalog filtering: search box + category chip.
   const filteredPlans = useMemo(() => {
@@ -265,10 +265,18 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                           ) : null}
                         </div>
                         <div className="flex shrink-0 flex-col items-end leading-tight">
-                          <span className="text-[15px] font-semibold tabular-nums">
-                            {formatKRW(item.amount)}
+                          <span
+                            className={
+                              item.amount == null
+                                ? "text-[15px] font-semibold tabular-nums text-muted-foreground/70"
+                                : "text-[15px] font-semibold tabular-nums"
+                            }
+                          >
+                            {item.amount == null
+                              ? "금액 미입력"
+                              : formatKRW(item.amount)}
                           </span>
-                          {showDefault ? (
+                          {showDefault && item.amount != null ? (
                             <span className="text-[11px] text-muted-foreground tabular-nums">
                               원래 가격 {formatKRW(plan.default_amount)}
                             </span>

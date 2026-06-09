@@ -30,6 +30,21 @@ type SpendingCalendarSectionProps = {
   /** Own-mode fixed-expense total prefetched by the page. Ignored in friend mode. */
   ownFixedExpense?: number;
   /**
+   * Own-mode effective fixed expenses for the displayed cycle, prefetched by
+   * the page via get_fixed_effective_items (amount = override ?? base). Used to
+   * render per-day markers + the tap-to-override day-panel rows. Ignored in
+   * friend mode (friend calendar shows no fixed markers).
+   */
+  ownFixedEffectiveItems?: Array<{
+    id: string;
+    name: string;
+    plan_name: string | null;
+    amount: number | null;
+    base_amount: number | null;
+    payment_day: number | null;
+    is_overridden: boolean;
+  }>;
+  /**
    * Own-mode per-cycle extra income prefetched by the page. Folded into
    * `availableBudget` so calendar day-classification (normal/warning/danger)
    * uses the effective cycle budget. Ignored in friend mode.
@@ -65,6 +80,7 @@ export async function SpendingCalendarSection({
   targetUserId,
   ownSettings,
   ownFixedExpense,
+  ownFixedEffectiveItems,
   ownExtraIncome,
   showSpendingItems = true,
   hasFriends = false,
@@ -89,16 +105,15 @@ export async function SpendingCalendarSection({
   // read. Drives the heart icon and the read-only "last comment" trace next
   // to the message icon. Own mode skips this entirely (no DM thread, no
   // interaction state to surface).
-  // Own-mode-only: pull active fixed_expenses with a payment_day so we can
-  // surface "scheduled to come out on day X" markers on the calendar. Friend
-  // mode is intentionally excluded for now — privacy of friend's payment
-  // schedule has not been spec'd in DESIGN.md.
+  // Own-mode fixed-expense markers come from the page-prefetched
+  // `ownFixedEffectiveItems` (get_fixed_effective_items: amount = override ??
+  // base). Friend mode is intentionally excluded — privacy of a friend's
+  // payment schedule has not been spec'd in DESIGN.md.
   const supabase = await createClient();
   const [
     monthlyResult,
     categoriesResult,
     viewerInteractions,
-    fixedExpensesRes,
     ownGroupsRes,
   ] = await Promise.all([
     getMonthlyTransactions(userId, startIso, endIso),
@@ -108,22 +123,6 @@ export async function SpendingCalendarSection({
       : Promise.resolve(
           new Map() as ViewerInteractionsByTransaction,
         ),
-    isOwn
-      ? supabase
-          .from("fixed_expenses")
-          .select("id, name, plan_name, amount, payment_day")
-          .eq("user_id", userId)
-          .eq("is_active", true)
-          .not("payment_day", "is", null)
-      : Promise.resolve({
-          data: [] as Array<{
-            id: string;
-            name: string;
-            plan_name: string | null;
-            amount: number;
-            payment_day: number | null;
-          }>,
-        }),
     // Own-mode only: resolve all of the viewer's friend groups (seed +
     // user-defined). The form needs the seed today and the full array in
     // step 6 (multi-group picker). Friend mode never edits.
@@ -213,18 +212,27 @@ export async function SpendingCalendarSection({
   // fire twice (e.g. for a cycle 5/15–6/14, day 20 fires on 5/20 only because
   // 6/20 falls outside; but 5/20 is captured by walking every cycle day).
   const fixedExpenseItems: CalendarFixedExpenseItem[] = (
-    fixedExpensesRes.data ?? []
+    ownFixedEffectiveItems ?? []
   ).map((row) => ({
     id: row.id,
     name: row.name,
     plan_name: row.plan_name,
-    amount: Number(row.amount),
+    amount: row.amount == null ? null : Number(row.amount),
+    baseAmount: row.base_amount == null ? null : Number(row.base_amount),
+    isOverridden: row.is_overridden,
     payment_day: row.payment_day,
   }));
+  // expandFixedExpensesByDay self-filters items without a payment_day and
+  // dedupes a long cycle's double-match to the first matching day.
   const fixedExpensesByDay = expandFixedExpensesByDay(
     cycleStart,
     cycleEnd,
     fixedExpenseItems,
+  );
+  // Active fixed expenses with no payment_day have no calendar day, so the
+  // per-day override edit can't reach them — surface a nudge in the day panel.
+  const undatedFixedExpenses = fixedExpenseItems.filter(
+    (it) => it.payment_day == null,
   );
 
   // Resolve member ids and nicknames for every own-mode group in one pass.
@@ -315,6 +323,7 @@ export async function SpendingCalendarSection({
       incomingCommentSenderNameByTx={incomingCommentSenderNameByTx}
       incomingCommentUnreadByTx={incomingCommentUnreadByTx}
       fixedExpensesByDay={fixedExpensesByDay}
+      undatedFixedExpenses={undatedFixedExpenses}
       focusTxId={focusTxId ?? null}
     />
   );

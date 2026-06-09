@@ -140,4 +140,24 @@ describe("expandFixedExpensesByDay", () => {
       expandFixedExpensesByDay(new Date(2026, 5, 1), new Date(2026, 4, 1), []),
     ).toEqual({});
   });
+
+  it("places an item on its FIRST matching day in a long (>1 month) cycle", () => {
+    // A holiday-cluster-shifted cycle like [1/15, 2/19) spans 35 days and
+    // contains both 1/18 and 2/18, so payment_day=18 would match twice. A
+    // recurring bill leaves once per cycle → it must appear on the first match
+    // only, so a per-cycle override renders exactly one editable row and the
+    // per-day total stays consistent with the once-per-row budget sum.
+    const items = [{ id: "card", payment_day: 18 }];
+    const map = expandFixedExpensesByDay(
+      new Date(2026, 0, 15), // Jan 15
+      new Date(2026, 1, 19), // Feb 19 (exclusive)
+      items,
+    );
+    expect(map["2026-01-18"]?.map((i) => i.id)).toEqual(["card"]);
+    expect(map["2026-02-18"]).toBeUndefined();
+    // Exactly one placement across the whole cycle.
+    expect(
+      Object.values(map).flat().filter((i) => i.id === "card"),
+    ).toHaveLength(1);
+  });
 });

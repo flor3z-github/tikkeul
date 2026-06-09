@@ -66,8 +66,14 @@ export function FriendFixedSummary({
                     ) : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-end leading-tight">
-                    <span className="text-[15px] font-semibold tabular-nums">
-                      {formatKRW(item.amount)}
+                    <span
+                      className={
+                        item.amount == null
+                          ? "text-[15px] font-semibold tabular-nums text-muted-foreground/70"
+                          : "text-[15px] font-semibold tabular-nums"
+                      }
+                    >
+                      {item.amount == null ? "금액 미입력" : formatKRW(item.amount)}
                     </span>
                   </div>
                 </li>

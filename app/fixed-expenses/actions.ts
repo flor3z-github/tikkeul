@@ -15,11 +15,23 @@ function normalizeName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
 }
 
-function validateAmount(amount: number): FixedExpenseActionResult | null {
+// NULL amount = "금액 미입력" (add the item now, fill the amount later). Only a
+// provided value is range-checked.
+function validateAmount(
+  amount: number | null | undefined,
+): FixedExpenseActionResult | null {
+  if (amount === null || amount === undefined) return null;
   if (!Number.isFinite(amount) || amount < 0) {
     return { ok: false, error: "금액은 0원 이상이어야 해요." };
   }
   return null;
+}
+
+// Normalize a form amount to the stored value: NULL when unset, rounded KRW
+// integer otherwise.
+function normalizeAmount(amount: number | null | undefined): number | null {
+  if (amount === null || amount === undefined) return null;
+  return Math.round(amount);
 }
 
 function validateName(name: string): FixedExpenseActionResult | null {
@@ -65,7 +77,7 @@ async function requireUser() {
  */
 export async function activateCatalogPlanAction(input: {
   planId: string;
-  amount: number;
+  amount: number | null;
   payment_day?: number | null;
 }): Promise<FixedExpenseActionResult> {
   const { supabase, user } = await requireUser();
@@ -91,7 +103,7 @@ export async function activateCatalogPlanAction(input: {
     ? `${plan.service_name} ${plan.plan_name}`
     : plan.service_name;
   const name = label.slice(0, 40);
-  const amount = Math.round(input.amount);
+  const amount = normalizeAmount(input.amount);
 
   // Check whether the user already has this plan (active or deactivated).
   const { data: existing, error: existingError } = await supabase
@@ -137,7 +149,7 @@ export async function activateCatalogPlanAction(input: {
 /** Update the amount (and optionally the display name) of an active item. */
 export async function updateFixedExpenseAction(input: {
   id: string;
-  amount: number;
+  amount: number | null;
   name?: string;
   plan_name?: string | null;
   payment_day?: number | null;
@@ -153,12 +165,12 @@ export async function updateFixedExpenseAction(input: {
   }
 
   const patch: {
-    amount: number;
+    amount: number | null;
     name?: string;
     plan_name?: string | null;
     payment_day?: number | null;
   } = {
-    amount: Math.round(input.amount),
+    amount: normalizeAmount(input.amount),
   };
 
   if (input.payment_day !== undefined) {
@@ -239,7 +251,7 @@ export async function deleteFixedExpenseAction(
 /** Add a manual item that isn't in the shared catalog. */
 export async function addManualFixedExpenseAction(input: {
   name: string;
-  amount: number;
+  amount: number | null;
   category?: string | null;
   plan_name?: string | null;
   payment_day?: number | null;
@@ -270,7 +282,7 @@ export async function addManualFixedExpenseAction(input: {
     subscription_plan_id: null,
     name,
     plan_name,
-    amount: Math.round(input.amount),
+    amount: normalizeAmount(input.amount),
     category: input.category ?? null,
     is_active: true,
     payment_day,

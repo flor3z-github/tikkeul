@@ -85,25 +85,29 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   const isCatalog = item.subscription_plan_id !== null;
   const [name, setName] = useState(item.name);
   const [planName, setPlanName] = useState(item.plan_name ?? "");
-  const [amountText, setAmountText] = useState(formatNumber(item.amount));
+  const [amountText, setAmountText] = useState(
+    item.amount != null ? formatNumber(item.amount) : "",
+  );
   const [paymentDay, setPaymentDay] = useState<number | null>(item.payment_day);
   const [savePending, startSaveTransition] = useTransition();
   const [actionPending, startActionTransition] = useTransition();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
+  // Amount is optional ("금액 미입력"): empty input stores null.
+  const amountIsEmpty = amountText.trim().length === 0;
+  const nextAmount = amountIsEmpty ? null : amountValue;
   const trimmedName = name.trim();
   const trimmedPlanName = planName.trim();
   const planNameChanged =
     !isCatalog && trimmedPlanName !== (item.plan_name ?? "");
   const paymentDayChanged = paymentDay !== item.payment_day;
   const dirty =
-    amountValue !== item.amount ||
+    nextAmount !== item.amount ||
     (isCatalog ? false : trimmedName !== item.name) ||
     planNameChanged ||
     paymentDayChanged;
-  const canSave =
-    amountValue > 0 && trimmedName.length > 0 && dirty && !savePending;
+  const canSave = trimmedName.length > 0 && dirty && !savePending;
 
   function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,7 +116,7 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
     startSaveTransition(async () => {
       const result = await updateFixedExpenseAction({
         id: item.id,
-        amount: amountValue,
+        amount: nextAmount,
         // Catalog items keep their canonical name from the plan; manual items
         // let the user rename freely.
         ...(isCatalog
@@ -189,7 +193,7 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-muted-foreground">
-          매달 결제 금액
+          매달 결제 금액 <span className="text-muted-foreground/70">(선택)</span>
         </label>
         <AmountInput value={amountText} onChange={setAmountText} />
         {catalogDefaultAmount != null ? (

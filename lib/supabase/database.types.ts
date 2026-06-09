@@ -103,7 +103,7 @@ export type Database = {
           subscription_plan_id: string | null;
           name: string;
           plan_name: string | null;
-          amount: number;
+          amount: number | null;
           category: string | null;
           is_active: boolean;
           payment_day: number | null;
@@ -116,7 +116,7 @@ export type Database = {
           subscription_plan_id?: string | null;
           name: string;
           plan_name?: string | null;
-          amount: number;
+          amount?: number | null;
           category?: string | null;
           is_active?: boolean;
           payment_day?: number | null;
@@ -129,7 +129,7 @@ export type Database = {
           subscription_plan_id?: string | null;
           name?: string;
           plan_name?: string | null;
-          amount?: number;
+          amount?: number | null;
           category?: string | null;
           is_active?: boolean;
           payment_day?: number | null;
@@ -142,6 +142,44 @@ export type Database = {
             columns: ["subscription_plan_id"];
             isOneToOne: false;
             referencedRelation: "subscription_plans";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      fixed_expense_overrides: {
+        Row: {
+          id: string;
+          user_id: string;
+          fixed_expense_id: string;
+          cycle_anchor: string;
+          amount: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          fixed_expense_id: string;
+          cycle_anchor: string;
+          amount: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          fixed_expense_id?: string;
+          cycle_anchor?: string;
+          amount?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fixed_expense_overrides_fixed_expense_id_fkey";
+            columns: ["fixed_expense_id"];
+            isOneToOne: false;
+            referencedRelation: "fixed_expenses";
             referencedColumns: ["id"];
           },
         ];
@@ -578,8 +616,22 @@ export type Database = {
         Returns: undefined;
       };
       get_friend_fixed_total: {
-        Args: { target: string };
+        Args: { target: string; cycle_anchor: string };
         Returns: number;
+      };
+      get_fixed_effective_items: {
+        Args: { target: string; cycle_anchor: string };
+        Returns: {
+          id: string;
+          subscription_plan_id: string | null;
+          name: string;
+          plan_name: string | null;
+          amount: number | null;
+          base_amount: number | null;
+          category: string | null;
+          payment_day: number | null;
+          is_overridden: boolean;
+        }[];
       };
       get_or_create_dm_thread: {
         Args: { target: string };

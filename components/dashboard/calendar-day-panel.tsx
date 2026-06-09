@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import {
@@ -13,6 +14,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  FixedOverrideDialog,
+  type FixedOverrideTarget,
+} from "@/components/dashboard/fixed-override-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { SpendingMonthGrid } from "@/components/calendar/spending-month-grid";
 import { MonthSwitcher } from "@/app/dashboard/_components/month-switcher";
@@ -41,7 +46,12 @@ export type CalendarFixedExpenseItem = {
   id: string;
   name: string;
   plan_name: string | null;
-  amount: number;
+  /** Effective amount for the cycle (override ?? base); NULL = "금액 미입력". */
+  amount: number | null;
+  /** Monthly base amount; NULL = 미입력. Own mode only (NULL in friend mode). */
+  baseAmount: number | null;
+  /** True when this cycle's amount was overridden. Own mode only. */
+  isOverridden: boolean;
   payment_day: number | null;
 };
 
@@ -85,6 +95,10 @@ type CalendarDayPanelProps = {
   /** Own-mode only: fixed expenses scheduled to fire on each YYYY-MM-DD in
    *  the visible cycle. Drives the calendar marker + the per-day section. */
   fixedExpensesByDay?: Record<string, CalendarFixedExpenseItem[]>;
+  /** Own-mode only: active fixed expenses with no payment_day — they have no
+   *  calendar day, so the per-day override edit can't reach them. Surfaced as
+   *  a nudge pointing to /fixed-expenses to set a payment day. */
+  undatedFixedExpenses?: CalendarFixedExpenseItem[];
   /** Friend-mode only: transaction id forwarded from a push notification's
    *  `?focus=<id>` param. When set, the panel scrolls the matching row into
    *  view on mount and plays a brief pulse so the viewer can locate the
@@ -114,9 +128,16 @@ export function CalendarDayPanel({
   incomingCommentSenderNameByTx,
   incomingCommentUnreadByTx,
   fixedExpensesByDay,
+  undatedFixedExpenses,
   focusTxId,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
+
+  // Per-cycle fixed-expense amount override editor (own mode only). cycleAnchor
+  // for the override is `ym` (the displayed cycle's anchorYm).
+  const [overrideTarget, setOverrideTarget] =
+    useState<FixedOverrideTarget | null>(null);
+  const overrideOpen = overrideTarget !== null;
 
   // Friend-mode interaction state — exclusive (only one row open at a time).
   // The parent owns the draft so we can decide whether outside-click should
@@ -301,37 +322,94 @@ export function CalendarDayPanel({
             </h2>
             <span className="text-[13px] font-semibold tabular-nums text-muted-foreground">
               {formatKRW(
-                fixedExpensesForDay.reduce((sum, it) => sum + it.amount, 0),
+                fixedExpensesForDay.reduce(
+                  (sum, it) => sum + (it.amount ?? 0),
+                  0,
+                ),
               )}
             </span>
           </div>
           <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
             <CardContent className="p-2">
               <ul className="space-y-0.5">
-                {fixedExpensesForDay.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex items-center gap-3 rounded-2xl px-3 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-medium leading-tight">
-                        {item.name}
-                      </p>
-                      {item.plan_name ? (
-                        <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
-                          {item.plan_name}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="shrink-0 text-[15px] font-semibold tabular-nums text-muted-foreground">
-                      {formatKRW(item.amount)}
-                    </span>
-                  </li>
-                ))}
+                {fixedExpensesForDay.map((item) => {
+                  const amountLabel =
+                    item.amount == null ? "금액 미입력" : formatKRW(item.amount);
+                  const inner = (
+                    <>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="truncate text-[15px] font-medium leading-tight">
+                            {item.name}
+                          </p>
+                          {item.isOverridden ? (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                              이번 달
+                            </span>
+                          ) : null}
+                        </div>
+                        {item.plan_name ? (
+                          <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
+                            {item.plan_name}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 text-[15px] font-semibold tabular-nums",
+                          item.amount == null
+                            ? "text-muted-foreground/70"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {amountLabel}
+                      </span>
+                    </>
+                  );
+                  return (
+                    <li key={item.id}>
+                      {isOwn ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOverrideTarget({
+                              fixedExpenseId: item.id,
+                              name: item.name,
+                              planName: item.plan_name,
+                              baseAmount: item.baseAmount,
+                              currentAmount: item.amount,
+                              isOverridden: item.isOverridden,
+                            })
+                          }
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors active:bg-muted"
+                        >
+                          {inner}
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-3 rounded-2xl px-3 py-2.5">
+                          {inner}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </CardContent>
           </Card>
         </section>
+      ) : null}
+
+      {isOwn && (undatedFixedExpenses?.length ?? 0) > 0 ? (
+        <Link
+          href="/fixed-expenses"
+          className="mt-3 block rounded-2xl border border-dashed border-border px-4 py-3 text-[13px] text-muted-foreground transition-colors active:bg-muted"
+        >
+          날짜 미정 고정지출{" "}
+          <span className="font-semibold text-foreground">
+            {undatedFixedExpenses!.length}개
+          </span>{" "}
+          — 날짜를 정하면 여기서 이번 달 금액을 조정할 수 있어요.
+        </Link>
       ) : null}
 
       <section className="mt-6 space-y-3">
@@ -443,6 +521,17 @@ export function CalendarDayPanel({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {isOwn ? (
+        <FixedOverrideDialog
+          open={overrideOpen}
+          onOpenChange={(open) => {
+            if (!open) setOverrideTarget(null);
+          }}
+          cycleAnchor={ym}
+          target={overrideTarget}
+        />
+      ) : null}
     </>
   );
 }

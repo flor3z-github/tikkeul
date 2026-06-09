@@ -1,0 +1,13 @@
+-- 20260512100052_drop_legacy_friend_fixed_total.sql
+-- Cleanup: run ONLY AFTER the application code is deployed and calling the
+-- 2-arg get_friend_fixed_total(uuid, text) overload (migration 0051). Drops the
+-- obsolete 1-arg get_friend_fixed_total(uuid) that summed base amounts with no
+-- cycle awareness.
+--
+-- FULL DEPLOY ORDER:  0050, 0051, 0053  ->  deploy app code  ->  0052
+--   * 0050/0051/0053 are additive and must land BEFORE the code (the dashboard
+--     now calls get_fixed_effective_items + 2-arg get_friend_fixed_total, and
+--     adding a null-amount fixed expense needs the nullable column).
+--   * 0052 is the only breaking step and must land AFTER the code stops calling
+--     the 1-arg overload, or live requests resolve to a dropped signature.
+drop function if exists public.get_friend_fixed_total(uuid);

@@ -107,9 +107,17 @@ function toIsoLocalDate(date: Date): string {
  * The cycle range may span two months (income_day mode), so we iterate days
  * and ask each item whether it matches. Items without a `payment_day` are
  * silently dropped — they are unscheduled by definition.
+ *
+ * Dedup: a cycle longer than a month (e.g. a holiday-cluster-shifted cycle like
+ * `[1/15, 2/19)`) can contain the same day-of-month twice, so a given
+ * `payment_day` would otherwise match two days in one cycle. A recurring bill
+ * leaves once per cycle, so each item is placed on its FIRST matching day only
+ * (cursor walks ascending). This keeps the per-day total consistent with the
+ * once-per-row budget sum and gives a per-cycle amount override exactly one
+ * editable row instead of two.
  */
 export function expandFixedExpensesByDay<
-  T extends { payment_day: number | null },
+  T extends { id: string; payment_day: number | null },
 >(cycleStart: Date, cycleEnd: Date, items: T[]): Record<string, T[]> {
   const result: Record<string, T[]> = {};
   if (cycleStart >= cycleEnd) return result;
@@ -123,11 +131,14 @@ export function expandFixedExpensesByDay<
     cycleEnd.getMonth(),
     cycleEnd.getDate(),
   );
+  const placed = new Set<string>();
   while (cursor < end) {
     const iso = toIsoLocalDate(cursor);
     for (const item of items) {
+      if (placed.has(item.id)) continue;
       if (paymentDayMatchesDate(item.payment_day, cursor)) {
         (result[iso] ??= []).push(item);
+        placed.add(item.id);
       }
     }
     cursor.setDate(cursor.getDate() + 1);
