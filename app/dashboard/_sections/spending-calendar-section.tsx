@@ -41,6 +41,7 @@ type SpendingCalendarSectionProps = {
     plan_name: string | null;
     amount: number | null;
     base_amount: number | null;
+    category: string | null;
     payment_day: number | null;
     is_overridden: boolean;
   }>;
@@ -219,6 +220,7 @@ export async function SpendingCalendarSection({
     plan_name: row.plan_name,
     amount: row.amount == null ? null : Number(row.amount),
     baseAmount: row.base_amount == null ? null : Number(row.base_amount),
+    category: row.category,
     isOverridden: row.is_overridden,
     payment_day: row.payment_day,
   }));

@@ -43,6 +43,7 @@ import {
 } from "@/lib/utils/calendar";
 import { toISODate } from "@/lib/utils/date";
 import { formatKRW } from "@/lib/utils/money";
+import { FixedCategoryBadge } from "@/lib/utils/fixed-category-icon";
 
 export type InteractionMode = "emoji" | "comment";
 
@@ -54,6 +55,8 @@ export type CalendarFixedExpenseItem = {
   amount: number | null;
   /** Monthly base amount; NULL = 미입력. Own mode only (NULL in friend mode). */
   baseAmount: number | null;
+  /** Catalog category text (AI/OTT/…) → row icon; NULL for manual items. */
+  category: string | null;
   /** True when this cycle's amount was overridden. Own mode only. */
   isOverridden: boolean;
   payment_day: number | null;
@@ -275,7 +278,7 @@ export function CalendarDayPanel({
     [transactions, selectedDay],
   );
 
-  const dayTotal = dayRows.reduce((sum, row) => sum + Number(row.amount), 0);
+  const txDayTotal = dayRows.reduce((sum, row) => sum + Number(row.amount), 0);
   const label = formatKoreanLongDate(selectedDay);
 
   // Push-notification deep link: scroll the focused transaction row into view
@@ -311,6 +314,13 @@ export function CalendarDayPanel({
   }, [focusTxId]);
 
   const fixedExpensesForDay = fixedExpensesByDay?.[selectedDay] ?? [];
+  // Day total = fixed expenses firing this day + variable spending. Summed so
+  // every day's total reconciles to the headline totalSpent (fixed + 변동).
+  const fixedDayTotal = fixedExpensesForDay.reduce(
+    (sum, it) => sum + (it.amount ?? 0),
+    0,
+  );
+  const dayTotal = txDayTotal + fixedDayTotal;
   // Set of every day in the cycle that has at least one scheduled fixed
   // expense. Used to render a small dot under those day cells.
   const fixedExpenseDays = useMemo(() => {
@@ -338,91 +348,6 @@ export function CalendarDayPanel({
           onSelectDay={handleSelectDay}
         />
       </div>
-
-      {fixedExpensesForDay.length > 0 ? (
-        <section className="mt-6 space-y-3">
-          <div className="flex items-baseline justify-between px-1">
-            <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
-              이 날 빠지는 고정지출
-            </h2>
-            <span className="text-[13px] font-semibold tabular-nums text-muted-foreground">
-              {formatKRW(
-                fixedExpensesForDay.reduce(
-                  (sum, it) => sum + (it.amount ?? 0),
-                  0,
-                ),
-              )}
-            </span>
-          </div>
-          <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
-            <CardContent className="p-2">
-              <ul className="space-y-0.5">
-                {fixedExpensesForDay.map((item) => {
-                  const amountLabel =
-                    item.amount == null ? "금액 미입력" : formatKRW(item.amount);
-                  const inner = (
-                    <>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate text-[15px] font-medium leading-tight">
-                            {item.name}
-                          </p>
-                          {item.isOverridden ? (
-                            <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                              이번 달
-                            </span>
-                          ) : null}
-                        </div>
-                        {item.plan_name ? (
-                          <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
-                            {item.plan_name}
-                          </p>
-                        ) : null}
-                      </div>
-                      <span
-                        className={cn(
-                          "shrink-0 text-[15px] font-semibold tabular-nums",
-                          item.amount == null
-                            ? "text-muted-foreground/70"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        {amountLabel}
-                      </span>
-                    </>
-                  );
-                  return (
-                    <li key={item.id}>
-                      {isOwn ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setOverrideTarget({
-                              fixedExpenseId: item.id,
-                              name: item.name,
-                              planName: item.plan_name,
-                              baseAmount: item.baseAmount,
-                              currentAmount: item.amount,
-                              isOverridden: item.isOverridden,
-                            })
-                          }
-                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors active:bg-muted"
-                        >
-                          {inner}
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-3 rounded-2xl px-3 py-2.5">
-                          {inner}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
 
       {isOwn && undatedItems.length > 0 ? (
         <div className="mt-3">
@@ -503,12 +428,78 @@ export function CalendarDayPanel({
 
         <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
           <CardContent className="p-2" ref={listContainerRef}>
-            {dayRows.length === 0 ? (
+            {dayRows.length === 0 && fixedExpensesForDay.length === 0 ? (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                 이 날 기록된 소비가 없어요.
               </p>
             ) : (
               <ul className="space-y-0.5">
+                {/* Fixed expenses firing this day, pinned above variable
+                    spending. Same icon-circle row as a transaction, tagged
+                    「고정」; tap (own mode) opens the per-cycle override sheet. */}
+                {fixedExpensesForDay.map((item) => {
+                  const amountLabel =
+                    item.amount == null
+                      ? "금액 미입력"
+                      : formatKRW(item.amount);
+                  const inner = (
+                    <div className="flex w-full items-center gap-3">
+                      <FixedCategoryBadge category={item.category} />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 truncate text-[15px] font-medium leading-tight">
+                          <span className="truncate">{item.name}</span>
+                          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            고정
+                          </span>
+                          {item.isOverridden ? (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                              이번 달
+                            </span>
+                          ) : null}
+                        </p>
+                        {item.plan_name ? (
+                          <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
+                            {item.plan_name}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 text-[15px] font-semibold tabular-nums",
+                          item.amount == null && "text-muted-foreground/70",
+                        )}
+                      >
+                        {amountLabel}
+                      </span>
+                    </div>
+                  );
+                  return (
+                    <li key={`fx-${item.id}`}>
+                      {isOwn ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOverrideTarget({
+                              fixedExpenseId: item.id,
+                              name: item.name,
+                              planName: item.plan_name,
+                              baseAmount: item.baseAmount,
+                              currentAmount: item.amount,
+                              isOverridden: item.isOverridden,
+                            })
+                          }
+                          className="block w-full rounded-2xl px-3 py-2 text-left transition-colors hover:bg-muted active:bg-muted"
+                        >
+                          {inner}
+                        </button>
+                      ) : (
+                        <div className="block w-full rounded-2xl px-3 py-2">
+                          {inner}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
                 {dayRows.map((transaction) => (
                   <li key={transaction.id} data-tx-id={transaction.id}>
                     <TransactionItem

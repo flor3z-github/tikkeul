@@ -307,6 +307,7 @@ export default async function DashboardPage({
       plan_name: row.plan_name,
       amount: row.amount == null ? null : Number(row.amount),
       base_amount: row.base_amount == null ? null : Number(row.base_amount),
+      category: row.category,
       payment_day: row.payment_day,
       is_overridden: row.is_overridden,
     }),
