@@ -64,12 +64,11 @@ export function CycleBreakdownView({
             className={cn(
               "text-[13px] tabular-nums",
               topDelta! > 0
-                ? "text-[color:var(--warning)]"
-                : "text-muted-foreground",
+                ? "text-[color:var(--destructive)]"
+                : "text-[color:var(--success)]",
             )}
           >
             지난 사이클보다 {topDelta! > 0 ? "↑" : "↓"}{" "}
-            {topDelta! > 0 ? "+" : "−"}
             {formatNumber(Math.abs(topDelta!))}원
           </p>
         ) : null}
@@ -127,12 +126,13 @@ function DeltaBadge({ delta }: { delta: number }) {
   return (
     <span
       className={cn(
-        "shrink-0 text-[11px] tabular-nums",
-        up ? "text-[color:var(--warning)]" : "text-muted-foreground",
+        "shrink-0 whitespace-nowrap text-[11px] tabular-nums",
+        up
+          ? "text-[color:var(--destructive)]"
+          : "text-[color:var(--success)]",
       )}
     >
-      {up ? "↑" : "↓"} {up ? "+" : "−"}
-      {formatNumber(Math.abs(delta))}
+      {up ? "↑" : "↓"} {formatNumber(Math.abs(delta))}원
     </span>
   );
 }
@@ -148,23 +148,19 @@ function VariableRow({ row }: { row: VariableBreakdownRow }) {
       >
         <CategoryIcon slug={row.icon} className="size-5" />
       </span>
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-[15px] font-medium">{row.name}</span>
-          <span className="shrink-0 text-[15px] font-semibold tabular-nums">
-            {formatNumber(row.total)}원
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${row.share}%`, backgroundColor: swatch }}
-            />
-          </div>
-          <span className="w-9 shrink-0 text-right text-[12px] tabular-nums text-muted-foreground">
+      {/* 토스식 2줄: 왼쪽 이름/비중(%), 오른쪽 금액/전월比 delta. %는 상단 막대의
+          세그먼트 색과 같은 카테고리의 정확한 비중(슬리버까지 숫자로 확인). */}
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-medium">{row.name}</p>
+          <p className="text-[13px] tabular-nums text-muted-foreground">
             {Math.round(row.share)}%
-          </span>
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-[15px] font-semibold tabular-nums">
+            {formatNumber(row.total)}원
+          </p>
           {showDelta ? <DeltaBadge delta={row.delta!} /> : null}
         </div>
       </div>
