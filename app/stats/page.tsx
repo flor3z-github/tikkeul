@@ -21,6 +21,7 @@ import {
   variableTotal,
   type FixedEffectiveItem,
 } from "@/lib/utils/stats/cycle-breakdown";
+import { clampToElapsedWindow } from "@/lib/utils/stats/elapsed-window";
 
 type FixedRpcRow = {
   id: string;
@@ -97,12 +98,13 @@ export default async function StatsPage({
     rule = (settingsRes.data.payroll_rule ?? "prev") as PayrollRule;
   }
 
+  const now = nowInSeoul();
   const { ym, cycleStart, cycleEnd, cycleLabel } = resolveDashboardParamsB(
     {},
     payday,
     rule,
     holidays,
-    nowInSeoul(),
+    now,
   );
   const startIso = cycleStart.toISOString();
   const endIso = cycleEnd.toISOString();
@@ -166,8 +168,19 @@ export default async function StatsPage({
   // per-row deltas then naturally hide unchanged/new items.
   const hasPrevBaseline =
     prevMonthly.ok && prevMonthly.transactions.length > 0;
+  // 변동 전월比는 같은 경과 시점끼리 비교한다(§12.9): 진행 중인 이번 사이클은
+  // "지금까지" 쓴 부분합인데 직전은 완료된 전체합이라, 직전 변동을 이번 사이클이
+  // 지난 경과 시간만큼만 잘라 비교한다(고정은 결제일 step이라 자르지 않음 — 아래
+  // prevFixedItems는 전액 유지). 이번 사이클 측은 자르지 않는다: 상단 총액이
+  // 대시보드 monthlyTotal과 정확히 같아야 하는 불변식(§12.9) 보존 + 미래일자 거래
+  // 엣지 때문.
   const prevTransactions = hasPrevBaseline
-    ? prevMonthly.transactions
+    ? clampToElapsedWindow(
+        prevMonthly.transactions,
+        cycleStart,
+        prevCycle.start,
+        now,
+      )
     : undefined;
   // Fixed deltas + topDelta need BOTH fixed RPCs to have succeeded — if the prev
   // (or current) fixed query errored, prev fixed would read as 0 and overstate
