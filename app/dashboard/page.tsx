@@ -508,6 +508,12 @@ export default async function DashboardPage({
           const showSpendingGroup =
             perms.spendingTotal || perms.spendingItems;
           const showFixedGroup = perms.fixedTotal || perms.fixedItems;
+          // B-full in friend mode: when the calendar renders (spending items
+          // granted) AND fixed items are granted, fold the friend's fixed
+          // expenses into the calendar cells/day-panel and drop the separate
+          // 고정지출 list. Other perm combos fall back to FriendFixedSection
+          // (items list when the calendar is hidden, total-only card otherwise).
+          const foldFixed = perms.spendingItems && perms.fixedItems;
           return (
             <>
               {showSpendingGroup ? (
@@ -539,17 +545,18 @@ export default async function DashboardPage({
                       cycleLabel={cycleLabel}
                       targetUserId={viewingUserId}
                       showSpendingItems={perms.spendingItems}
+                      showFixedItems={perms.fixedItems}
                       focusTxId={focusTxId}
                     />
                   </Suspense>
                 </section>
               ) : null}
 
-              {showSpendingGroup && showFixedGroup ? (
+              {showSpendingGroup && showFixedGroup && !foldFixed ? (
                 <hr aria-hidden className="mt-8 border-border" />
               ) : null}
 
-              {showFixedGroup ? (
+              {showFixedGroup && !foldFixed ? (
                 <section className="mt-6 space-y-3">
                   <h2 className="px-1 text-xl font-bold tracking-[-0.02em]">
                     고정지출

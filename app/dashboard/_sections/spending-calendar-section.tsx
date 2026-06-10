@@ -30,8 +30,9 @@ type SpendingCalendarSectionProps = {
   /**
    * Own-mode effective fixed expenses for the displayed cycle, prefetched by
    * the page via get_fixed_effective_items (amount = override ?? base). Used to
-   * render per-day markers + the tap-to-override day-panel rows. Ignored in
-   * friend mode (friend calendar shows no fixed markers).
+   * render per-day markers + the tap-to-override day-panel rows. In friend mode
+   * the section fetches the friend's effective items itself (gated by
+   * `showFixedItems`); this prop is ignored there.
    */
   ownFixedEffectiveItems?: Array<{
     id: string;
@@ -43,6 +44,15 @@ type SpendingCalendarSectionProps = {
     payment_day: number | null;
     is_overridden: boolean;
   }>;
+  /**
+   * Friend-mode flag: when true the owner granted the fixed-items perm, so we
+   * fold the friend's fixed expenses into the calendar (same get_fixed_effective_items
+   * RPC, perm re-checked server-side; a friend gets base_amount = null /
+   * is_overridden = false). Undated (payment_day = null) friend fixed expenses
+   * have no calendar day and are intentionally dropped in friend mode (no
+   * scheduling nudge for a friend). Ignored in own mode.
+   */
+  showFixedItems?: boolean;
   /**
    * Own-mode per-cycle extra income prefetched by the page. Folded into
    * `cycleBudget` (income + 추가수입) so calendar day-classification
@@ -82,6 +92,7 @@ export async function SpendingCalendarSection({
   ownFixedEffectiveItems,
   ownExtraIncome,
   showSpendingItems = true,
+  showFixedItems = false,
   hasFriends = false,
   focusTxId,
 }: SpendingCalendarSectionProps) {
@@ -106,14 +117,17 @@ export async function SpendingCalendarSection({
   // interaction state to surface).
   // Own-mode fixed-expense markers come from the page-prefetched
   // `ownFixedEffectiveItems` (get_fixed_effective_items: amount = override ??
-  // base). Friend mode is intentionally excluded — privacy of a friend's
-  // payment schedule has not been spec'd in DESIGN.md.
+  // base). Friend mode fetches the same RPC below (gated by `showFixedItems`)
+  // so the friend's fixed expenses fold into the calendar (B-full) — the RPC
+  // re-checks show_fixed_items and returns base_amount/is_overridden nulled, so
+  // no override signal leaks (DESIGN.md §12.6).
   const supabase = await createClient();
   const [
     monthlyResult,
     categoriesResult,
     viewerInteractions,
     ownGroupsRes,
+    friendFixedRes,
   ] = await Promise.all([
     getMonthlyTransactions(userId, startIso, endIso),
     getCategories(viewerId),
@@ -136,6 +150,29 @@ export async function SpendingCalendarSection({
             name: string;
             slug: string | null;
             created_at: string;
+          }>,
+        }),
+    // Friend-mode fixed expenses for the displayed cycle (B-full: folded into
+    // the calendar). Same RPC the FriendFixedSection list used; it re-checks the
+    // show_fixed_items perm server-side and returns base_amount = null /
+    // is_overridden = false for a friend. Own mode uses the page-prefetched
+    // ownFixedEffectiveItems instead, so this stays empty.
+    !isOwn && showFixedItems
+      ? supabase.rpc("get_fixed_effective_items", {
+          target: userId,
+          cycle_anchor: ym,
+        })
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            subscription_plan_id: string | null;
+            name: string;
+            plan_name: string | null;
+            amount: number | null;
+            base_amount: number | null;
+            category: string | null;
+            payment_day: number | null;
+            is_overridden: boolean;
           }>,
         }),
   ]);
@@ -211,18 +248,23 @@ export async function SpendingCalendarSection({
   // visible cycle. Income_day cycles span two months, so payment_day=20 may
   // fire twice (e.g. for a cycle 5/15–6/14, day 20 fires on 5/20 only because
   // 6/20 falls outside; but 5/20 is captured by walking every cycle day).
-  const fixedExpenseItems: CalendarFixedExpenseItem[] = (
-    ownFixedEffectiveItems ?? []
-  ).map((row) => ({
-    id: row.id,
-    name: row.name,
-    plan_name: row.plan_name,
-    amount: row.amount == null ? null : Number(row.amount),
-    baseAmount: row.base_amount == null ? null : Number(row.base_amount),
-    category: row.category,
-    isOverridden: row.is_overridden,
-    payment_day: row.payment_day,
-  }));
+  // Source = own-mode page-prefetched items, or the friend RPC result (same
+  // shape; base_amount/is_overridden already nulled server-side for a friend).
+  const fixedEffectiveSource = isOwn
+    ? (ownFixedEffectiveItems ?? [])
+    : (friendFixedRes.data ?? []);
+  const fixedExpenseItems: CalendarFixedExpenseItem[] = fixedEffectiveSource.map(
+    (row) => ({
+      id: row.id,
+      name: row.name,
+      plan_name: row.plan_name,
+      amount: row.amount == null ? null : Number(row.amount),
+      baseAmount: row.base_amount == null ? null : Number(row.base_amount),
+      category: row.category,
+      isOverridden: row.is_overridden,
+      payment_day: row.payment_day,
+    }),
+  );
   // expandFixedExpensesByDay self-filters items without a payment_day and
   // dedupes a long cycle's double-match to the first matching day.
   const fixedExpensesByDay = expandFixedExpensesByDay(
@@ -232,9 +274,11 @@ export async function SpendingCalendarSection({
   );
   // Active fixed expenses with no payment_day have no calendar day, so the
   // per-day override edit can't reach them — surface a nudge in the day panel.
-  const undatedFixedExpenses = fixedExpenseItems.filter(
-    (it) => it.payment_day == null,
-  );
+  // Own mode only: a friend's undated fixed expenses are intentionally dropped
+  // (no calendar day, no scheduling affordance for a friend).
+  const undatedFixedExpenses = isOwn
+    ? fixedExpenseItems.filter((it) => it.payment_day == null)
+    : [];
 
   // Resolve member ids and nicknames for every own-mode group in one pass.
   // The form needs each group's members for the visibility selector / nested
