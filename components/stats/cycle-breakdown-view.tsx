@@ -168,30 +168,37 @@ function VariableRow({ row }: { row: VariableBreakdownRow }) {
   );
 }
 
+/**
+ * 고정 행. 이름(좌)·금액(우)을 한 줄에 두고 inner `items-center`로 정렬 → 둘 다 블록
+ * 세로 center에 와 같은 라인에 놓인다. delta는 (잠정) 금액 아래 `absolute`라 행 높이·
+ * 이름/금액 centering에 영향 없음 — delta 위치는 추후 재검토. 아이콘(40px)이 최대
+ * 높이라 행 높이는 통일. /poc/stats 후보 비교로 검증.
+ */
 function FixedRow({ row }: { row: FixedBreakdownRow }) {
   const showDelta = row.delta != null && row.delta !== 0;
   return (
     <li className="flex items-center gap-3 px-1 py-2">
       <FixedCategoryBadge category={row.category} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <div className="min-w-0 truncate">
-            <span className="text-[15px] font-medium">{row.name}</span>
-            {row.planName ? (
-              <span className="ml-1.5 text-[12px] text-muted-foreground">
-                {row.planName}
-              </span>
-            ) : null}
-          </div>
-          <span className="shrink-0 text-[15px] font-semibold tabular-nums">
-            {formatNumber(row.amount)}원
-          </span>
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-medium">{row.name}</p>
+          {row.planName ? (
+            <p className="truncate text-[13px] text-muted-foreground">
+              {row.planName}
+            </p>
+          ) : null}
         </div>
-        {showDelta ? (
-          <div className="mt-0.5">
-            <DeltaBadge delta={row.delta!} />
-          </div>
-        ) : null}
+        <div className="relative shrink-0 text-right">
+          <p className="text-[15px] font-semibold tabular-nums">
+            {formatNumber(row.amount)}원
+          </p>
+          {showDelta ? (
+            // 잠정: 금액 바로 아래 absolute. 추후 위치 결정.
+            <div className="absolute right-0 top-full -mt-1">
+              <DeltaBadge delta={row.delta!} />
+            </div>
+          ) : null}
+        </div>
       </div>
     </li>
   );
