@@ -58,8 +58,9 @@ export function UndatedFixedDialog({
             날짜·금액 정하기
           </DrawerTitle>
           <DrawerDescription className="text-[13px] text-muted-foreground">
-            날짜를 정하면 달력에 표시돼요. 금액은 기본값이 채워져 있고, 이번 달만
-            다르게 바꿀 수 있어요.
+            {target?.baseAmount != null
+              ? "날짜를 정하면 달력에 표시돼요. 금액은 기본값이 채워져 있고, 이번 달만 다르게 바꿀 수 있어요."
+              : "날짜를 정하면 달력에 표시돼요. 이번 달 금액을 입력하면 이번 달에만 적용돼요."}
           </DrawerDescription>
         </DrawerHeader>
         {target ? (
