@@ -488,7 +488,6 @@ export default async function DashboardPage({
               cycleLabel={cycleLabel}
               targetUserId={undefined}
               ownSettings={ownSettings}
-              ownFixedExpense={ownFixedExpense}
               ownFixedEffectiveItems={ownFixedEffectiveItems}
               ownExtraIncome={ownExtraIncome}
               showSpendingItems={perms.spendingItems}

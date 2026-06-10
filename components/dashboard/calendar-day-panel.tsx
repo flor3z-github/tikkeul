@@ -75,7 +75,10 @@ type CalendarDayPanelProps = {
    *  to the edit form / FAB so the visibility selector can render. Empty in
    *  friend mode (no edit affordance) or until the data loads. */
   groups?: TransactionFormGroup[];
-  availableBudget: number;
+  /** Daily-classification baseline forwarded to the grid: the cycle's full
+   *  inflow pool (income + 추가수입), NOT income − fixed (B-full: fixed is
+   *  folded into each day's amount, so subtracting it here too double-counts). */
+  cycleBudget: number;
   /** True when the viewer is looking at their own dashboard. */
   isOwn: boolean;
   /** Transaction owner's user_id — same as the viewer in own mode, the friend's
@@ -123,7 +126,7 @@ export function CalendarDayPanel({
   transactions,
   categories,
   groups,
-  availableBudget,
+  cycleBudget,
   isOwn,
   ownerUserId,
   lastEmojiByTx,
@@ -250,14 +253,24 @@ export function CalendarDayPanel({
     };
   }, [activeRowId, requestClose]);
 
+  // Grid cell amount = variable spending + fixed expenses firing that day
+  // (B-full). The cell number therefore matches the day-panel header total, and
+  // the cycle's daily cells sum to totalSpent (변동 + 고정). The classification
+  // baseline (cycleBudget) is the full inflow pool — not income − fixed — so the
+  // fixed amount isn't subtracted twice. Friend mode passes no
+  // fixedExpensesByDay, so this stays variable-only there.
   const dailyTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const tx of transactions) {
       const day = toISODate(new Date(tx.spent_at));
       totals[day] = (totals[day] ?? 0) + Number(tx.amount);
     }
+    for (const [iso, items] of Object.entries(fixedExpensesByDay ?? {})) {
+      const fixedSum = items.reduce((sum, it) => sum + (it.amount ?? 0), 0);
+      if (fixedSum !== 0) totals[iso] = (totals[iso] ?? 0) + fixedSum;
+    }
     return totals;
-  }, [transactions]);
+  }, [transactions, fixedExpensesByDay]);
 
   const dayRows: TransactionListRow[] = useMemo(
     () =>
@@ -343,7 +356,7 @@ export function CalendarDayPanel({
           cycleMode={cycleMode}
           selectedDay={selectedDay}
           dailyTotals={dailyTotals}
-          availableBudget={availableBudget}
+          cycleBudget={cycleBudget}
           fixedExpenseDays={fixedExpenseDays}
           onSelectDay={handleSelectDay}
         />

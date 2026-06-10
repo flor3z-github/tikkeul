@@ -17,7 +17,10 @@ type SpendingMonthGridProps = {
   cycleMode: CycleMode;
   selectedDay: string;
   dailyTotals: Record<string, number>;
-  availableBudget: number;
+  /** Daily-classification baseline: the cycle's full inflow pool (income +
+   *  추가수입). Fixed expenses are folded into `dailyTotals`, so this is NOT
+   *  income − fixed (would double-count). 0 in friend mode → all cells normal. */
+  cycleBudget: number;
   /** Own-mode: set of YYYY-MM-DD with at least one scheduled fixed expense.
    *  Drives a small marker under the day number. */
   fixedExpenseDays?: Set<string>;
@@ -68,7 +71,7 @@ export function SpendingMonthGrid({
   cycleMode,
   selectedDay,
   dailyTotals,
-  availableBudget,
+  cycleBudget,
   fixedExpenseDays,
   onSelectDay,
 }: SpendingMonthGridProps) {
@@ -116,7 +119,7 @@ export function SpendingMonthGrid({
             );
           }
           const amount = dailyTotals[cell.iso] ?? 0;
-          const state = classifyDailyAmount(amount, availableBudget);
+          const state = classifyDailyAmount(amount, cycleBudget);
           const isSelected = cell.inCycle && cell.iso === selectedDay;
           const hasFixedExpense = fixedExpenseDays?.has(cell.iso) === true;
           const isMonthBoundary = shouldShowMonthLabel(

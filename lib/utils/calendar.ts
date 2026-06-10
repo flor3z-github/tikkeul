@@ -391,15 +391,19 @@ export function buildCycleMatrix(
   return cells;
 }
 
-// `available / 30` baseline keeps the threshold predictable month-to-month and
-// avoids month-length skew (28 vs 31). 2× → warning, 3× → danger.
+// `cycleBudget / 30` baseline keeps the threshold predictable month-to-month
+// and avoids month-length skew (28 vs 31). 2× → warning, 3× → danger.
+// cycleBudget is the cycle's full inflow pool (income + 추가수입) — fixed
+// expenses are charged on the day they fire (folded into each day's amount), so
+// the baseline keeps the whole pool, NOT income − fixed (else fixed is
+// subtracted once from the pool and once as the day's spend = double-count).
 export function classifyDailyAmount(
   amount: number,
-  availableBudget: number,
+  cycleBudget: number,
 ): DayState {
   if (amount <= 0) return "none";
-  if (availableBudget <= 0) return "normal";
-  const daily = availableBudget / 30;
+  if (cycleBudget <= 0) return "normal";
+  const daily = cycleBudget / 30;
   if (amount >= daily * 3) return "danger";
   if (amount >= daily * 2) return "warning";
   return "normal";

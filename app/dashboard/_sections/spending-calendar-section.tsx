@@ -27,8 +27,6 @@ type SpendingCalendarSectionProps = {
   targetUserId?: string;
   /** Own-mode user_settings prefetched by the page. Ignored in friend mode. */
   ownSettings?: { hasSettings: boolean; monthlyIncome: number };
-  /** Own-mode fixed-expense total prefetched by the page. Ignored in friend mode. */
-  ownFixedExpense?: number;
   /**
    * Own-mode effective fixed expenses for the displayed cycle, prefetched by
    * the page via get_fixed_effective_items (amount = override ?? base). Used to
@@ -47,8 +45,9 @@ type SpendingCalendarSectionProps = {
   }>;
   /**
    * Own-mode per-cycle extra income prefetched by the page. Folded into
-   * `availableBudget` so calendar day-classification (normal/warning/danger)
-   * uses the effective cycle budget. Ignored in friend mode.
+   * `cycleBudget` (income + 추가수입) so calendar day-classification
+   * (normal/warning/danger) uses the full inflow pool as its baseline. Ignored
+   * in friend mode.
    */
   ownExtraIncome?: number;
   /**
@@ -80,7 +79,6 @@ export async function SpendingCalendarSection({
   cycleLabel,
   targetUserId,
   ownSettings,
-  ownFixedExpense,
   ownFixedEffectiveItems,
   ownExtraIncome,
   showSpendingItems = true,
@@ -161,12 +159,13 @@ export async function SpendingCalendarSection({
   }
 
   const monthlyIncome = isOwn ? (ownSettings?.monthlyIncome ?? 0) : 0;
-  const fixedExpense = isOwn ? (ownFixedExpense ?? 0) : 0;
   const extraIncome = isOwn ? (ownExtraIncome ?? 0) : 0;
-  const availableBudget = Math.max(
-    0,
-    monthlyIncome + extraIncome - fixedExpense,
-  );
+  // Daily-classification baseline for the grid (B-full): the cycle's full
+  // inflow pool (income + 추가수입), NOT income − fixed. Fixed expenses are
+  // charged on the day they fire (folded into each day's cell amount in
+  // CalendarDayPanel), so subtracting fixed here too would double-count it.
+  // Friend mode → 0 (income hidden) → classifyDailyAmount returns "normal".
+  const cycleBudget = monthlyIncome + extraIncome;
 
   // Own mode only: comments friends left on the owner's own transactions,
   // surfaced as a trace under each row (deep-links to the DM message). Needs
@@ -313,7 +312,7 @@ export async function SpendingCalendarSection({
       transactions={monthlyResult.transactions}
       categories={categoriesResult.categories}
       groups={groups}
-      availableBudget={availableBudget}
+      cycleBudget={cycleBudget}
       isOwn={isOwn}
       ownerUserId={userId}
       lastEmojiByTx={lastEmojiByTx}
