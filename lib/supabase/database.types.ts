@@ -450,6 +450,7 @@ export type Database = {
           sender_id: string;
           content: string;
           quoted_transaction_id: string | null;
+          reply_to_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -458,6 +459,7 @@ export type Database = {
           sender_id: string;
           content: string;
           quoted_transaction_id?: string | null;
+          reply_to_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -466,6 +468,7 @@ export type Database = {
           sender_id?: string;
           content?: string;
           quoted_transaction_id?: string | null;
+          reply_to_id?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -483,6 +486,8 @@ export type Database = {
             referencedRelation: "transactions";
             referencedColumns: ["id"];
           },
+          // reply_to_id is a plain uuid (no FK — see migration 0054) so it has
+          // no Relationships entry; it's resolved by an explicit self-fetch.
         ];
       };
       push_subscriptions: {

@@ -10,7 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, X } from "lucide-react";
+import { ChevronLeft, CornerUpLeft, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -23,6 +23,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { CategoryIcon } from "@/lib/utils/category-icon";
 import { cn } from "@/lib/utils";
@@ -61,12 +66,23 @@ export type DmChatQuoteCard = {
   category_color: string | null;
 };
 
+// A message-to-message quote reply. `content` is the replied-to message's text
+// (rendered as a one-line preview); `deleted` is true when the target couldn't
+// be resolved (hard-deleted), in which case the UI shows a "삭제된 메시지" stub.
+export type DmChatReply = {
+  id: string;
+  senderId: string;
+  content: string;
+  deleted: boolean;
+};
+
 export type DmChatMessage = {
   id: string;
   senderId: string;
   content: string;
   createdAt: string;
   quote: DmChatQuoteCard | null;
+  replyTo: DmChatReply | null;
 };
 
 type MessageGroup = {
@@ -92,6 +108,18 @@ type Props = {
 };
 
 const HIGHLIGHT_MS = 1500;
+
+// Ring flash applied to a message when it's scrolled into view (deep-link on
+// mount, or tapping a reply card to jump to the original). Listed as static
+// string literals so Tailwind's content scanner picks them up at build time.
+// Tailwind: ring-2 ring-primary/50 ring-offset-2 ring-offset-background rounded-2xl
+const HIGHLIGHT_CLASSES = [
+  "ring-2",
+  "ring-primary/50",
+  "ring-offset-2",
+  "ring-offset-background",
+  "rounded-2xl",
+];
 
 function mintUUIDv4(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -139,9 +167,11 @@ function buildRenderItems(
     const continuesGroup =
       currentGroup !== null &&
       currentGroup.senderId === message.senderId &&
-      // Quoted messages start their own group so the quote card always sits at
-      // the visual top of the bubble cluster instead of being orphaned.
+      // Quoted messages (transaction quote OR a message reply) start their own
+      // group so the quote/reply card always sits at the visual top of the
+      // bubble cluster instead of being orphaned.
       message.quote === null &&
+      message.replyTo === null &&
       messageDate.getTime() -
         new Date(
           currentGroup.messages[currentGroup.messages.length - 1].createdAt,
@@ -177,9 +207,18 @@ export function DmChat({
   const [pendingQuote, setPendingQuote] = useState<DmChatQuoteCard | null>(
     prefilledQuote,
   );
+  const [pendingReply, setPendingReply] = useState<DmChatReply | null>(null);
   const [, startSendTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // The long-pressed message whose action sheet (답장 / 삭제) is open. Holds the
+  // whole message so the sheet can build the reply snippet and decide whether
+  // 삭제 shows (own messages only).
+  const [actionSheetMessage, setActionSheetMessage] =
+    useState<DmChatMessage | null>(null);
+  // Set true by the 답장 action so the sheet's onCloseAutoFocus re-focuses the
+  // composer (and only then) — see handleReplyFromSheet.
+  const focusComposerOnCloseRef = useRef(false);
   const [composerHeight, setComposerHeight] = useState(COMPOSER_FALLBACK_HEIGHT);
   // While true, suppress every auto-scroll-to-bottom path (composer resize,
   // initialMessages refresh) so the user stays parked on the deep-linked
@@ -195,6 +234,13 @@ export function DmChat({
   const composerRef = useRef<HTMLFormElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Tracks the in-flight reply-jump highlight (timer + element) so overlapping
+  // taps cancel the previous flash instead of leaving a stuck ring / flipping
+  // parkedAtTarget off under a newer jump. See scrollToMessage.
+  const jumpHighlightRef = useRef<{
+    timer: ReturnType<typeof setTimeout>;
+    el: HTMLElement;
+  } | null>(null);
 
   // Scroll the window to the document bottom on the next frame so layout
   // (composer height, new message DOM) has settled. We deliberately do NOT
@@ -423,16 +469,6 @@ export function DmChat({
         el.scrollIntoView({ block: "center", behavior: "auto" });
         // Apply the highlight directly via classList rather than via React
         // state to avoid setState-in-effect (react-hooks/set-state-in-effect).
-        // The class strings are listed below as static literals so Tailwind's
-        // content scanner still picks them up at build time.
-        // Tailwind: ring-2 ring-primary/50 ring-offset-2 ring-offset-background rounded-2xl
-        const HIGHLIGHT_CLASSES = [
-          "ring-2",
-          "ring-primary/50",
-          "ring-offset-2",
-          "ring-offset-background",
-          "rounded-2xl",
-        ];
         el.classList.add(...HIGHLIGHT_CLASSES);
         parkedAtTargetRef.current = true;
         // Brief highlight flash; afterwards let normal auto-scroll resume so
@@ -464,6 +500,35 @@ export function DmChat({
     scrollToEnd();
   }, [initialMessages]);
 
+  // Scroll a message into view + flash it. Used when the viewer taps a reply
+  // card to jump to the message it quotes. If the target isn't in the loaded
+  // batch (older than the 200-msg window) we surface a toast rather than fail
+  // silently. Mirrors the deep-link highlight in the useLayoutEffect above.
+  function scrollToMessage(messageId: string) {
+    const el = document.querySelector<HTMLElement>(
+      `[data-message-id="${CSS.escape(messageId)}"]`,
+    );
+    if (!el) {
+      toast.error("원본 메시지를 찾을 수 없어요.");
+      return;
+    }
+    // Cancel any in-flight highlight from a previous tap before starting a new
+    // one, so a stale timer can't strip the ring / un-park under this jump.
+    if (jumpHighlightRef.current) {
+      clearTimeout(jumpHighlightRef.current.timer);
+      jumpHighlightRef.current.el.classList.remove(...HIGHLIGHT_CLASSES);
+    }
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.add(...HIGHLIGHT_CLASSES);
+    parkedAtTargetRef.current = true;
+    const timer = setTimeout(() => {
+      parkedAtTargetRef.current = false;
+      el.classList.remove(...HIGHLIGHT_CLASSES);
+      jumpHighlightRef.current = null;
+    }, HIGHLIGHT_MS);
+    jumpHighlightRef.current = { timer, el };
+  }
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = draft.trim();
@@ -479,6 +544,7 @@ export function DmChat({
     textareaRef.current?.focus();
 
     const quoteToSend = pendingQuote;
+    const replyToSend = pendingReply;
     // Mint a client-side UUID and render the message instantly as part of
     // the merged list. The server action below reuses the same id, so the
     // realtime echo will dedupe against this entry rather than producing a
@@ -494,10 +560,12 @@ export function DmChat({
       content: trimmed,
       createdAt: new Date().toISOString(),
       quote: quoteToSend,
+      replyTo: replyToSend,
     };
 
     setDraft("");
     setPendingQuote(null);
+    setPendingReply(null);
     setPendingMessages((prev) => [...prev, optimistic]);
     // Anchor to the bottom right away so the new optimistic row is visible
     // above the composer immediately, not after the realtime refresh.
@@ -508,6 +576,7 @@ export function DmChat({
         threadId,
         trimmed,
         quoteToSend?.id ?? null,
+        replyToSend?.id ?? null,
         clientMessageId,
       );
       if (!result.ok) {
@@ -519,6 +588,7 @@ export function DmChat({
         );
         setDraft(trimmed);
         setPendingQuote(quoteToSend);
+        setPendingReply(replyToSend);
         return;
       }
       // Belt-and-suspenders: re-anchor after the server confirms in case the
@@ -537,6 +607,36 @@ export function DmChat({
       }
       setConfirmDeleteId(null);
     });
+  }
+
+  // 답장: attach the long-pressed message as the pending reply and close the
+  // sheet. The actual focus happens in the Drawer's onCloseAutoFocus (gated by
+  // focusComposerOnCloseRef) — focusing the textarea while the modal sheet is
+  // still open is fought by vaul's focus trap, and a focus() after the close
+  // animation lands outside the user-gesture tick so iOS won't raise the
+  // keyboard. Preventing the auto-focus + focusing on close is the Radix-blessed
+  // path; it's still best-effort on iOS, but the 답장 중 banner shows either way
+  // so the user can always tap the composer to type.
+  function handleReplyFromSheet() {
+    const m = actionSheetMessage;
+    if (!m) return;
+    setPendingReply({
+      id: m.id,
+      senderId: m.senderId,
+      content: m.content,
+      deleted: false,
+    });
+    focusComposerOnCloseRef.current = true;
+    setActionSheetMessage(null);
+  }
+
+  // 삭제: close the sheet and open the existing delete-confirm AlertDialog. Only
+  // wired for own messages (the 삭제 button isn't rendered for friend bubbles).
+  function handleDeleteFromSheet() {
+    const m = actionSheetMessage;
+    if (!m) return;
+    setActionSheetMessage(null);
+    setConfirmDeleteId(m.id);
   }
 
   return (
@@ -594,7 +694,8 @@ export function DmChat({
                 key={`group-${item.messages[0].id}`}
                 group={item}
                 friendNickname={friendNickname}
-                onRequestDelete={(id) => setConfirmDeleteId(id)}
+                onLongPress={(m) => setActionSheetMessage(m)}
+                onJumpToMessage={scrollToMessage}
               />
             );
           })}
@@ -607,6 +708,22 @@ export function DmChat({
         onSubmit={handleSubmit}
         className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md border-t border-border bg-background/95 px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-3 backdrop-blur"
       >
+        {pendingReply ? (
+          <div className="mb-2 flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2 text-[12px]">
+            <CornerUpLeft className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">
+              {pendingReply.deleted ? "삭제된 메시지" : pendingReply.content}
+            </span>
+            <button
+              type="button"
+              aria-label="답장 취소"
+              onClick={() => setPendingReply(null)}
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        ) : null}
         {pendingQuote ? (
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2 text-[12px]">
             <CategoryIcon
@@ -698,6 +815,49 @@ export function DmChat({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Drawer
+        open={actionSheetMessage !== null}
+        onOpenChange={(open) => {
+          if (!open) setActionSheetMessage(null);
+        }}
+      >
+        <DrawerContent
+          // Keep focus on the textarea that 답장 just focused (via the ref flag)
+          // so iOS can raise the keyboard; without preventDefault vaul returns
+          // focus to the body on close and the keyboard never opens.
+          onCloseAutoFocus={(event) => {
+            if (focusComposerOnCloseRef.current) {
+              event.preventDefault();
+              focusComposerOnCloseRef.current = false;
+              textareaRef.current?.focus();
+            }
+          }}
+          className="px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-1"
+        >
+          <DrawerTitle className="sr-only">메시지 작업</DrawerTitle>
+          <div className="flex flex-col gap-1 py-1">
+            <button
+              type="button"
+              onClick={handleReplyFromSheet}
+              className="flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-[15px] font-medium text-foreground transition-colors active:bg-muted"
+            >
+              <CornerUpLeft className="size-[18px] text-muted-foreground" />
+              답장
+            </button>
+            {actionSheetMessage?.senderId === viewerId ? (
+              <button
+                type="button"
+                onClick={handleDeleteFromSheet}
+                className="flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-[15px] font-medium text-destructive transition-colors active:bg-destructive/10"
+              >
+                <Trash2 className="size-[18px]" />
+                삭제
+              </button>
+            ) : null}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
@@ -705,13 +865,15 @@ export function DmChat({
 type MessageGroupViewProps = {
   group: MessageGroup;
   friendNickname: string;
-  onRequestDelete: (messageId: string) => void;
+  onLongPress: (message: DmChatMessage) => void;
+  onJumpToMessage: (messageId: string) => void;
 };
 
 function MessageGroupView({
   group,
   friendNickname,
-  onRequestDelete,
+  onLongPress,
+  onJumpToMessage,
 }: MessageGroupViewProps) {
   const lastMessage = group.messages[group.messages.length - 1];
   const timeLabel = formatChatTime(new Date(lastMessage.createdAt));
@@ -740,8 +902,8 @@ function MessageGroupView({
             message={message}
             isMe={group.isMe}
             timeLabel={isLast ? timeLabel : null}
-            canDelete={group.isMe}
-            onRequestDelete={onRequestDelete}
+            onLongPress={onLongPress}
+            onJumpToMessage={onJumpToMessage}
           />
         );
       })}
@@ -753,16 +915,16 @@ type MessageRowProps = {
   message: DmChatMessage;
   isMe: boolean;
   timeLabel: string | null;
-  canDelete: boolean;
-  onRequestDelete: (messageId: string) => void;
+  onLongPress: (message: DmChatMessage) => void;
+  onJumpToMessage: (messageId: string) => void;
 };
 
 function MessageRow({
   message,
   isMe,
   timeLabel,
-  canDelete,
-  onRequestDelete,
+  onLongPress,
+  onJumpToMessage,
 }: MessageRowProps) {
   // Emoji-only messages render as a chunky standalone bubble so reactions
   // sent via the transaction sheet read as reactions, not text. The regex
@@ -778,6 +940,8 @@ function MessageRow({
   // mouse events drive — releasing/moving cancels the pending fire. We do NOT
   // suppress the synthetic click after a successful long-press because the
   // bubble has no click action; messages only ever react to long-press.
+  // Long-press is universal now (reply works on BOTH own and friend bubbles);
+  // the sheet itself decides which actions (답장 / 삭제) to show.
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelPress = () => {
     if (pressTimer.current) {
@@ -786,11 +950,10 @@ function MessageRow({
     }
   };
   const startPress = () => {
-    if (!canDelete) return;
     cancelPress();
     pressTimer.current = setTimeout(() => {
       pressTimer.current = null;
-      onRequestDelete(message.id);
+      onLongPress(message);
     }, LONG_PRESS_MS);
   };
 
@@ -814,6 +977,13 @@ function MessageRow({
           isMe ? "items-end" : "items-start",
         )}
       >
+        {message.replyTo ? (
+          <ReplyCard
+            reply={message.replyTo}
+            mine={isMe}
+            onJump={onJumpToMessage}
+          />
+        ) : null}
         {message.quote ? <QuoteCard quote={message.quote} mine={isMe} /> : null}
         <div
           onTouchStart={startPress}
@@ -826,8 +996,8 @@ function MessageRow({
           onContextMenu={(event) => {
             // Suppress the native context menu on long-press (mobile Safari
             // fires this after ~300ms of touch-hold) so our 500ms timer is
-            // what gates the AlertDialog.
-            if (canDelete) event.preventDefault();
+            // what gates the action sheet.
+            event.preventDefault();
           }}
           className={cn(
             "select-none rounded-2xl px-3.5 py-2 text-[14px] leading-snug",
@@ -848,6 +1018,36 @@ function MessageRow({
         </span>
       ) : null}
     </div>
+  );
+}
+
+function ReplyCard({
+  reply,
+  mine,
+  onJump,
+}: {
+  reply: DmChatReply;
+  mine: boolean;
+  onJump: (messageId: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!reply.deleted) onJump(reply.id);
+      }}
+      disabled={reply.deleted}
+      className={cn(
+        "flex max-w-full items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-left text-[12px]",
+        mine ? "self-end" : "self-start",
+        reply.deleted ? "opacity-70" : "transition-colors active:bg-muted/60",
+      )}
+    >
+      <CornerUpLeft className="size-3 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+        {reply.deleted ? "삭제된 메시지" : reply.content}
+      </span>
+    </button>
   );
 }
 

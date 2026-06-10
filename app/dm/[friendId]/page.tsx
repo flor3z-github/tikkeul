@@ -2,7 +2,12 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
-import { DmChat, type DmChatMessage, type DmChatQuoteCard } from "./_components/dm-chat";
+import {
+  DmChat,
+  type DmChatMessage,
+  type DmChatQuoteCard,
+  type DmChatReply,
+} from "./_components/dm-chat";
 import { createClient } from "@/lib/supabase/server";
 
 const UUID_RE =
@@ -78,7 +83,7 @@ export default async function DmThreadPage({
   const { data: latestMessages, error: messagesError } = await supabase
     .from("dm_messages")
     .select(
-      "id, sender_id, content, quoted_transaction_id, created_at",
+      "id, sender_id, content, quoted_transaction_id, reply_to_id, created_at",
     )
     .eq("thread_id", threadId)
     .order("created_at", { ascending: false })
@@ -143,6 +148,43 @@ export default async function DmThreadPage({
     );
   }
 
+  // Resolve replied-to message snippets in a single batched self-fetch against
+  // dm_messages. We query by id (NOT against the loaded window) because a
+  // replied-to message can be older than the latest-200 window; RLS lets thread
+  // members SELECT every message in the thread, so the by-id fetch is allowed.
+  // A reply whose target was since hard-deleted simply won't resolve and the UI
+  // renders a "삭제된 메시지" stub via the deleted flag below.
+  const replyToIds = Array.from(
+    new Set(
+      (rawMessages ?? [])
+        .map((m) => m.reply_to_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  let replyById = new Map<string, DmChatReply>();
+  if (replyToIds.length > 0) {
+    const { data: replyRows } = await supabase
+      .from("dm_messages")
+      .select("id, sender_id, content")
+      .in("id", replyToIds);
+    replyById = new Map(
+      ((replyRows ?? []) as Array<{
+        id: string;
+        sender_id: string;
+        content: string;
+      }>).map((row) => [
+        row.id,
+        {
+          id: row.id,
+          senderId: row.sender_id,
+          content: row.content,
+          deleted: false,
+        },
+      ]),
+    );
+  }
+
   const messages: DmChatMessage[] = (rawMessages ?? []).map((row) => ({
     id: row.id,
     senderId: row.sender_id,
@@ -158,6 +200,14 @@ export default async function DmThreadPage({
           category_name: null,
           category_icon: null,
           category_color: null,
+        })
+      : null,
+    replyTo: row.reply_to_id
+      ? (replyById.get(row.reply_to_id) ?? {
+          id: row.reply_to_id,
+          senderId: "",
+          content: "",
+          deleted: true,
         })
       : null,
   }));

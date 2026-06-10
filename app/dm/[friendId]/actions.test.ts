@@ -23,9 +23,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-import { markThreadReadAction } from "./actions";
+import { markThreadReadAction, sendMessageAction } from "./actions";
 
 const VALID_THREAD_ID = "11111111-2222-3333-4444-555555555555";
+const VALID_REPLY_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+const VALID_MESSAGE_ID = "99999999-8888-7777-6666-555555555555";
 
 type MockOpts = {
   user?: { id: string } | null;
@@ -91,5 +93,78 @@ describe("markThreadReadAction", () => {
 
     expect(result).toEqual({ ok: false, error: "rpc boom" });
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+// Contract test for the message-reply path of sendMessageAction. Like the suite
+// above, this pins the action's observable contract (the new replyToMessageId
+// UUID guard, and that a valid reply id is threaded into the dm_messages insert
+// as reply_to_id) — not that the reply card renders. Visual confirmation is the
+// on-device checklist; the project has no component/e2e suite (CLAUDE.md).
+
+type SendMockOpts = {
+  user?: { id: string } | null;
+  thread?: { user_a_id: string; user_b_id: string } | null;
+  insertError?: { message: string } | null;
+};
+
+function mockSendSupabase({
+  user = { id: "u-1" },
+  thread = { user_a_id: "u-1", user_b_id: "u-2" },
+  insertError = null,
+}: SendMockOpts = {}) {
+  const insert = vi.fn().mockResolvedValue({ error: insertError });
+  const maybeSingle = vi.fn().mockResolvedValue({ data: thread, error: null });
+  const eq = vi.fn(() => ({ maybeSingle }));
+  const select = vi.fn(() => ({ eq }));
+  const from = vi.fn((table: string) => {
+    if (table === "dm_threads") return { select };
+    if (table === "dm_messages") return { insert };
+    throw new Error(`unexpected table: ${table}`);
+  });
+  const getUser = vi.fn().mockResolvedValue({ data: { user } });
+  const client = { auth: { getUser }, from };
+  vi.mocked(createClient).mockResolvedValue(
+    client as unknown as Awaited<ReturnType<typeof createClient>>,
+  );
+  return { client, from, insert, select };
+}
+
+describe("sendMessageAction (reply)", () => {
+  it("rejects a malformed reply id before touching the database", async () => {
+    const { from } = mockSendSupabase();
+
+    const result = await sendMessageAction(
+      VALID_THREAD_ID,
+      "안녕",
+      null,
+      "not-a-uuid",
+    );
+
+    expect(result).toEqual({ ok: false, error: "잘못된 답장이에요." });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("threads a valid reply id into the dm_messages insert as reply_to_id", async () => {
+    const { insert } = mockSendSupabase();
+
+    const result = await sendMessageAction(
+      VALID_THREAD_ID,
+      "안녕",
+      null,
+      VALID_REPLY_ID,
+      VALID_MESSAGE_ID,
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reply_to_id: VALID_REPLY_ID,
+        quoted_transaction_id: null,
+        content: "안녕",
+        id: VALID_MESSAGE_ID,
+      }),
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/dm/u-2");
   });
 });

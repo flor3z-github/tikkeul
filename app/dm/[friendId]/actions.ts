@@ -21,10 +21,15 @@ const UUID_RE =
 // The caller provides a client-generated UUID as `messageId` so the optimistic
 // row rendered in the client can be deduped against the realtime arrival by
 // matching ids. If omitted, the DB default generates one.
+//
+// `replyToMessageId` quotes another message in the same thread (message-to-
+// message reply, distinct from `quotedTransactionId` which quotes a spend). RLS
+// additionally enforces that the reply target lives in the same thread.
 export async function sendMessageAction(
   threadId: string,
   content: string,
   quotedTransactionId: string | null,
+  replyToMessageId: string | null = null,
   messageId: string | null = null,
 ): Promise<DmActionResult> {
   const supabase = await createClient();
@@ -41,6 +46,9 @@ export async function sendMessageAction(
     !UUID_RE.test(quotedTransactionId)
   ) {
     return { ok: false, error: "잘못된 인용이에요." };
+  }
+  if (replyToMessageId !== null && !UUID_RE.test(replyToMessageId)) {
+    return { ok: false, error: "잘못된 답장이에요." };
   }
   if (messageId !== null && !UUID_RE.test(messageId)) {
     return { ok: false, error: "잘못된 메시지 ID예요." };
@@ -75,12 +83,14 @@ export async function sendMessageAction(
     sender_id: string;
     content: string;
     quoted_transaction_id: string | null;
+    reply_to_id: string | null;
     id?: string;
   } = {
     thread_id: threadId,
     sender_id: user.id,
     content: trimmed,
     quoted_transaction_id: quotedTransactionId,
+    reply_to_id: replyToMessageId,
   };
   if (messageId) insertRow.id = messageId;
 
