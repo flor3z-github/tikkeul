@@ -182,12 +182,17 @@ export async function SpendingSummarySection({
   // Pace info: rendered only when the *currently selected* cycle is the one
   // we're living in. Past/future cycles have no actionable pace.
   let daysRemaining: number | null = null;
+  // Whether the displayed cycle is the one we're living in. Gates both the pace
+  // line and the /stats entry point — stats always resolves the CURRENT cycle,
+  // so we only let the card link out when the card itself shows that cycle
+  // (otherwise a past-month card total would mismatch the stats total).
+  let isCurrentCycle = false;
   if (cycleStart && cycleEnd) {
     const now = new Date();
-    const inCycle =
+    isCurrentCycle =
       now.getTime() >= cycleStart.getTime() &&
       now.getTime() < cycleEnd.getTime();
-    if (inCycle) {
+    if (isCurrentCycle) {
       const todayMid = new Date(
         now.getFullYear(),
         now.getMonth(),
@@ -221,6 +226,7 @@ export async function SpendingSummarySection({
       cycleLabel={cycleLabel}
       daysRemainingInCycle={daysRemaining}
       cycleMode={cycleMode}
+      statsHref={isCurrentCycle ? "/stats" : undefined}
     />
   );
 }

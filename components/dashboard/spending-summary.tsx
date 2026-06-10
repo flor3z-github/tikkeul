@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight, PieChart } from "lucide-react";
 
 import { IncomeLine, type IncomeLineItem } from "@/components/income/income-line";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +67,13 @@ type SpendingSummaryProps = {
    * `calendar`, "다음 급여일까지" for `income_day`.
    */
   cycleMode?: "calendar" | "income_day";
+  /**
+   * When provided, the card becomes a tappable entry point to the stats screen
+   * (§12.9) via a stretched-link overlay. The caller passes this ONLY in own
+   * mode for the CURRENT cycle — friend mode and past/future cycles omit it so
+   * the stats total always matches the number this card shows.
+   */
+  statsHref?: string;
 };
 
 const STATUS_COPY: Record<SpendingStatus, { tone: string; label: string }> = {
@@ -96,6 +104,7 @@ export function SpendingSummary({
   cycleLabel,
   daysRemainingInCycle = null,
   cycleMode,
+  statsHref,
 }: SpendingSummaryProps) {
   if (friendView) {
     // Friend mode: total spending number. When the owner granted fixed
@@ -151,8 +160,21 @@ export function SpendingSummary({
   const isOver = summary.remainingBudget < 0;
   const hasExtraIncome = summary.extraIncome > 0;
 
+  // Stats entry overlay: only in the populated hero state. The !hasSettings and
+  // monthlyIncome===0 branches render their own inner <Link>/CTA, and stats has
+  // nothing to show without a budget — gating here also avoids nesting links.
+  const showStatsOverlay =
+    Boolean(statsHref) && hasSettings && summary.monthlyIncome !== 0;
+
   return (
-    <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
+    <Card className="relative rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
+      {showStatsOverlay ? (
+        <Link
+          href={statsHref!}
+          aria-label="소비 구성 통계 보기"
+          className="absolute inset-0 z-10 rounded-3xl [-webkit-tap-highlight-color:transparent]"
+        />
+      ) : null}
       <CardContent className="space-y-4 px-6 py-4">
         {!hasSettings ? (
           <Link
@@ -242,22 +264,26 @@ export function SpendingSummary({
                 </span>
               </div>
               {hasExtraIncome ? (
-                extraIncomeItems && cycleStartDate && cycleEndDate ? (
-                  <IncomeLine
-                    items={extraIncomeItems}
-                    totalAmount={summary.extraIncome}
-                    cycleStartDate={cycleStartDate}
-                    cycleEndDate={cycleEndDate}
-                    cycleMode={cycleMode}
-                  />
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    이번 {cycleMode === "income_day" ? "주기" : "달"} 추가 수입{" "}
-                    <span className="font-semibold tabular-nums text-foreground">
-                      +{formatNumber(summary.extraIncome)}원
-                    </span>
-                  </p>
-                )
+                // Raised above the stats overlay so the income editor stays
+                // tappable when the card itself links to /stats.
+                <div className="relative z-20">
+                  {extraIncomeItems && cycleStartDate && cycleEndDate ? (
+                    <IncomeLine
+                      items={extraIncomeItems}
+                      totalAmount={summary.extraIncome}
+                      cycleStartDate={cycleStartDate}
+                      cycleEndDate={cycleEndDate}
+                      cycleMode={cycleMode}
+                    />
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      이번 {cycleMode === "income_day" ? "주기" : "달"} 추가 수입{" "}
+                      <span className="font-semibold tabular-nums text-foreground">
+                        +{formatNumber(summary.extraIncome)}원
+                      </span>
+                    </p>
+                  )}
+                </div>
               ) : null}
               {status !== "normal" ? (
                 <p className={cn("text-xs font-medium", STATUS_COPY[status].tone)}>
@@ -292,6 +318,19 @@ export function SpendingSummary({
                     </span>
                   </span>
                 </div>
+              </div>
+            ) : null}
+
+            {showStatsOverlay ? (
+              // Visual cue for the whole-card /stats entry (§12.2). NOT raised
+              // above the stretched-link overlay — the overlay (z-10) still
+              // catches the tap; this row is just the affordance.
+              <div className="flex items-center justify-between border-t border-dashed border-border pt-3 text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
+                  <PieChart className="size-4" />
+                  소비 구성 보기
+                </span>
+                <ChevronRight className="size-4" />
               </div>
             ) : null}
           </>

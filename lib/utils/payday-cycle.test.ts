@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { resolveDashboardParamsB } from "@/lib/utils/payday-cycle";
+import {
+  getPreviousCycleB,
+  resolveDashboardParamsB,
+} from "@/lib/utils/payday-cycle";
 import { nowInSeoul, toISODate } from "@/lib/utils/date";
 
 // Fixed reference "now" so todayInCycle / fallback math is deterministic.
@@ -142,5 +145,41 @@ describe("resolveDashboardParamsB — UTC-host cycle resolution (nowInSeoul)", (
     // under TZ=UTC at this instant.
     expect(toISODate(r.cycleStart)).not.toBe("2026-05-01");
     expect(r.day).not.toBe("2026-05-31");
+  });
+});
+
+describe("getPreviousCycleB — 전월比 anchor (/stats)", () => {
+  it("previous cycle's end equals the current cycle's start (contiguous) across paydays/rules", () => {
+    for (const payday of [1, 15, 25, 0]) {
+      for (const rule of ["prev", "same", "next"] as const) {
+        const cur = resolveDashboardParamsB(
+          { ym: "2026-05" },
+          payday,
+          rule,
+          NONE,
+          NOW,
+        );
+        const prev = getPreviousCycleB(payday, rule, NONE, cur.cycleStart);
+        expect(prev.end.getTime()).toBe(cur.cycleStart.getTime());
+        expect(prev.start.getTime()).toBeLessThan(prev.end.getTime());
+      }
+    }
+  });
+
+  it("payday=25 same: previous of [05-25, 06-25) is [04-25, 05-25)", () => {
+    const cur = resolveDashboardParamsB({ ym: "2026-05" }, 25, "same", NONE, NOW);
+    const prev = getPreviousCycleB(25, "same", NONE, cur.cycleStart);
+    expect(toISODate(prev.start)).toBe("2026-04-25");
+    expect(toISODate(prev.end)).toBe("2026-05-25");
+    expect(prev.anchorYm).toBe("2026-04");
+  });
+
+  it("year boundary — payday=1 same: previous of the Jan 2026 cycle is Dec 2025", () => {
+    const cur = resolveDashboardParamsB({ ym: "2026-01" }, 1, "same", NONE, NOW);
+    expect(toISODate(cur.cycleStart)).toBe("2026-01-01");
+    const prev = getPreviousCycleB(1, "same", NONE, cur.cycleStart);
+    expect(toISODate(prev.start)).toBe("2025-12-01");
+    expect(toISODate(prev.end)).toBe("2026-01-01");
+    expect(prev.anchorYm).toBe("2025-12");
   });
 });

@@ -252,6 +252,27 @@ export function getCurrentCycleB(
   return findContainingCycle(payday, rule, holidays, now);
 }
 
+/**
+ * The cycle immediately BEFORE the one beginning at `currentCycleStart`. Cycles
+ * are contiguous (end(M) === start(M+1)) and `[start, end)` is start-inclusive,
+ * so the day before `currentCycleStart` belongs to the previous cycle — we just
+ * bracket that day. Used by /stats to compute 전월比 (previous-cycle) deltas.
+ *
+ * Invariant: getPreviousCycleB(...).end === currentCycleStart. The cycle can
+ * cross a year boundary (a Jan cycle's previous is the prior-year Dec cycle), so
+ * this must go through the same engine, not naive month arithmetic. Subtracting
+ * 86_400_000 ms is safe in KST/UTC (no DST) and lands on the prior local day.
+ */
+export function getPreviousCycleB(
+  payday: number,
+  rule: PayrollRule,
+  holidays: Set<string>,
+  currentCycleStart: Date,
+): CycleRange {
+  const dayBefore = new Date(currentCycleStart.getTime() - 86_400_000);
+  return findContainingCycle(payday, rule, holidays, dayBefore);
+}
+
 // LABEL month string for the cycle containing `now` — used by
 // resolveDashboardParamsB when ?ym is absent.
 function currentLabelYm(
