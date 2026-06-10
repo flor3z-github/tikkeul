@@ -200,11 +200,16 @@ export default async function StatsPage({
           fixedTotal(prevFixedItems ?? []))
       : null;
 
+  // 전월比 계산 기준 시점 = 오늘(now). 변동은 양쪽을 이 경과 시점까지로 맞춰
+  // 비교하므로, 라벨 옆에 "M/D 기준"으로 어느 시점까지의 비교인지 밝힌다.
+  const comparisonAsOf = `${now.getMonth() + 1}/${now.getDate()}`;
+
   return (
     <AppShell>
       {backToDashboard}
       <CycleBreakdownView
         cycleLabel={cycleLabel}
+        comparisonAsOf={comparisonAsOf}
         grandTotal={varTotal + fixTotal}
         variableTotal={varTotal}
         fixedTotal={fixTotal}
