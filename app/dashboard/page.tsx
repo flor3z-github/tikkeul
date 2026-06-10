@@ -514,6 +514,18 @@ export default async function DashboardPage({
           // 고정지출 list. Other perm combos fall back to FriendFixedSection
           // (items list when the calendar is hidden, total-only card otherwise).
           const foldFixed = perms.spendingItems && perms.fixedItems;
+          // The summary card now carries the fixed total (고정/변동 split)
+          // whenever the viewer sees spending total AND any fixed perm is on.
+          // Suppress the standalone 고정 합계 카드 in that case so the fixed
+          // total isn't shown twice; keep FriendFixedSection only for the
+          // itemized list (which the card can't show) or when the summary card
+          // isn't rendered at all (spending total hidden).
+          const summaryShowsFixedSplit =
+            perms.spendingTotal && (perms.fixedTotal || perms.fixedItems);
+          const showFixedSection =
+            showFixedGroup &&
+            !foldFixed &&
+            (perms.fixedItems || !summaryShowsFixedSplit);
           return (
             <>
               {showSpendingGroup ? (
@@ -530,6 +542,8 @@ export default async function DashboardPage({
                       targetUserId={viewingUserId}
                       showSpendingTotal={perms.spendingTotal}
                       showSpendingItems={perms.spendingItems}
+                      showFixed={perms.fixedTotal || perms.fixedItems}
+                      cycleAnchor={ym}
                     />
                   </Suspense>
                   <Suspense fallback={<SpendingCalendarSkeleton />}>
@@ -552,11 +566,11 @@ export default async function DashboardPage({
                 </section>
               ) : null}
 
-              {showSpendingGroup && showFixedGroup && !foldFixed ? (
+              {showSpendingGroup && showFixedSection ? (
                 <hr aria-hidden className="mt-8 border-border" />
               ) : null}
 
-              {showFixedGroup && !foldFixed ? (
+              {showFixedSection ? (
                 <section className="mt-6 space-y-3">
                   <h2 className="px-1 text-xl font-bold tracking-[-0.02em]">
                     고정지출
@@ -566,6 +580,7 @@ export default async function DashboardPage({
                     showTotal={perms.fixedTotal}
                     showItems={perms.fixedItems}
                     cycleAnchor={ym}
+                    suppressTotalHeader={summaryShowsFixedSplit}
                   />
                 </section>
               ) : null}

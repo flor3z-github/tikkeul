@@ -35,11 +35,20 @@ type SpendingSummaryProps = {
   cycleEndDate?: string;
   hasSettings: boolean;
   /**
-   * When true, render only the monthly expense total. Income, fixed expense,
-   * available budget, and spending rate are hidden because they are private
-   * to the data owner. Used when viewing a friend's dashboard.
+   * When true, render only the spending total(s). Income, available budget,
+   * spending rate, and the progress bar are hidden because they derive from
+   * `monthly_income` (private to the data owner). Used when viewing a friend's
+   * dashboard.
    */
   friendView?: boolean;
+  /**
+   * Friend mode only: the owner granted fixed visibility (show_fixed_total OR
+   * show_fixed_items), so the card shows the 고정/변동 split — hero becomes the
+   * true total spending (fixed + variable) with a "고정 X · 변동 Y" breakdown
+   * line. Both numbers are already-permitted aggregates, so this leaks no
+   * income/budget/rate. When false the friend card stays variable-only.
+   */
+  showFixedBreakdown?: boolean;
   /**
    * Identifier for the current budget cycle. When this changes (e.g. user
    * navigates to a different month), the hero number re-mounts and fades in
@@ -83,14 +92,21 @@ export function SpendingSummary({
   cycleEndDate,
   hasSettings,
   friendView = false,
+  showFixedBreakdown = false,
   cycleLabel,
   daysRemainingInCycle = null,
   cycleMode,
 }: SpendingSummaryProps) {
   if (friendView) {
-    // Friend mode: render only the total spending number. The surrounding
-    // page composition (presence/absence of the fixed-expense block, etc.)
-    // tells the user what's hidden — no explicit disclaimer needed here.
+    // Friend mode: total spending number. When the owner granted fixed
+    // visibility (showFixedBreakdown), the hero becomes the true total
+    // (고정 + 변동) with a 고정/변동 breakdown line — both are already-permitted
+    // aggregates, so no income/budget/rate leaks. Otherwise the hero stays
+    // variable-only. The surrounding page composition tells the user what else
+    // is hidden — no explicit disclaimer needed here.
+    const friendHero = showFixedBreakdown
+      ? fixedExpense + monthlyExpense
+      : monthlyExpense;
     return (
       <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
         <CardContent className="space-y-2 p-6">
@@ -99,8 +115,26 @@ export function SpendingSummary({
             key={cycleLabel}
             className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
           >
-            {formatNumber(monthlyExpense)} 원
+            {formatNumber(friendHero)} 원
           </p>
+          {showFixedBreakdown ? (
+            <div className="flex items-center gap-3 pt-1 text-[12px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className="size-2 rounded-full bg-foreground/25"
+                />
+                고정 {formatKRW(fixedExpense)}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className="size-2 rounded-full bg-foreground/45"
+                />
+                변동 {formatKRW(monthlyExpense)}
+              </span>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     );

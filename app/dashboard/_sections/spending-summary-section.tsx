@@ -43,6 +43,15 @@ type SpendingSummarySectionProps = {
   showSpendingTotal?: boolean;
   showSpendingItems?: boolean;
   /**
+   * Friend-mode: owner granted fixed visibility (show_fixed_total OR
+   * show_fixed_items). When true the section also fetches the friend's fixed
+   * total (get_friend_fixed_total, perm re-checked server-side) so the card
+   * shows the 고정/변동 split. Ignored in own mode.
+   */
+  showFixed?: boolean;
+  /** Friend-mode cycle anchor (anchorYm "YYYY-MM") for get_friend_fixed_total. */
+  cycleAnchor?: string;
+  /**
    * Cycle bounds and mode for the pace line ("이번 달이 끝나기까지 · 남은 N일 ·
    * 하루 X원"). Used only in own mode; friend mode never receives or shows
    * pace info because it derives from `remainingBudget` (privacy).
@@ -66,6 +75,8 @@ export async function SpendingSummarySection({
   cycleEndDate,
   showSpendingTotal = true,
   showSpendingItems = true,
+  showFixed = false,
+  cycleAnchor,
   cycleStart,
   cycleEnd,
   cycleMode,
@@ -85,6 +96,11 @@ export async function SpendingSummarySection({
   if (!isOwn) {
     if (!showSpendingTotal) return null;
 
+    const supabase = await createClient();
+
+    // Variable (월소비) total: items path sums RLS-allowed rows client-side;
+    // total-only path uses the SECURITY DEFINER RPC (RLS blocks the rows).
+    let monthlyExpense: number;
     if (showSpendingItems) {
       const monthlyResult = await getMonthlyTransactions(
         userId,
@@ -99,39 +115,51 @@ export async function SpendingSummarySection({
           </div>
         );
       }
-      return (
-        <SpendingSummary
-          monthlyIncome={0}
-          fixedExpense={0}
-          monthlyExpense={monthlyResult.monthlyTotal}
-          hasSettings={false}
-          friendView
-          cycleLabel={cycleLabel}
-        />
+      monthlyExpense = monthlyResult.monthlyTotal;
+    } else {
+      const { data: totalData, error: totalError } = await supabase.rpc(
+        "get_friend_spending_total",
+        { target: userId, start_iso: startIso, end_iso: endIso },
       );
+      if (totalError) {
+        return (
+          <div className="space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
+            <p className="font-semibold">{`${cycleLabel} 요약을 불러오지 못했어요`}</p>
+            <p className="break-all text-xs opacity-80">{totalError.message}</p>
+          </div>
+        );
+      }
+      monthlyExpense = Number(totalData ?? 0);
     }
 
-    // Total-only path (items OFF, total ON).
-    const supabase = await createClient();
-    const { data: totalData, error: totalError } = await supabase.rpc(
-      "get_friend_spending_total",
-      { target: userId, start_iso: startIso, end_iso: endIso },
-    );
-    if (totalError) {
-      return (
-        <div className="space-y-2 rounded-2xl bg-destructive/10 px-4 py-4 text-sm text-destructive">
-          <p className="font-semibold">{`${cycleLabel} 요약을 불러오지 못했어요`}</p>
-          <p className="break-all text-xs opacity-80">{totalError.message}</p>
-        </div>
+    // Fixed total for the 고정/변동 split. Gated by showFixed (owner granted
+    // show_fixed_total OR show_fixed_items); get_friend_fixed_total re-checks
+    // the perm server-side and never exposes income. fixedExpense stays 0 when
+    // not granted, so the card falls back to variable-only.
+    let friendFixed = 0;
+    let fixedAvailable = false;
+    if (showFixed && cycleAnchor) {
+      const { data: fixedData, error: fixedError } = await supabase.rpc(
+        "get_friend_fixed_total",
+        { target: userId, cycle_anchor: cycleAnchor },
       );
+      // On RPC failure, degrade to variable-only (drop the split) rather than
+      // mislabeling the failed fetch as "고정 0원" — the spending number still
+      // renders. Only show the breakdown when the fixed total truly resolved.
+      if (!fixedError) {
+        friendFixed = Number(fixedData ?? 0);
+        fixedAvailable = true;
+      }
     }
+
     return (
       <SpendingSummary
         monthlyIncome={0}
-        fixedExpense={0}
-        monthlyExpense={Number(totalData ?? 0)}
+        fixedExpense={friendFixed}
+        monthlyExpense={monthlyExpense}
         hasSettings={false}
         friendView
+        showFixedBreakdown={fixedAvailable}
         cycleLabel={cycleLabel}
       />
     );

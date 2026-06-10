@@ -13,6 +13,11 @@ type FriendFixedSectionProps = {
   showItems: boolean;
   /** anchorYm "YYYY-MM" of the cycle being viewed — resolves per-cycle overrides. */
   cycleAnchor: string;
+  /** When the summary card above already shows the fixed total (고정/변동 split),
+   *  hide the items-list total header here so the same sum isn't shown twice.
+   *  Only affects the items path; the total-only fallback card is unaffected
+   *  (it never co-occurs with the summary split). */
+  suppressTotalHeader?: boolean;
 };
 
 export async function FriendFixedSection({
@@ -20,6 +25,7 @@ export async function FriendFixedSection({
   showTotal,
   showItems,
   cycleAnchor,
+  suppressTotalHeader = false,
 }: FriendFixedSectionProps) {
   if (!showTotal && !showItems) return null;
 
@@ -78,7 +84,14 @@ export async function FriendFixedSection({
     const plans = (plansResult.data ?? []) as SubscriptionPlan[];
     const total = items.reduce((sum, row) => sum + (row.amount ?? 0), 0);
 
-    return <FriendFixedSummary total={total} items={items} plans={plans} />;
+    return (
+      <FriendFixedSummary
+        total={total}
+        items={items}
+        plans={plans}
+        hideTotal={suppressTotalHeader}
+      />
+    );
   }
 
   // Total-only path: viewer can see the sum but not the rows.

@@ -8,6 +8,14 @@ type FriendFixedSummaryProps = {
   total: number;
   items?: FixedExpenseRow[];
   plans?: SubscriptionPlan[];
+  /**
+   * Skip the "친구의 고정지출 합계" total header, rendering only the item list.
+   * Used when the summary card above already shows the fixed total as part of
+   * its 고정/변동 split, so repeating the same sum here would be redundant.
+   * Only meaningful in the items path (a header-only card with no items would
+   * render nothing).
+   */
+  hideTotal?: boolean;
 };
 
 // Caller wraps this in `<section><h2>고정지출</h2>` (see app/dashboard/page.tsx).
@@ -18,25 +26,28 @@ export function FriendFixedSummary({
   total,
   items,
   plans,
+  hideTotal = false,
 }: FriendFixedSummaryProps) {
   const planById = new Map<string, SubscriptionPlan>();
   for (const plan of plans ?? []) planById.set(plan.id, plan);
 
   return (
     <>
-      <div className="space-y-2 px-1">
-        <p className="text-sm font-medium text-muted-foreground">
-          친구의 고정지출 합계
-        </p>
-        <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
-          {formatKRW(total)}
-        </p>
-        {items ? (
-          <p className="text-xs text-muted-foreground">
-            총 {items.length}개 항목
+      {hideTotal ? null : (
+        <div className="space-y-2 px-1">
+          <p className="text-sm font-medium text-muted-foreground">
+            친구의 고정지출 합계
           </p>
-        ) : null}
-      </div>
+          <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
+            {formatKRW(total)}
+          </p>
+          {items ? (
+            <p className="text-xs text-muted-foreground">
+              총 {items.length}개 항목
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {items ? (
         items.length === 0 ? (
