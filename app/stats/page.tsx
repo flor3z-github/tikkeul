@@ -16,6 +16,7 @@ import {
 } from "@/lib/utils/payday-cycle";
 import {
   aggregateVariableByCategory,
+  fixedDelta,
   fixedTotal,
   mapFixedItems,
   variableTotal,
@@ -192,24 +193,21 @@ export default async function StatsPage({
     hasPrevBaseline && prevFixedOk
       ? mapFixedRpcRows(prevFixedRes.data)
       : undefined;
+  // 변동분은 총차이(같은 경과 시점끼리), 고정분은 matched-only delta로 더한다.
+  // 고정을 fixedTotal 총차이로 빼면 직전에 미기록(amount null→0)인 공과금이 가짜
+  // +로 잡히므로 fixedDelta가 직전에 값 있던 항목만 비교한다(§12.9 artifact 제거).
   const topDelta =
     hasPrevBaseline && fixedOk && prevFixedOk
-      ? varTotal +
-        fixTotal -
-        (variableTotal(prevTransactions ?? []) +
-          fixedTotal(prevFixedItems ?? []))
+      ? varTotal -
+        variableTotal(prevTransactions ?? []) +
+        fixedDelta(fixedItems, prevFixedItems ?? [])
       : null;
-
-  // 전월比 계산 기준 시점 = 오늘(now). 변동은 양쪽을 이 경과 시점까지로 맞춰
-  // 비교하므로, 라벨 옆에 "M/D 기준"으로 어느 시점까지의 비교인지 밝힌다.
-  const comparisonAsOf = `${now.getMonth() + 1}/${now.getDate()}`;
 
   return (
     <AppShell>
       {backToDashboard}
       <CycleBreakdownView
         cycleLabel={cycleLabel}
-        comparisonAsOf={comparisonAsOf}
         grandTotal={varTotal + fixTotal}
         variableTotal={varTotal}
         fixedTotal={fixTotal}

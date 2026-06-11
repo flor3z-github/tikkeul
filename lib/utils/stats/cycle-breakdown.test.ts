@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   aggregateVariableByCategory,
+  fixedDelta,
   fixedTotal,
   grandTotal,
   mapFixedItems,
@@ -217,6 +218,48 @@ describe("mapFixedItems — catalog grouping (B: group total desc, amount desc w
       [fixed("netflix", 4_100)],
     );
     expect(row.delta).toBe(0);
+  });
+});
+
+describe("fixedDelta — 전월比 헤드라인 고정분 (matched-only)", () => {
+  it("sums amount−prev for items present (>0) in both cycles", () => {
+    const cur = [fixed("loan", 180_820), fixed("phone", 19_790)];
+    const prev = [fixed("loan", 180_000), fixed("phone", 30_600)];
+    // (180_820 − 180_000) + (19_790 − 30_600) = 820 − 10_810 = −9_990
+    expect(fixedDelta(cur, prev)).toBe(-9_990);
+  });
+
+  it("excludes a bill unrecorded last cycle (prev null → no phantom +)", () => {
+    // 전기세: this cycle has an override, last cycle was never entered (amount null).
+    // Naive fixedTotal(this)−fixedTotal(prev) would count +64_990; matched-only drops it.
+    const cur = [fixed("elec", 64_990)];
+    const prev = [fixed("elec", null)];
+    expect(fixedDelta(cur, prev)).toBe(0);
+    // contrast: the naive total-difference would have over-counted
+    expect(fixedTotal(cur) - fixedTotal(prev)).toBe(64_990);
+  });
+
+  it("excludes a genuinely new item (absent last cycle)", () => {
+    expect(fixedDelta([fixed("new", 5_000)], [fixed("other", 9_000)])).toBe(0);
+  });
+
+  it("excludes an item dropped this cycle (this null → not a negative)", () => {
+    // mapFixedItems hides amount≤0 rows, so the headline must not count −prev either.
+    expect(fixedDelta([fixed("elec", null)], [fixed("elec", 50_000)])).toBe(0);
+  });
+
+  it("equals the sum of visible mapFixedItems row deltas (invariant)", () => {
+    const cur = [fixed("loan", 180_820), fixed("phone", 19_790), fixed("elec", 64_990)];
+    const prev = [fixed("loan", 180_000), fixed("phone", 30_600), fixed("elec", null)];
+    const rowDeltaSum = mapFixedItems(cur, prev).reduce(
+      (s, r) => s + (r.delta ?? 0),
+      0,
+    );
+    expect(fixedDelta(cur, prev)).toBe(rowDeltaSum);
+  });
+
+  it("is 0 when there is no previous data", () => {
+    expect(fixedDelta([fixed("loan", 180_820)], [])).toBe(0);
   });
 });
 

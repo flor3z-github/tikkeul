@@ -152,6 +152,33 @@ export function fixedTotal(items: FixedEffectiveItem[]): number {
 }
 
 /**
+ * 전월比 헤드라인의 고정 비교분 (§12.9). `mapFixedItems`의 per-row delta와 같은
+ * 규칙으로 — 이번·직전 둘 다 값이 있는(amount>0) 항목만 `amount − prev`를 더한다.
+ *
+ * 단순 `fixedTotal(this) − fixedTotal(prev)`로 빼면 안 되는 이유: 전기세·도시가스
+ * 처럼 금액이 cycle override로만 들어오는 변동 공과금은, 직전 주기에 미입력이면
+ * amount=null(→0)이 된다. 이걸 0 baseline으로 깔면 이번 금액이 통째로 가짜 +로
+ * 잡힌다(같은 청구서가 새로 생긴 게 아니라 직전에 기록만 안 된 것). 그래서 직전에
+ * 값이 없던 항목은 비교에서 제외한다. 결과적으로 헤드라인 고정분 = 화면에 보이는
+ * 고정 행 delta들의 합(불변식). 변동분은 page.tsx에서 총차이로 따로 더한다 —
+ * 변동의 "새 카테고리"는 진짜 신규 지출이라 카운트하는 게 맞기 때문(비대칭 의도).
+ */
+export function fixedDelta(
+  items: FixedEffectiveItem[],
+  prevItems: FixedEffectiveItem[],
+): number {
+  const prevById = new Map<string, number>();
+  for (const it of prevItems) prevById.set(it.id, it.amount ?? 0);
+  let delta = 0;
+  for (const it of items) {
+    const amount = it.amount ?? 0;
+    const prev = prevById.get(it.id) ?? 0;
+    if (amount > 0 && prev > 0) delta += amount - prev;
+  }
+  return delta;
+}
+
+/**
  * Map fixed items to display rows, GROUPED by catalog category. Group order =
  * group total desc; within a group, amount desc (§12.9 — no sub-headers, the
  * per-category icon distinguishes groups). Items with no positive effective

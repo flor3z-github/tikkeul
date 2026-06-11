@@ -14,9 +14,6 @@ type CycleBreakdownViewProps = {
   fixedTotal: number;
   /** 총 소비 change vs the previous cycle. null = no comparable prior cycle. */
   topDelta: number | null;
-  /** 전월比 계산 기준 시점 "M/D" (오늘). 변동을 양쪽 같은 경과 시점까지 맞춰
-   *  비교하므로 어느 시점까지의 비교인지 라벨 옆에 작게 밝힌다 (§12.9). */
-  comparisonAsOf: string;
   variableRows: VariableBreakdownRow[];
   fixedRows: FixedBreakdownRow[];
 };
@@ -34,7 +31,6 @@ export function CycleBreakdownView({
   variableTotal,
   fixedTotal,
   topDelta,
-  comparisonAsOf,
   variableRows,
   fixedRows,
 }: CycleBreakdownViewProps) {
@@ -74,10 +70,6 @@ export function CycleBreakdownView({
             >
               지난 주기보다 {topDelta! > 0 ? "↑" : "↓"}{" "}
               {formatNumber(Math.abs(topDelta!))}원
-            </span>
-            {/* 계산 기준 시점 — 변동을 양쪽 같은 경과 시점까지 맞춰 비교한다는 단서. */}
-            <span className="ml-1.5 text-[11px] text-muted-foreground">
-              {comparisonAsOf} 기준
             </span>
           </p>
         ) : null}
