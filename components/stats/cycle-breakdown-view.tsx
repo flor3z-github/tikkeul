@@ -12,8 +12,6 @@ type CycleBreakdownViewProps = {
   grandTotal: number;
   variableTotal: number;
   fixedTotal: number;
-  /** 총 소비 change vs the previous cycle. null = no comparable prior cycle. */
-  topDelta: number | null;
   variableRows: VariableBreakdownRow[];
   fixedRows: FixedBreakdownRow[];
 };
@@ -23,20 +21,19 @@ const NEUTRAL_SWATCH = "#8E8E93";
 /**
  * /stats 본문 — "이번 사이클에 돈이 어디로 갔나"를 변동(카테고리 집계, CSS 막대)과
  * 고정(카탈로그 그룹, 항목별)으로 분해한다 (§12.9). 차트 없이 분해 리스트만, surface
- * 1단계. 상단 총액·변동 카테고리별·고정 항목별에 직전 사이클 대비 ±delta를 단다.
+ * 1단계. 변동 카테고리별·고정 항목별에 직전 사이클 대비 ±delta를 단다(상단 총액의
+ * 전월比 verdict는 두지 않는다 — 추세는 대시보드의 일, /stats는 구성에 집중 §3.3).
  */
 export function CycleBreakdownView({
   cycleLabel,
   grandTotal,
   variableTotal,
   fixedTotal,
-  topDelta,
   variableRows,
   fixedRows,
 }: CycleBreakdownViewProps) {
   const isEmpty =
     grandTotal === 0 && variableRows.length === 0 && fixedRows.length === 0;
-  const showTopDelta = topDelta != null && topDelta !== 0;
 
   return (
     <div className="space-y-6">
@@ -57,20 +54,6 @@ export function CycleBreakdownView({
         {!isEmpty ? (
           <p className="text-[13px] text-muted-foreground">
             변동 {formatKRW(variableTotal)} · 고정 {formatKRW(fixedTotal)}
-          </p>
-        ) : null}
-        {showTopDelta ? (
-          <p className="text-[13px] tabular-nums">
-            <span
-              className={cn(
-                topDelta! > 0
-                  ? "text-[color:var(--destructive)]"
-                  : "text-[color:var(--success)]",
-              )}
-            >
-              지난 주기보다 {topDelta! > 0 ? "↑" : "↓"}{" "}
-              {formatNumber(Math.abs(topDelta!))}원
-            </span>
           </p>
         ) : null}
       </div>

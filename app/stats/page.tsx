@@ -16,7 +16,6 @@ import {
 } from "@/lib/utils/payday-cycle";
 import {
   aggregateVariableByCategory,
-  fixedDelta,
   fixedTotal,
   mapFixedItems,
   variableTotal,
@@ -183,25 +182,13 @@ export default async function StatsPage({
         now,
       )
     : undefined;
-  // Fixed deltas + topDelta need BOTH fixed RPCs to have succeeded — if the prev
-  // (or current) fixed query errored, prev fixed would read as 0 and overstate
-  // the change. Variable deltas only depend on prevMonthly, so they stay on even
-  // when the fixed RPC fails.
-  const fixedOk = !fixedRes.error;
+  // 고정 per-row delta는 직전 fixed RPC가 성공했을 때만 켠다 — 실패 시 prev가
+  // 0으로 읽혀 delta가 부풀려지는 것 차단. 변동 delta는 prevMonthly에만 의존.
   const prevFixedOk = !prevFixedRes.error;
   const prevFixedItems =
     hasPrevBaseline && prevFixedOk
       ? mapFixedRpcRows(prevFixedRes.data)
       : undefined;
-  // 변동분은 총차이(같은 경과 시점끼리), 고정분은 matched-only delta로 더한다.
-  // 고정을 fixedTotal 총차이로 빼면 직전에 미기록(amount null→0)인 공과금이 가짜
-  // +로 잡히므로 fixedDelta가 직전에 값 있던 항목만 비교한다(§12.9 artifact 제거).
-  const topDelta =
-    hasPrevBaseline && fixedOk && prevFixedOk
-      ? varTotal -
-        variableTotal(prevTransactions ?? []) +
-        fixedDelta(fixedItems, prevFixedItems ?? [])
-      : null;
 
   return (
     <AppShell>
@@ -211,7 +198,6 @@ export default async function StatsPage({
         grandTotal={varTotal + fixTotal}
         variableTotal={varTotal}
         fixedTotal={fixTotal}
-        topDelta={topDelta}
         variableRows={aggregateVariableByCategory(transactions, prevTransactions)}
         fixedRows={mapFixedItems(fixedItems, prevFixedItems)}
       />
