@@ -4,6 +4,7 @@ import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 
 import { cn } from "@/lib/utils"
+import { PopupPortalContext } from "@/components/ui/popup-portal-context"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
 const Select = SelectPrimitive.Root
@@ -64,14 +65,23 @@ function SelectContent({
   align = "center",
   alignOffset = 0,
   alignItemWithTrigger = true,
+  container,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
-  >) {
+  > & { container?: SelectPrimitive.Portal.Props["container"] }) {
+  // When rendered inside a vaul Drawer, default to portaling the popup INTO the
+  // drawer content (published via PopupPortalContext) rather than document.body.
+  // A body-portaled popup lands outside the modal drawer's interaction boundary
+  // and item taps get swallowed as outside-dismiss — see popup-portal-context.ts.
+  // An explicit `container` prop always wins; outside a Drawer the context is
+  // null and the popup falls back to body.
+  const drawerContainer = React.useContext(PopupPortalContext)
+  const portalContainer = container ?? drawerContainer ?? undefined
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={portalContainer}>
       <SelectPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}
