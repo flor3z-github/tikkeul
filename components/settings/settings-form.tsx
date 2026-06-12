@@ -18,6 +18,13 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { formatCycleLabelLong } from "@/lib/utils/calendar";
 import { cn } from "@/lib/utils";
@@ -431,30 +438,28 @@ export function SettingsForm({
                     <Label htmlFor="payday-day" className="text-sm">
                       며칠에 들어오나요
                     </Label>
-                    {/* Native <select> on purpose: the day picker lives inside a
-                        vaul modal Drawer and needs zero-latency touch selection.
-                        A JS-driven popup (base-ui Select) both fought the drawer's
-                        modal isolation and added a 200–400ms press-drag-release
-                        grace that read as lag. The OS picker has neither problem. */}
-                    <div className="relative w-28 shrink-0">
-                      <select
+                    <Select
+                      value={String(midDay)}
+                      onValueChange={(value) => setMidDay(Number(value ?? "25"))}
+                      disabled={group !== "mid"}
+                    >
+                      <SelectTrigger
                         id="payday-day"
-                        value={String(midDay)}
-                        onChange={(e) => setMidDay(Number(e.target.value))}
-                        disabled={group !== "mid"}
-                        className="h-10 w-full appearance-none rounded-xl border border-input bg-transparent pl-3 pr-9 text-[14px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="h-10 w-28 shrink-0 rounded-xl text-[14px]"
+                        tabIndex={group === "mid" ? 0 : -1}
                       >
+                        <SelectValue>
+                          {(value) => (value ? `${value}일` : "")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
                         {MID_DAY_OPTIONS.map((day) => (
-                          <option key={day} value={day}>
+                          <SelectItem key={day} value={String(day)}>
                             {day}일
-                          </option>
+                          </SelectItem>
                         ))}
-                      </select>
-                      <ChevronDown
-                        className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden
-                      />
-                    </div>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
