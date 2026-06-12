@@ -386,7 +386,10 @@ export function OnboardingFlow({
                             {(value) => (value ? `${value}일` : "")}
                           </SelectValue>
                         </SelectTrigger>
-                        <SelectContent>
+                        {/* alignItemWithTrigger={false}: plain dropdown below the
+                            trigger — see settings-form for why (avoids base-ui's
+                            press-drag-release mouseup grace that read as lag). */}
+                        <SelectContent alignItemWithTrigger={false}>
                           {MID_DAY_OPTIONS.map((day) => (
                             <SelectItem key={day} value={String(day)}>
                               {day}일

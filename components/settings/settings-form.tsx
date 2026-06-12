@@ -452,7 +452,14 @@ export function SettingsForm({
                           {(value) => (value ? `${value}일` : "")}
                         </SelectValue>
                       </SelectTrigger>
-                      <SelectContent>
+                      {/* alignItemWithTrigger={false}: open as a plain dropdown
+                          BELOW the trigger, not an overlay under the finger. The
+                          overlay mode put the selected item under the touch point,
+                          turning the open-tap into base-ui's press-drag-release
+                          gesture which is gated by a 200–400ms mouseup grace — felt
+                          as selection lag. A dropdown gets discrete taps (instant
+                          path), no grace. */}
+                      <SelectContent alignItemWithTrigger={false}>
                         {MID_DAY_OPTIONS.map((day) => (
                           <SelectItem key={day} value={String(day)}>
                             {day}일
