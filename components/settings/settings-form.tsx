@@ -18,13 +18,6 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { formatCycleLabelLong } from "@/lib/utils/calendar";
 import { cn } from "@/lib/utils";
@@ -438,35 +431,31 @@ export function SettingsForm({
                     <Label htmlFor="payday-day" className="text-sm">
                       며칠에 들어오나요
                     </Label>
-                    <Select
-                      value={String(midDay)}
-                      onValueChange={(value) => setMidDay(Number(value ?? "25"))}
-                      disabled={group !== "mid"}
-                    >
-                      <SelectTrigger
+                    {/* Native <select> (mirrors components/fixed-expenses/
+                        payment-day-select.tsx): hands the picker to the OS wheel
+                        (iOS) / dropdown (Android) — zero JS popup, so no base-ui
+                        press-drag-release latency and no vaul modal-portal
+                        conflict. Lives on /settings (navbar-less) so it can't
+                        touch the dashboard bottom nav. */}
+                    <div className="relative w-28 shrink-0">
+                      <select
                         id="payday-day"
-                        className="h-10 w-28 shrink-0 rounded-xl text-[14px]"
-                        tabIndex={group === "mid" ? 0 : -1}
+                        value={String(midDay)}
+                        onChange={(e) => setMidDay(Number(e.target.value))}
+                        disabled={group !== "mid"}
+                        className="h-10 w-full appearance-none rounded-xl border border-input bg-transparent pl-3 pr-9 text-[14px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <SelectValue>
-                          {(value) => (value ? `${value}일` : "")}
-                        </SelectValue>
-                      </SelectTrigger>
-                      {/* alignItemWithTrigger={false}: open as a plain dropdown
-                          BELOW the trigger, not an overlay under the finger. The
-                          overlay mode put the selected item under the touch point,
-                          turning the open-tap into base-ui's press-drag-release
-                          gesture which is gated by a 200–400ms mouseup grace — felt
-                          as selection lag. A dropdown gets discrete taps (instant
-                          path), no grace. */}
-                      <SelectContent alignItemWithTrigger={false}>
                         {MID_DAY_OPTIONS.map((day) => (
-                          <SelectItem key={day} value={String(day)}>
+                          <option key={day} value={day}>
                             {day}일
-                          </SelectItem>
+                          </option>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </select>
+                      <ChevronDown
+                        aria-hidden
+                        className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
