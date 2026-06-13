@@ -457,7 +457,10 @@ export function CalendarDayPanel({
                       : formatKRW(item.amount);
                   const inner = (
                     <div className="flex w-full items-center gap-3">
-                      <FixedCategoryBadge category={item.category} />
+                      {/* 소비(대시보드)에선 모든 고정지출을 직접추가(manual) 아이콘
+                          으로 통일 — 카탈로그 카테고리별 아이콘 대신 중립 「repeat」
+                          하나로. category={null}이 NEUTRAL 비주얼을 강제한다. */}
+                      <FixedCategoryBadge category={null} />
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-1.5 truncate text-[15px] font-medium leading-tight">
                           <span className="truncate">{item.name}</span>
