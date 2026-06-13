@@ -622,6 +622,10 @@ export function CalendarDayPanel({
           }}
           cycleAnchor={ym}
           target={scheduleTarget}
+          // Prefill 결제일 with the selected calendar day's day-of-month
+          // (selectedDay is "YYYY-MM-DD"), so scheduling lands on the tapped day
+          // without reopening the sheet to check the date.
+          defaultPaymentDay={Number(selectedDay.slice(8, 10))}
         />
       ) : null}
     </>

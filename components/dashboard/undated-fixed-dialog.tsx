@@ -42,6 +42,10 @@ type UndatedFixedDialogProps = {
   /** anchorYm "YYYY-MM" of the displayed cycle (override key for the amount). */
   cycleAnchor: string;
   target: UndatedFixedTarget | null;
+  /** Day-of-month (1..31) of the calendar day the user had selected when they
+   *  opened this sheet. Prefills 결제일 so the common "schedule it on the day I
+   *  tapped" case needs no extra interaction. null/undefined → 미지정. */
+  defaultPaymentDay?: number | null;
 };
 
 export function UndatedFixedDialog({
@@ -49,6 +53,7 @@ export function UndatedFixedDialog({
   onOpenChange,
   cycleAnchor,
   target,
+  defaultPaymentDay,
 }: UndatedFixedDialogProps) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -70,6 +75,7 @@ export function UndatedFixedDialog({
             key={`${target.fixedExpenseId}-${cycleAnchor}`}
             cycleAnchor={cycleAnchor}
             target={target}
+            defaultPaymentDay={defaultPaymentDay}
             onSaved={() => onOpenChange(false)}
           />
         ) : null}
@@ -81,13 +87,20 @@ export function UndatedFixedDialog({
 function UndatedFixedBody({
   cycleAnchor,
   target,
+  defaultPaymentDay,
   onSaved,
 }: {
   cycleAnchor: string;
   target: UndatedFixedTarget;
+  defaultPaymentDay?: number | null;
   onSaved: () => void;
 }) {
-  const [paymentDay, setPaymentDay] = useState<number | null>(null);
+  // Seed 결제일 with the calendar day the user tapped (the body remounts per
+  // open — target nulls on close — so this picks up the current selection each
+  // time rather than going stale).
+  const [paymentDay, setPaymentDay] = useState<number | null>(
+    defaultPaymentDay ?? null,
+  );
   // Prefill the base amount so the common "이번 달도 기본 금액" case is a single
   // tap — the user doesn't retype it. A redundant override (= base) is avoided
   // at save time: if the value still equals the base we send null, so no
