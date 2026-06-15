@@ -6,7 +6,6 @@ import { XIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { PopupPortalContext } from "@/components/ui/popup-portal-context";
 
 // IMPORTANT: every bottom sheet in this app must go through DrawerContent so
 // the iOS keyboard handling below applies. Do NOT call vaul's
@@ -100,14 +99,6 @@ function DrawerContent({
   ...props
 }: DrawerContentProps) {
   const contentRef = React.useRef<HTMLDivElement>(null);
-  // The content node is also published via PopupPortalContext so nested popups
-  // (Select) can portal INTO the drawer instead of body. We track it as state
-  // (not just the ref) so the context re-renders consumers once the node mounts.
-  const [contentEl, setContentEl] = React.useState<HTMLElement | null>(null);
-  const setContentNode = React.useCallback((node: HTMLDivElement | null) => {
-    contentRef.current = node;
-    setContentEl(node);
-  }, []);
 
   // iOS soft-keyboard handling. Two iOS Safari quirks combine to break a
   // naive bottom sheet:
@@ -194,12 +185,11 @@ function DrawerContent({
   }, []);
 
   return (
-    <PopupPortalContext.Provider value={contentEl}>
-      <DrawerPortal>
-        <DrawerOverlay />
-        <DrawerPrimitive.Content
-          ref={setContentNode}
-          data-slot="drawer-content"
+    <DrawerPortal>
+      <DrawerOverlay />
+      <DrawerPrimitive.Content
+        ref={contentRef}
+        data-slot="drawer-content"
         className={cn(
           "fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md flex-col border-t bg-popover text-popover-foreground shadow-lg outline-none",
           "rounded-t-[28px]",
@@ -235,8 +225,7 @@ function DrawerContent({
           </DrawerPrimitive.Close>
         ) : null}
       </DrawerPrimitive.Content>
-      </DrawerPortal>
-    </PopupPortalContext.Provider>
+    </DrawerPortal>
   );
 }
 
