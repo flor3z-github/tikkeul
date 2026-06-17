@@ -156,7 +156,7 @@ function VariableRow({ row }: { row: VariableBreakdownRow }) {
  * 고정 행. 이름(좌)·금액(우)을 한 줄에 두고 inner `items-center`로 정렬 → 둘 다 블록
  * 세로 center에 와 같은 라인에 놓인다. delta는 (잠정) 금액 아래 `absolute`라 행 높이·
  * 이름/금액 centering에 영향 없음 — delta 위치는 추후 재검토. 아이콘(40px)이 최대
- * 높이라 행 높이는 통일. /poc/stats 후보 비교로 검증.
+ * 높이라 행 높이는 통일.
  */
 function FixedRow({ row }: { row: FixedBreakdownRow }) {
   const showDelta = row.delta != null && row.delta !== 0;
