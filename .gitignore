@@ -44,3 +44,10 @@ next-env.d.ts
 # claude code local state (transient lock + local-only workflow scratch)
 .claude/scheduled_tasks.lock
 .claude/workflows/
+
+# design-sync (claude.ai/design sync) — staged scripts, build output, machine state
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules

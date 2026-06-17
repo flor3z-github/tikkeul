@@ -1,0 +1,43 @@
+{
+  "projectId": "ef534151-ee64-48b0-91e6-01edec5556c4",
+  "pkg": "tikkeul",
+  "globalName": "Tikkeul",
+  "shape": "package",
+  "srcDir": "components/ui",
+  "tsconfig": "tsconfig.json",
+  "buildCmd": "node .design-sync/build-css.cjs",
+  "cssEntry": ".design-sync/.cache/tailwind-compiled.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "extraFonts": [".design-sync/fonts/pretendard.css"],
+  "componentSrcMap": {
+    "Badge": null,
+    "CalendarDayButton": null,
+    "CardHeader": null,
+    "CardTitle": null,
+    "CardDescription": null,
+    "CardAction": null,
+    "CardFooter": null,
+    "Dialog": null,
+    "DialogClose": null,
+    "DialogContent": null,
+    "DialogDescription": null,
+    "DialogFooter": null,
+    "DialogHeader": null,
+    "DialogOverlay": null,
+    "DialogPortal": null,
+    "DialogTitle": null,
+    "DialogTrigger": null,
+    "DrawerTrigger": null,
+    "DrawerPortal": null,
+    "DrawerOverlay": null,
+    "DrawerFooter": null,
+    "DrawerHeader": null,
+    "PopoverDescription": null,
+    "PopoverHeader": null,
+    "PopoverTitle": null,
+    "RadioGroupItem": null
+  },
+  "overrides": {
+    "Popover": { "cardMode": "single", "primaryStory": "Open" }
+  }
+}

@@ -1,0 +1,24 @@
+/* Pretendard for design-sync's cfg.extraFonts.
+ *
+ * app/globals.css sets --font-sans to "Pretendard Variable", Pretendard, …
+ * The shipped bundle references BOTH family names, so we declare both here
+ * (same single variable woff2) — otherwise the bare "Pretendard" fallback
+ * trips [FONT_MISSING]. The woff2 is referenced from node_modules so we don't
+ * commit the 2 MB binary; design-sync copies it into the bundle's fonts/.
+ */
+@font-face {
+  font-family: "Pretendard Variable";
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../node_modules/pretendard/dist/web/variable/woff2/PretendardVariable.woff2")
+    format("woff2-variations");
+}
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../node_modules/pretendard/dist/web/variable/woff2/PretendardVariable.woff2")
+    format("woff2-variations");
+}
