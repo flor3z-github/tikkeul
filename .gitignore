@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code local state (transient lock + local-only workflow scratch)
+.claude/scheduled_tasks.lock
+.claude/workflows/
