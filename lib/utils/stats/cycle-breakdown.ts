@@ -26,10 +26,19 @@ import type { MonthlyTransaction } from "@/lib/queries/transactions";
  *   - grandTotal === dashboard `totalSpent`
  */
 
-/** Minimal structural input — only the fields the breakdown reads. */
+/** Minimal structural input — only the fields the breakdown reads. `id`/
+ *  `spent_at`/`memo` feed the per-category drill-down list (each category row
+ *  carries its own transactions so /stats can expand them inline). */
 export type VariableTxInput = Pick<
   MonthlyTransaction,
-  "amount" | "category_id" | "category_name" | "category_icon" | "category_color"
+  | "id"
+  | "amount"
+  | "category_id"
+  | "category_name"
+  | "category_icon"
+  | "category_color"
+  | "spent_at"
+  | "memo"
 >;
 
 /** Effective fixed-expense item (override-aware) as returned by the
@@ -45,6 +54,14 @@ export type FixedEffectiveItem = {
   is_overridden: boolean;
 };
 
+/** One transaction inside a category, for the inline drill-down list. */
+export type VariableBreakdownItem = {
+  id: string;
+  amount: number;
+  spentAt: string;
+  memo: string | null;
+};
+
 export type VariableBreakdownRow = {
   /** null when the transaction had no category (rendered as "미분류"). */
   categoryId: string | null;
@@ -57,6 +74,8 @@ export type VariableBreakdownRow = {
   /** thisCycle − prevCycle for the same category. null when this category had
    *  no spending last cycle (or no prev data supplied). */
   delta: number | null;
+  /** This category's transactions, amount desc — the expandable detail rows. */
+  items: VariableBreakdownItem[];
 };
 
 export type FixedBreakdownRow = {
@@ -104,14 +123,28 @@ export function aggregateVariableByCategory(
 ): VariableBreakdownRow[] {
   const groups = new Map<
     string,
-    { categoryId: string | null; name: string; icon: string | null; color: string | null; total: number }
+    {
+      categoryId: string | null;
+      name: string;
+      icon: string | null;
+      color: string | null;
+      total: number;
+      items: VariableBreakdownItem[];
+    }
   >();
 
   for (const tx of transactions) {
     const key = tx.category_id ?? UNCATEGORIZED_KEY;
+    const item: VariableBreakdownItem = {
+      id: tx.id,
+      amount: tx.amount,
+      spentAt: tx.spent_at,
+      memo: tx.memo,
+    };
     const existing = groups.get(key);
     if (existing) {
       existing.total += tx.amount;
+      existing.items.push(item);
     } else {
       groups.set(key, {
         categoryId: tx.category_id,
@@ -119,6 +152,7 @@ export function aggregateVariableByCategory(
         icon: tx.category_icon,
         color: tx.category_color,
         total: tx.amount,
+        items: [item],
       });
     }
   }
@@ -140,6 +174,13 @@ export function aggregateVariableByCategory(
         total: g.total,
         share: total > 0 ? (g.total / total) * 100 : 0,
         delta: prev && prev > 0 ? g.total - prev : null,
+        // Amount desc — mirrors the category ordering ("큰 것부터"), since this
+        // is a read-only composition view, not a chronological log. Tie-break
+        // newest-first (ISO strings sort chronologically, no Date parsing — keeps
+        // this layer TZ-agnostic).
+        items: [...g.items].sort(
+          (a, b) => b.amount - a.amount || b.spentAt.localeCompare(a.spentAt),
+        ),
       };
     })
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));

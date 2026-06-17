@@ -1,11 +1,14 @@
-import { CategoryIcon } from "@/lib/utils/category-icon";
 import { FixedCategoryBadge } from "@/lib/utils/fixed-category-icon";
-import { cn } from "@/lib/utils";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
 import type {
   FixedBreakdownRow,
   VariableBreakdownRow,
 } from "@/lib/utils/stats/cycle-breakdown";
+import {
+  DeltaBadge,
+  SectionHeading,
+  VariableSection,
+} from "@/components/stats/variable-section";
 
 type CycleBreakdownViewProps = {
   cycleLabel: string;
@@ -15,8 +18,6 @@ type CycleBreakdownViewProps = {
   variableRows: VariableBreakdownRow[];
   fixedRows: FixedBreakdownRow[];
 };
-
-const NEUTRAL_SWATCH = "#8E8E93";
 
 /**
  * /stats 본문 — "이번 사이클에 돈이 어디로 갔나"를 변동(카테고리 집계, CSS 막대)과
@@ -65,14 +66,10 @@ export function CycleBreakdownView({
       ) : null}
 
       {variableRows.length > 0 ? (
-        <section className="space-y-1">
-          <SectionHeading title="변동지출" total={variableTotal} />
-          <ul>
-            {variableRows.map((row) => (
-              <VariableRow key={row.categoryId ?? "__uncat__"} row={row} />
-            ))}
-          </ul>
-        </section>
+        <VariableSection
+          variableRows={variableRows}
+          variableTotal={variableTotal}
+        />
       ) : null}
 
       {variableRows.length > 0 && fixedRows.length > 0 ? (
@@ -90,65 +87,6 @@ export function CycleBreakdownView({
         </section>
       ) : null}
     </div>
-  );
-}
-
-function SectionHeading({ title, total }: { title: string; total: number }) {
-  return (
-    <div className="flex items-baseline justify-between px-1 pb-1">
-      <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
-      <span className="text-[13px] tabular-nums text-muted-foreground">
-        {formatKRW(total)}
-      </span>
-    </div>
-  );
-}
-
-/** 직전 사이클 대비 ±N. up(더 씀)=warning, down(덜 씀)=muted. */
-function DeltaBadge({ delta }: { delta: number }) {
-  const up = delta > 0;
-  return (
-    <span
-      className={cn(
-        "shrink-0 whitespace-nowrap text-[11px] tabular-nums",
-        up
-          ? "text-[color:var(--destructive)]"
-          : "text-[color:var(--success)]",
-      )}
-    >
-      {up ? "↑" : "↓"} {formatNumber(Math.abs(delta))}원
-    </span>
-  );
-}
-
-function VariableRow({ row }: { row: VariableBreakdownRow }) {
-  const swatch = row.color ?? NEUTRAL_SWATCH;
-  const showDelta = row.delta != null && row.delta !== 0;
-  return (
-    <li className="flex items-center gap-3 px-1 py-2">
-      <span
-        className="flex size-10 shrink-0 items-center justify-center rounded-full"
-        style={{ backgroundColor: `${swatch}26`, color: swatch }}
-      >
-        <CategoryIcon slug={row.icon} className="size-5" />
-      </span>
-      {/* 토스식 2줄: 왼쪽 이름/비중(%), 오른쪽 금액/전월比 delta. %는 상단 막대의
-          세그먼트 색과 같은 카테고리의 정확한 비중(슬리버까지 숫자로 확인). */}
-      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-[15px] font-medium">{row.name}</p>
-          <p className="text-[13px] tabular-nums text-muted-foreground">
-            {Math.round(row.share)}%
-          </p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-[15px] font-semibold tabular-nums">
-            {formatNumber(row.total)}원
-          </p>
-          {showDelta ? <DeltaBadge delta={row.delta!} /> : null}
-        </div>
-      </div>
-    </li>
   );
 }
 

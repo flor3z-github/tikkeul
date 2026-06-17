@@ -17,17 +17,21 @@ import {
 // payday-cycle.test.ts, incl. getPreviousCycleB). So there are deliberately NO
 // TZ tests below — only aggregation, grouping, and delta invariants.
 
+let txSeq = 0;
 function tx(
   category_id: string | null,
   amount: number,
   meta?: Partial<VariableTxInput>,
 ): VariableTxInput {
   return {
+    id: meta?.id ?? `tx-${txSeq++}`,
     amount,
     category_id,
     category_name: meta?.category_name ?? (category_id ? category_id : null),
     category_icon: meta?.category_icon ?? null,
     category_color: meta?.category_color ?? null,
+    spent_at: meta?.spent_at ?? "2026-06-15T00:00:00.000Z",
+    memo: meta?.memo ?? null,
   };
 }
 
@@ -128,6 +132,45 @@ describe("aggregateVariableByCategory", () => {
       [tx("food", 100_000)],
     );
     expect(rows.find((r) => r.categoryId === "new")?.delta).toBeNull();
+  });
+
+  // per-category drill-down items
+  it("collects each category's transactions as items", () => {
+    const rows = aggregateVariableByCategory([
+      tx("food", 100, { id: "a" }),
+      tx("cafe", 30, { id: "b" }),
+      tx("food", 200, { id: "c" }),
+    ]);
+    const food = rows.find((r) => r.categoryId === "food");
+    expect(food?.items.map((i) => i.id).sort()).toEqual(["a", "c"]);
+    expect(rows.find((r) => r.categoryId === "cafe")?.items).toHaveLength(1);
+  });
+
+  it("sorts items by amount desc regardless of input order", () => {
+    const rows = aggregateVariableByCategory([
+      tx("food", 100, { id: "mid" }),
+      tx("food", 50, { id: "small" }),
+      tx("food", 200, { id: "big" }),
+    ]);
+    expect(rows[0].items.map((i) => i.id)).toEqual(["big", "mid", "small"]);
+  });
+
+  it("breaks an amount tie by newest first", () => {
+    const rows = aggregateVariableByCategory([
+      tx("food", 100, { id: "older", spent_at: "2026-06-01T00:00:00.000Z" }),
+      tx("food", 100, { id: "newer", spent_at: "2026-06-20T00:00:00.000Z" }),
+    ]);
+    expect(rows[0].items.map((i) => i.id)).toEqual(["newer", "older"]);
+  });
+
+  it("carries memo through onto items (null when absent)", () => {
+    const rows = aggregateVariableByCategory([
+      tx("food", 100, { id: "withmemo", memo: "회식" }),
+      tx("food", 200, { id: "nomemo" }),
+    ]);
+    const items = rows[0].items;
+    expect(items.find((i) => i.id === "withmemo")?.memo).toBe("회식");
+    expect(items.find((i) => i.id === "nomemo")?.memo).toBeNull();
   });
 });
 
