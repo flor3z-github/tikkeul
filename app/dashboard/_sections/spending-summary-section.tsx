@@ -1,6 +1,14 @@
 import { SpendingSummary } from "@/components/dashboard/spending-summary";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
 import { createClient } from "@/lib/supabase/server";
+import { nowInSeoul } from "@/lib/utils/date";
+import {
+  fixedDelta,
+  variableTotal,
+  type FixedEffectiveItem,
+} from "@/lib/utils/stats/cycle-breakdown";
+import { clampToElapsedWindow } from "@/lib/utils/stats/elapsed-window";
+import { cycleSpendTrend } from "@/lib/utils/stats/trend";
 
 type SpendingSummarySectionProps = {
   /** Viewer id resolved by the page from JWT claims — no auth call here. */
@@ -16,6 +24,12 @@ type SpendingSummarySectionProps = {
   ownSettings?: { hasSettings: boolean; monthlyIncome: number };
   /** Own-mode fixed-expense total, prefetched by the page. Ignored in friend mode. */
   ownFixedExpense?: number;
+  /**
+   * Own-mode effective fixed items (override-aware), prefetched by the page.
+   * Used as the "this cycle" side of the 토스式 추세 고정 비교(fixedDelta,
+   * matched-only). Ignored in friend mode.
+   */
+  ownFixedEffectiveItems?: FixedEffectiveItem[];
   /**
    * Own-mode per-cycle extra income (sum of `income_adjustments` whose
    * `occurred_on` falls inside the cycle), prefetched by the page so this
@@ -59,6 +73,16 @@ type SpendingSummarySectionProps = {
   cycleStart?: Date;
   cycleEnd?: Date;
   cycleMode?: "calendar" | "income_day";
+  /**
+   * Previous-cycle bounds + anchor (from the same payday engine as the current
+   * cycle) for the 토스式 총액 추세. The section fetches prev tx/fixed and
+   * computes the trend delta ONLY in own + current cycle; past/future cycles
+   * (no actionable pace) and friend mode never receive a comparison. prev tx is
+   * elapsed-clamped to the same point; prev fixed feeds fixedDelta (matched-only).
+   */
+  prevCycleStart?: Date;
+  prevCycleEnd?: Date;
+  prevCycleAnchor?: string;
 };
 
 export async function SpendingSummarySection({
@@ -80,6 +104,10 @@ export async function SpendingSummarySection({
   cycleStart,
   cycleEnd,
   cycleMode,
+  ownFixedEffectiveItems,
+  prevCycleStart,
+  prevCycleEnd,
+  prevCycleAnchor,
 }: SpendingSummarySectionProps) {
   const userId = targetUserId ?? viewerId;
   const isOwn = userId === viewerId;
@@ -165,10 +193,40 @@ export async function SpendingSummarySection({
     );
   }
 
-  // Own mode: user_settings + fixed_expenses are prefetched by the page.
-  // Only transactions remain — single round-trip (dedup'd by React cache()
-  // when SpendingCalendarSection asks for the same range).
-  const monthlyResult = await getMonthlyTransactions(userId, startIso, endIso);
+  // Own mode. `now` (KST) drives BOTH the current-cycle gate and the prev-cycle
+  // elapsed clamp so they agree.
+  const now = nowInSeoul();
+  // Whether the displayed cycle is the one we're living in. Gates the pace line,
+  // the /stats entry point, AND the 토스式 추세 — stats/추세 always resolve the
+  // CURRENT cycle, so we only show them when the card itself shows that cycle
+  // (otherwise a past-month card total would mismatch).
+  const isCurrentCycle =
+    !!cycleStart &&
+    !!cycleEnd &&
+    now.getTime() >= cycleStart.getTime() &&
+    now.getTime() < cycleEnd.getTime();
+
+  // 토스式 총액 추세는 own + 현재 주기 + 직전 주기 bounds가 있을 때만 직전 tx/fixed를
+  // 가져온다(과거/미래 주기엔 행동 가능한 페이스가 없음). 현재 주기 tx와 병렬로.
+  const wantTrend =
+    isCurrentCycle && !!prevCycleStart && !!prevCycleEnd && !!prevCycleAnchor;
+  const supabase = wantTrend ? await createClient() : null;
+  const [monthlyResult, prevMonthly, prevFixedRes] = await Promise.all([
+    getMonthlyTransactions(userId, startIso, endIso),
+    wantTrend
+      ? getMonthlyTransactions(
+          userId,
+          prevCycleStart!.toISOString(),
+          prevCycleEnd!.toISOString(),
+        )
+      : Promise.resolve(null),
+    wantTrend
+      ? supabase!.rpc("get_fixed_effective_items", {
+          target: userId,
+          cycle_anchor: prevCycleAnchor!,
+        })
+      : Promise.resolve(null),
+  ]);
 
   if (!monthlyResult.ok) {
     return (
@@ -182,34 +240,51 @@ export async function SpendingSummarySection({
   // Pace info: rendered only when the *currently selected* cycle is the one
   // we're living in. Past/future cycles have no actionable pace.
   let daysRemaining: number | null = null;
-  // Whether the displayed cycle is the one we're living in. Gates both the pace
-  // line and the /stats entry point — stats always resolves the CURRENT cycle,
-  // so we only let the card link out when the card itself shows that cycle
-  // (otherwise a past-month card total would mismatch the stats total).
-  let isCurrentCycle = false;
-  if (cycleStart && cycleEnd) {
-    const now = new Date();
-    isCurrentCycle =
-      now.getTime() >= cycleStart.getTime() &&
-      now.getTime() < cycleEnd.getTime();
-    if (isCurrentCycle) {
-      const todayMid = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-      ).getTime();
-      // `cycleEnd` is exclusive — last day of cycle is (cycleEnd − 1 day).
-      const lastDayDate = new Date(cycleEnd.getTime() - 86_400_000);
-      const lastDayMid = new Date(
-        lastDayDate.getFullYear(),
-        lastDayDate.getMonth(),
-        lastDayDate.getDate(),
-      ).getTime();
-      daysRemaining = Math.max(
-        0,
-        Math.round((lastDayMid - todayMid) / 86_400_000),
-      );
-    }
+  if (isCurrentCycle && cycleEnd) {
+    const todayMid = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    ).getTime();
+    // `cycleEnd` is exclusive — last day of cycle is (cycleEnd − 1 day).
+    const lastDayDate = new Date(cycleEnd.getTime() - 86_400_000);
+    const lastDayMid = new Date(
+      lastDayDate.getFullYear(),
+      lastDayDate.getMonth(),
+      lastDayDate.getDate(),
+    ).getTime();
+    daysRemaining = Math.max(
+      0,
+      Math.round((lastDayMid - todayMid) / 86_400_000),
+    );
+  }
+
+  // 총액 추세 델타(원). 직전 주기에 실거래가 있었을 때만(hasPrevBaseline) 계산해
+  // 카드에 넘긴다 — 첫 주기가 상설 고정지출 대비 가짜 "+전부"로 뜨는 것 방지(/stats
+  // 와 동일 게이트). 고정은 matched-only(fixedDelta), 변동은 같은 경과 시점 클램프.
+  let trendDeltaWon: number | undefined = undefined;
+  if (
+    wantTrend &&
+    prevMonthly?.ok &&
+    prevMonthly.transactions.length > 0 &&
+    cycleStart
+  ) {
+    const prevElapsed = clampToElapsedWindow(
+      prevMonthly.transactions,
+      cycleStart,
+      prevCycleStart!,
+      now,
+    );
+    // prev fixed RPC 실패 시 빈 배열 → fixedDelta가 0(고정 비교 생략, 변동만).
+    const prevFixedItems: FixedEffectiveItem[] =
+      prevFixedRes && !prevFixedRes.error
+        ? mapFixedRpcRows(prevFixedRes.data)
+        : [];
+    trendDeltaWon = cycleSpendTrend({
+      curVariable: monthlyResult.monthlyTotal,
+      prevVariableElapsed: variableTotal(prevElapsed),
+      fixedDeltaWon: fixedDelta(ownFixedEffectiveItems ?? [], prevFixedItems),
+    });
   }
 
   return (
@@ -227,6 +302,33 @@ export async function SpendingSummarySection({
       daysRemainingInCycle={daysRemaining}
       cycleMode={cycleMode}
       statsHref={isCurrentCycle ? "/stats" : undefined}
+      trendDeltaWon={trendDeltaWon}
     />
   );
+}
+
+/** Map get_fixed_effective_items rows to FixedEffectiveItem (same shape the page
+ *  uses for the current cycle), so fixedDelta compares like-for-like. */
+type FixedRpcRow = {
+  id: string;
+  name: string;
+  plan_name: string | null;
+  amount: number | null;
+  base_amount: number | null;
+  category: string | null;
+  payment_day: number | null;
+  is_overridden: boolean;
+};
+
+function mapFixedRpcRows(data: unknown): FixedEffectiveItem[] {
+  return ((data ?? []) as FixedRpcRow[]).map((row) => ({
+    id: row.id,
+    name: row.name,
+    plan_name: row.plan_name,
+    amount: row.amount == null ? null : Number(row.amount),
+    base_amount: row.base_amount == null ? null : Number(row.base_amount),
+    category: row.category,
+    payment_day: row.payment_day,
+    is_overridden: row.is_overridden,
+  }));
 }

@@ -16,6 +16,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { parseYearMonth } from "@/lib/utils/calendar";
 import {
+  getPreviousCycleB,
   resolveDashboardParamsB,
   type PayrollRule,
 } from "@/lib/utils/payday-cycle";
@@ -219,6 +220,12 @@ export default async function DashboardPage({
     resolveDashboardParamsB(sp, payday, rule, holidays, nowInSeoul());
   const startIso = cycleStart.toISOString();
   const endIso = cycleEnd.toISOString();
+
+  // Previous cycle (for the 토스式 총액 추세 line) — resolved by the same payday
+  // engine as /stats, not naive month math (cycles cross year boundaries).
+  // prevCycle.end === cycleStart. The section fetches prev tx/fixed ONLY in own
+  // + current cycle (gated there), so this is just cheap pure bounds for now.
+  const prevCycle = getPreviousCycleB(payday, rule, holidays, cycleStart);
 
   // Round 3: per-cycle income adjustments (own mode only). Cannot be in round
   // 2 because the cycle bounds aren't resolved until after round 2 settings
@@ -450,6 +457,7 @@ export default async function DashboardPage({
               targetUserId={undefined}
               ownSettings={ownSettings}
               ownFixedExpense={ownFixedExpense}
+              ownFixedEffectiveItems={ownFixedEffectiveItems}
               ownExtraIncome={ownExtraIncome}
               ownExtraIncomeItems={ownExtraIncomeItems}
               cycleStartDate={cycleStartDate}
@@ -459,6 +467,9 @@ export default async function DashboardPage({
               cycleStart={cycleStart}
               cycleEnd={cycleEnd}
               cycleMode={cycleMode}
+              prevCycleStart={prevCycle.start}
+              prevCycleEnd={prevCycle.end}
+              prevCycleAnchor={prevCycle.anchorYm}
             />
           </Suspense>
 

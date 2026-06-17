@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, PieChart } from "lucide-react";
+import { ChevronRight, PieChart, TrendingDown, TrendingUp } from "lucide-react";
 
 import { IncomeLine, type IncomeLineItem } from "@/components/income/income-line";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import {
   getSpendingStatus,
   type SpendingStatus,
 } from "@/lib/utils/budget";
+import { spendTrend } from "@/lib/utils/stats/trend";
 import { SpendingProgress } from "./spending-progress";
 
 type SpendingSummaryProps = {
@@ -74,6 +75,13 @@ type SpendingSummaryProps = {
    * the stats total always matches the number this card shows.
    */
   statsHref?: string;
+  /**
+   * 총액 추세 델타(원, 이번 − 지난 주기 같은 때). 양수 = 더 씀. 고정은
+   * matched-only(fixedDelta), 변동은 같은 경과 시점 클램프로 정직하게 합산된 값
+   * (§3.3, lib/utils/stats/trend.ts). undefined면 추세 블록을 숨긴다 — 호출부는
+   * own + 현재 주기 + 직전 주기에 실거래가 있었을 때만(hasPrevBaseline) 넘긴다.
+   */
+  trendDeltaWon?: number;
 };
 
 const STATUS_COPY: Record<SpendingStatus, { tone: string; label: string }> = {
@@ -105,6 +113,7 @@ export function SpendingSummary({
   daysRemainingInCycle = null,
   cycleMode,
   statsHref,
+  trendDeltaWon,
 }: SpendingSummaryProps) {
   if (friendView) {
     // Friend mode: total spending number. When the owner granted fixed
@@ -160,6 +169,13 @@ export function SpendingSummary({
   const isOver = summary.remainingBudget < 0;
   const hasExtraIncome = summary.extraIncome > 0;
 
+  // 총액 추세 한 줄(§12.2): 숫자만 강조하고 방향 아이콘을 붙이려고 파트로 분해.
+  // 색은 budget 상태색과 충돌하지 않게 중립으로 둔다(더/덜 = 단어 + 아이콘 모양으로만).
+  const trend =
+    trendDeltaWon != null
+      ? spendTrend(trendDeltaWon, cycleMode === "income_day" ? "주기" : "달")
+      : null;
+
   // Stats entry overlay: only in the populated hero state. The !hasSettings and
   // monthlyIncome===0 branches render their own inner <Link>/CTA, and stats has
   // nothing to show without a budget — gating here also avoids nesting links.
@@ -189,45 +205,80 @@ export function SpendingSummary({
           </p>
         ) : (
           <>
-            <div
-              key={cycleLabel}
-              className="grid grid-cols-2 items-end gap-3 animate-in fade-in duration-200"
-            >
-              <div className="min-w-0 space-y-1">
-                <p className="text-[12px] text-muted-foreground">쓴 돈</p>
-                <p className="text-[clamp(20px,6vw,32px)] font-extrabold leading-none tracking-[-0.04em] tabular-nums whitespace-nowrap">
-                  {formatNumber(summary.totalSpent)}
-                  <span className="ml-1 text-base font-semibold text-muted-foreground">
-                    원
-                  </span>
-                </p>
-              </div>
-              <div className="min-w-0 space-y-1 text-right">
-                <p
-                  className={cn(
-                    "text-[12px]",
-                    isOver ? "text-destructive" : "text-muted-foreground",
-                  )}
-                >
-                  {isOver ? "초과" : "남은 돈"}
-                </p>
-                <p
-                  className={cn(
-                    "text-[clamp(16px,4.5vw,22px)] font-medium leading-none tabular-nums whitespace-nowrap",
-                    isOver ? "text-destructive" : "text-muted-foreground",
-                  )}
-                >
-                  {formatNumber(Math.abs(summary.remainingBudget))}
-                  <span
+            {/* 결과 그룹: hero 숫자 + 추세 한 줄을 한 덩어리로 묶어(공백 좁게)
+                아래 구성(progress) 그룹과 시각적으로 분리한다(피드백 #3). */}
+            <div className="space-y-2">
+              <div
+                key={cycleLabel}
+                className="grid grid-cols-2 items-end gap-3 animate-in fade-in duration-200"
+              >
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[12px] text-muted-foreground">쓴 돈</p>
+                  <p className="text-[clamp(20px,6vw,32px)] font-extrabold leading-none tracking-[-0.04em] tabular-nums whitespace-nowrap">
+                    {formatNumber(summary.totalSpent)}
+                    <span className="ml-1 text-base font-semibold text-muted-foreground">
+                      원
+                    </span>
+                  </p>
+                </div>
+                <div className="min-w-0 space-y-1 text-right">
+                  <p
                     className={cn(
-                      "ml-1 text-sm font-medium",
-                      isOver ? "text-destructive/80" : "text-muted-foreground/80",
+                      "text-[12px]",
+                      isOver ? "text-destructive" : "text-muted-foreground",
                     )}
                   >
-                    원
-                  </span>
-                </p>
+                    {isOver ? "초과" : "남은 돈"}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-[clamp(16px,4.5vw,22px)] font-medium leading-none tabular-nums whitespace-nowrap",
+                      isOver ? "text-destructive" : "text-muted-foreground",
+                    )}
+                  >
+                    {formatNumber(Math.abs(summary.remainingBudget))}
+                    <span
+                      className={cn(
+                        "ml-1 text-sm font-medium",
+                        isOver
+                          ? "text-destructive/80"
+                          : "text-muted-foreground/80",
+                      )}
+                    >
+                      원
+                    </span>
+                  </p>
+                </div>
               </div>
+
+              {trend ? (
+                trend.kind === "flat" ? (
+                  <p className="text-[13px] text-muted-foreground">
+                    {trend.text}
+                  </p>
+                ) : (
+                  <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                    {trend.kind === "up" ? (
+                      <TrendingUp
+                        aria-hidden
+                        className="size-3.5 shrink-0 text-muted-foreground/70"
+                      />
+                    ) : (
+                      <TrendingDown
+                        aria-hidden
+                        className="size-3.5 shrink-0 text-muted-foreground/70"
+                      />
+                    )}
+                    <span className="min-w-0">
+                      {trend.prefix}
+                      <span className="font-semibold text-foreground tabular-nums">
+                        {trend.amount}
+                      </span>
+                      {trend.suffix}
+                    </span>
+                  </p>
+                )
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -237,19 +288,22 @@ export function SpendingSummary({
                 monthlyExpense={monthlyExpense}
                 status={status}
               />
-              <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5">
+              <div className="flex items-baseline justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                     <span
                       aria-hidden
-                      className="size-2 rounded-full bg-foreground/25"
+                      className="size-2 shrink-0 rounded-full bg-foreground/25"
                     />
                     고정 {formatKRW(fixedExpense)}
                   </span>
-                  <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                     <span
                       aria-hidden
-                      className={cn("size-2 rounded-full", STATUS_DOT[status])}
+                      className={cn(
+                        "size-2 shrink-0 rounded-full",
+                        STATUS_DOT[status],
+                      )}
                     />
                     소비 {formatKRW(monthlyExpense)}
                   </span>
