@@ -419,6 +419,8 @@ export type Database = {
           show_spending_items: boolean;
           show_fixed_total: boolean;
           show_fixed_items: boolean;
+          show_savings_total: boolean;
+          show_savings_items: boolean;
           created_at: string;
         };
         Insert: {
@@ -429,6 +431,8 @@ export type Database = {
           show_spending_items?: boolean;
           show_fixed_total?: boolean;
           show_fixed_items?: boolean;
+          show_savings_total?: boolean;
+          show_savings_items?: boolean;
           created_at?: string;
         };
         Update: {
@@ -439,6 +443,8 @@ export type Database = {
           show_spending_items?: boolean;
           show_fixed_total?: boolean;
           show_fixed_items?: boolean;
+          show_savings_total?: boolean;
+          show_savings_items?: boolean;
           created_at?: string;
         };
         Relationships: [];
@@ -668,6 +674,21 @@ export type Database = {
       get_friend_fixed_total: {
         Args: { target: string; cycle_anchor: string };
         Returns: number;
+      };
+      get_friend_savings_total: {
+        Args: { target: string };
+        Returns: number;
+      };
+      get_friend_savings_items: {
+        Args: { target: string };
+        Returns: {
+          id: string;
+          name: string;
+          amount: number | null;
+          payment_day: number | null;
+          start_date: string;
+          maturity_date: string | null;
+        }[];
       };
       get_fixed_effective_items: {
         Args: { target: string; cycle_anchor: string };

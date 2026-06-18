@@ -64,6 +64,12 @@ type SpendingSummarySectionProps = {
    * shows the 고정/변동 split. Ignored in own mode.
    */
   showFixed?: boolean;
+  /**
+   * Friend-mode: owner granted show_savings_total (and show_spending_total — the
+   * data-layer RPC ANDs both). When true the section fetches the friend's
+   * "이번 달 모은 돈" (get_friend_savings_total) and appends a 모으기 line to the
+   * card. Ignored in own mode (own savings ride the 3-split hero). */
+  showSavingsTotal?: boolean;
   /** Friend-mode cycle anchor (anchorYm "YYYY-MM") for get_friend_fixed_total. */
   cycleAnchor?: string;
   /**
@@ -101,6 +107,7 @@ export async function SpendingSummarySection({
   showSpendingTotal = true,
   showSpendingItems = true,
   showFixed = false,
+  showSavingsTotal = false,
   cycleAnchor,
   cycleStart,
   cycleEnd,
@@ -181,6 +188,20 @@ export async function SpendingSummarySection({
       }
     }
 
+    // Savings total for the 모으기 line. Gated by showSavingsTotal; the RPC
+    // re-checks show_savings_total AND show_spending_total server-side and never
+    // exposes income or per-plan rows. Stays 0 on failure or when not granted.
+    let friendSavings = 0;
+    if (showSavingsTotal) {
+      const { data: savingsData, error: savingsError } = await supabase.rpc(
+        "get_friend_savings_total",
+        { target: userId },
+      );
+      if (!savingsError) {
+        friendSavings = Number(savingsData ?? 0);
+      }
+    }
+
     return (
       <SpendingSummary
         monthlyIncome={0}
@@ -189,6 +210,7 @@ export async function SpendingSummarySection({
         hasSettings={false}
         friendView
         showFixedBreakdown={fixedAvailable}
+        friendSavings={friendSavings}
         cycleLabel={cycleLabel}
       />
     );

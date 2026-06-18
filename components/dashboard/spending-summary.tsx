@@ -63,6 +63,13 @@ type SpendingSummaryProps = {
    */
   showFixedBreakdown?: boolean;
   /**
+   * Friend mode only: the friend's "이번 달 모은 돈" total (get_friend_savings_total,
+   * perm-gated server-side on show_savings_total AND show_spending_total). When
+   * > 0 a green 모으기 line is appended under the total. Already an aggregate, so
+   * it leaks no income/budget. 0 in own mode (own savings ride the 3-split hero).
+   */
+  friendSavings?: number;
+  /**
    * Identifier for the current budget cycle. When this changes (e.g. user
    * navigates to a different month), the hero number re-mounts and fades in
    * instead of snapping. Optional — friendView card also uses it.
@@ -131,6 +138,7 @@ export function SpendingSummary({
   hasSettings,
   friendView = false,
   showFixedBreakdown = false,
+  friendSavings = 0,
   cycleLabel,
   daysRemainingInCycle = null,
   cycleMode,
@@ -172,6 +180,20 @@ export function SpendingSummary({
                   className="size-2 rounded-full bg-foreground/45"
                 />
                 변동 {formatKRW(monthlyExpense)}
+              </span>
+            </div>
+          ) : null}
+          {friendSavings > 0 ? (
+            // 모으기 line — 친구가 show_savings_total을 켰을 때만(서버 게이트). 소비
+            // 총액과 별개의 보조 라인. 저축은 "쓴 돈"이 아니므로 총 소비 헤로엔 안 더함.
+            <div className="flex items-center gap-1.5 pt-1 text-[12px]">
+              <span
+                aria-hidden
+                className="size-2 rounded-full bg-[#1c8c4d]"
+              />
+              <span className="text-muted-foreground">이번 달 모은 돈</span>
+              <span className="font-semibold text-[#1c8c4d]">
+                {formatKRW(friendSavings)}
               </span>
             </div>
           ) : null}

@@ -41,7 +41,7 @@ export default async function FriendDetailPage({
       supabase
         .from("friendships")
         .select(
-          "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+          "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items, show_savings_total, show_savings_items",
         )
         .eq("owner_id", user.id)
         .eq("viewer_id", friendId)
@@ -66,6 +66,8 @@ export default async function FriendDetailPage({
     show_spending_items: row.show_spending_items ?? false,
     show_fixed_total: row.show_fixed_total ?? false,
     show_fixed_items: row.show_fixed_items ?? false,
+    show_savings_total: row.show_savings_total ?? false,
+    show_savings_items: row.show_savings_items ?? false,
   };
 
   // Sort groups: seed first, then by created_at. Same ordering as

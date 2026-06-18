@@ -58,6 +58,13 @@ type SpendingCalendarSectionProps = {
    */
   showFixedItems?: boolean;
   /**
+   * Friend-mode flag: owner granted show_savings_items (and show_spending_items
+   * — the RPC ANDs both). When true the friend's savings deposits are fetched
+   * via get_friend_savings_items (column-controlled — no opening_balance/goal
+   * leak) and rendered as green calendar markers, same non-counted treatment as
+   * own mode. Ignored in own mode (own savings read directly). */
+  showSavingsItems?: boolean;
+  /**
    * Own-mode per-cycle extra income prefetched by the page. Folded into
    * `cycleBudget` (income + 추가수입) so calendar day-classification
    * (normal/warning/danger) uses the full inflow pool as its baseline. Ignored
@@ -97,6 +104,7 @@ export async function SpendingCalendarSection({
   ownExtraIncome,
   showSpendingItems = true,
   showFixedItems = false,
+  showSavingsItems = false,
   hasFriends = false,
   focusTxId,
 }: SpendingCalendarSectionProps) {
@@ -180,25 +188,30 @@ export async function SpendingCalendarSection({
             is_overridden: boolean;
           }>,
         }),
-    // Own-mode savings deposits for the displayed cycle — green calendar markers
-    // only (NOT folded into any total; §12.6). savings_plans RLS is own-only, so
-    // friend mode never reads this (gated on isOwn here + RLS as a second fence).
+    // Savings deposits for the displayed cycle — green calendar markers only
+    // (NOT folded into any total; §12.6). Own mode reads savings_plans directly
+    // (RLS own-only). Friend mode with show_savings_items reads via the
+    // get_friend_savings_items RPC (column-controlled — only the marker columns,
+    // no opening_balance/goal; RPC ANDs show_spending_items as a backstop). All
+    // other cases stub empty.
     isOwn
       ? supabase
           .from("savings_plans")
           .select("id, name, amount, payment_day, start_date, maturity_date")
           .eq("user_id", userId)
           .eq("is_active", true)
-      : Promise.resolve({
-          data: [] as Array<{
-            id: string;
-            name: string;
-            amount: number | null;
-            payment_day: number | null;
-            start_date: string;
-            maturity_date: string | null;
-          }>,
-        }),
+      : showSavingsItems
+        ? supabase.rpc("get_friend_savings_items", { target: userId })
+        : Promise.resolve({
+            data: [] as Array<{
+              id: string;
+              name: string;
+              amount: number | null;
+              payment_day: number | null;
+              start_date: string;
+              maturity_date: string | null;
+            }>,
+          }),
   ]);
 
   if (!monthlyResult.ok) {
@@ -314,7 +327,17 @@ export async function SpendingCalendarSection({
   // any landing before the plan started or after it matured, so a cycle outside
   // the plan's life shows no phantom marker (a plan started on the 18th with
   // payment_day=1 first deposits the next month's 1st).
-  const savingsItems = (savingsRes.data ?? []).map((row) => ({
+  // own (table row) and friend (RPC row) shapes share these columns; normalize
+  // to one type so the union .map type-checks.
+  const savingsRows = (savingsRes.data ?? []) as Array<{
+    id: string;
+    name: string;
+    amount: number | null;
+    payment_day: number | null;
+    start_date: string;
+    maturity_date: string | null;
+  }>;
+  const savingsItems = savingsRows.map((row) => ({
     id: row.id,
     name: row.name,
     amount: row.amount == null ? null : Number(row.amount),
@@ -430,6 +453,7 @@ export async function SpendingCalendarSection({
       fixedExpensesByDay={fixedExpensesByDay}
       undatedFixedExpenses={undatedFixedExpenses}
       savingsByDay={savingsByDay}
+      showSavings={isOwn || showSavingsItems}
       focusTxId={focusTxId ?? null}
     />
   );

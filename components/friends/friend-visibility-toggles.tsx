@@ -6,17 +6,29 @@ import { toast } from "sonner";
 
 import { updateFriendVisibilityAction } from "@/app/friends/actions";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 export type FriendVisibilityPerms = {
   show_spending_total: boolean;
   show_spending_items: boolean;
   show_fixed_total: boolean;
   show_fixed_items: boolean;
+  show_savings_total: boolean;
+  show_savings_items: boolean;
 };
 
 type ToggleKey = keyof FriendVisibilityPerms;
 
-const ROWS: { key: ToggleKey; label: string; helper?: string }[] = [
+// `dependsOn`: this row's switch is disabled (savings can't be shown) until the
+// parent spending perm is on. Savings rides on top of the shared spending
+// surface — the hero 모으기 line needs the spending-total card, and the calendar
+// markers need the spending-items calendar to exist (Phase 2b §12.10).
+const ROWS: {
+  key: ToggleKey;
+  label: string;
+  helper?: string;
+  dependsOn?: ToggleKey;
+}[] = [
   {
     key: "show_spending_total",
     label: "총 소비 금액",
@@ -36,6 +48,18 @@ const ROWS: { key: ToggleKey; label: string; helper?: string }[] = [
     key: "show_fixed_items",
     label: "고정지출 항목",
     helper: "항목 이름이 친구에게 그대로 보여요.",
+  },
+  {
+    key: "show_savings_total",
+    label: "모은 돈 합계",
+    helper: "이번 달 모은 돈(적금·투자) 합계가 친구에게 보여요.",
+    dependsOn: "show_spending_total",
+  },
+  {
+    key: "show_savings_items",
+    label: "모으기 적립일",
+    helper: "달력에 적립일·항목 이름이 친구에게 보여요.",
+    dependsOn: "show_spending_items",
   },
 ];
 
@@ -69,13 +93,15 @@ export function FriendVisibilityToggles({ friendUserId, initialPerms }: Props) {
     <ul className="space-y-1">
       {ROWS.map((row) => {
         const value = perms[row.key];
+        // Savings rows are locked off until their parent spending perm is on.
+        const locked = row.dependsOn ? !perms[row.dependsOn] : false;
         return (
           <li
             key={row.key}
             className="flex items-start justify-between gap-3 rounded-2xl px-4 py-3"
           >
             <div className="flex min-w-0 flex-1 items-start gap-2.5">
-              {value ? (
+              {value && !locked ? (
                 <Eye
                   className="mt-0.5 size-4 shrink-0 text-primary"
                   aria-hidden
@@ -87,18 +113,22 @@ export function FriendVisibilityToggles({ friendUserId, initialPerms }: Props) {
                 />
               )}
               <div className="min-w-0">
-                <p className="text-[15px] font-medium leading-tight">
+                <p
+                  className={cn(
+                    "text-[15px] font-medium leading-tight",
+                    locked && "text-muted-foreground",
+                  )}
+                >
                   {row.label}
                 </p>
-                {row.helper ? (
-                  <p className="mt-1 text-[12px] leading-snug text-muted-foreground">
-                    {row.helper}
-                  </p>
-                ) : null}
+                <p className="mt-1 text-[12px] leading-snug text-muted-foreground">
+                  {locked ? "소비를 공개해야 켤 수 있어요." : row.helper}
+                </p>
               </div>
             </div>
             <Switch
-              checked={value}
+              checked={value && !locked}
+              disabled={locked}
               onCheckedChange={(next) => flip(row.key, next)}
               aria-label={row.label}
             />

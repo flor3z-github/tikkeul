@@ -141,6 +141,8 @@ const VISIBILITY_KEYS = [
   "show_spending_items",
   "show_fixed_total",
   "show_fixed_items",
+  "show_savings_total",
+  "show_savings_items",
 ] as const;
 
 type FriendVisibilityKey = (typeof VISIBILITY_KEYS)[number];
@@ -180,7 +182,7 @@ export async function updateFriendVisibilityAction(
   const { data: current, error: readError } = await supabase
     .from("friendships")
     .select(
-      "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+      "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items, show_savings_total, show_savings_items",
     )
     .eq("owner_id", user.id)
     .eq("viewer_id", friendUserId)

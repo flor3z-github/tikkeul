@@ -120,8 +120,13 @@ type CalendarDayPanelProps = {
   /** Own-mode only: savings deposits scheduled on each YYYY-MM-DD in the visible
    *  cycle. Renders a green calendar marker + a 「모으기」 day-panel row, but is
    *  EXCLUDED from the day total and cell classification (저축 ≠ 소비, §12.6).
-   *  Never passed in friend mode (savings is private — §12.10). */
+   *  In friend mode only populated when the owner granted show_savings_items
+   *  (the section fetches it via a perm-gated RPC). */
   savingsByDay?: Record<string, CalendarSavingsItem[]>;
+  /** Whether savings markers/rows may render: own mode, or a friend the owner
+   *  granted show_savings_items. Gates the render in addition to the data being
+   *  present (defense in depth — savings is private, §12.10). */
+  showSavings?: boolean;
   /** Friend-mode only: transaction id forwarded from a push notification's
    *  `?focus=<id>` param. When set, the panel scrolls the matching row into
    *  view on mount and plays a brief pulse so the viewer can locate the
@@ -153,6 +158,7 @@ export function CalendarDayPanel({
   fixedExpensesByDay,
   undatedFixedExpenses,
   savingsByDay,
+  showSavings = false,
   focusTxId,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
@@ -363,18 +369,18 @@ export function CalendarDayPanel({
   // Deliberately NOT folded into dailyTotals / dayTotal / classification —
   // savings is not spending, so a deposit day must never read as overspending
   // (§12.6, §12.10). Drives a green marker + a 「모으기」 day-panel row only.
-  // Code-gated on isOwn (not just data-gated) so a future caller that passes
-  // savingsByDay in friend mode still can't leak savings — savings is private
-  // (§12.10). The section already stubs the friend-mode read empty.
-  const savingsForDay = isOwn ? (savingsByDay?.[selectedDay] ?? []) : [];
+  // Code-gated on `showSavings` (own mode, or a friend granted show_savings_items)
+  // — not just data-gated — so a caller can't leak savings by passing data alone.
+  // Savings is private (§12.10).
+  const savingsForDay = showSavings ? (savingsByDay?.[selectedDay] ?? []) : [];
   const savingsDays = useMemo(() => {
     const set = new Set<string>();
-    if (!isOwn || !savingsByDay) return set;
+    if (!showSavings || !savingsByDay) return set;
     for (const [iso, list] of Object.entries(savingsByDay)) {
       if (list.length > 0) set.add(iso);
     }
     return set;
-  }, [isOwn, savingsByDay]);
+  }, [showSavings, savingsByDay]);
 
   return (
     <>

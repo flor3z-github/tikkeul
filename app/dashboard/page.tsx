@@ -73,7 +73,7 @@ export default async function DashboardPage({
       supabase
         .from("friendships")
         .select(
-          "viewer_id, show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+          "viewer_id, show_spending_total, show_spending_items, show_fixed_total, show_fixed_items, show_savings_total, show_savings_items",
         )
         .eq("owner_id", viewerId),
       supabase
@@ -94,6 +94,8 @@ export default async function DashboardPage({
       show_spending_items: boolean;
       show_fixed_total: boolean;
       show_fixed_items: boolean;
+      show_savings_total: boolean;
+      show_savings_items: boolean;
     }
   >();
   for (const row of outboundRowsRes.data ?? []) {
@@ -103,6 +105,8 @@ export default async function DashboardPage({
       show_spending_items: row.show_spending_items,
       show_fixed_total: row.show_fixed_total,
       show_fixed_items: row.show_fixed_items,
+      show_savings_total: row.show_savings_total,
+      show_savings_items: row.show_savings_items,
     });
   }
 
@@ -162,7 +166,7 @@ export default async function DashboardPage({
       ? supabase
           .from("friendships")
           .select(
-            "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items",
+            "show_spending_total, show_spending_items, show_fixed_total, show_fixed_items, show_savings_total, show_savings_items",
           )
           .eq("owner_id", viewingUserId)
           .eq("viewer_id", viewerId)
@@ -279,6 +283,8 @@ export default async function DashboardPage({
       show_spending_items: true,
       show_fixed_total: false,
       show_fixed_items: false,
+      show_savings_total: false,
+      show_savings_items: false,
     },
   }));
   const viewingNickname = nicknameById.get(viewingUserId) ?? "";
@@ -358,12 +364,20 @@ export default async function DashboardPage({
         spendingItems: true,
         fixedTotal: true,
         fixedItems: true,
+        savingsTotal: true,
+        savingsItems: true,
       }
     : {
         spendingTotal: permsRow?.show_spending_total ?? false,
         spendingItems: permsRow?.show_spending_items ?? false,
         fixedTotal: permsRow?.show_fixed_total ?? false,
         fixedItems: permsRow?.show_fixed_items ?? false,
+        // Savings rides on the spending surface — the data-layer RPCs also AND
+        // with the matching spending perm (migration 0057), so even a stale flag
+        // can't leak. allHiddenInFriendMode intentionally does NOT include these
+        // (savings-only is unreachable via the coupled toggles).
+        savingsTotal: permsRow?.show_savings_total ?? false,
+        savingsItems: permsRow?.show_savings_items ?? false,
       };
 
   const allHiddenInFriendMode =
@@ -554,6 +568,7 @@ export default async function DashboardPage({
                       showSpendingTotal={perms.spendingTotal}
                       showSpendingItems={perms.spendingItems}
                       showFixed={perms.fixedTotal || perms.fixedItems}
+                      showSavingsTotal={perms.savingsTotal}
                       cycleAnchor={ym}
                     />
                   </Suspense>
@@ -571,6 +586,7 @@ export default async function DashboardPage({
                       targetUserId={viewingUserId}
                       showSpendingItems={perms.spendingItems}
                       showFixedItems={perms.fixedItems}
+                      showSavingsItems={perms.savingsItems}
                       focusTxId={focusTxId}
                     />
                   </Suspense>
