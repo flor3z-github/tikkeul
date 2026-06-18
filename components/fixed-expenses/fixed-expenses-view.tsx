@@ -32,6 +32,17 @@ const CATEGORY_ORDER = [
   "클라우드",
 ] as const;
 
+// Services billed in USD (converted at the footer's fixed rate). Surfaced as a
+// small "해외결제" note next to the service name in the catalog. Keep this set
+// in sync with the footer copy at the bottom of the screen.
+const OVERSEAS_SERVICES = new Set([
+  "Claude",
+  "Cursor",
+  "GitHub Copilot",
+  "Slack",
+  "Dropbox",
+]);
+
 function groupPlansByCategory(plans: SubscriptionPlan[]) {
   const groups = new Map<string, SubscriptionPlan[]>();
   for (const plan of plans) {
@@ -96,7 +107,8 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
   }, [items]);
 
   // Reverse lookup: catalog default for an active item (if it came from the
-  // catalog). Used to surface a price diff hint next to the user's amount.
+  // catalog). Used to detect a "셰어" item (user amount below the list price)
+  // and to surface the original price.
   const planById = useMemo(() => {
     const map = new Map<string, SubscriptionPlan>();
     for (const plan of plans) map.set(plan.id, plan);
@@ -117,6 +129,26 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
     });
   }, [items]);
   const total = activeItems.reduce((sum, it) => sum + (it.amount ?? 0), 0);
+
+  // Distinct service counts per category (and overall), for the filter-chip
+  // badges. Counts services, not plans — a service with 3 plans counts once.
+  const serviceCountByCategory = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const plan of plans) {
+      const cat = plan.category ?? "기타";
+      let set = map.get(cat);
+      if (!set) {
+        set = new Set();
+        map.set(cat, set);
+      }
+      set.add(plan.service_name);
+    }
+    return map;
+  }, [plans]);
+  const totalServiceCount = useMemo(
+    () => new Set(plans.map((p) => p.service_name)).size,
+    [plans],
+  );
 
   // Catalog filtering: search box + category chip.
   const filteredPlans = useMemo(() => {
@@ -205,24 +237,54 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
 
   return (
     <>
+      {/* HERO — this month's fixed total + annual conversion. */}
       <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
-        <CardContent className="space-y-2 p-6">
-          <p className="text-sm font-medium text-muted-foreground">
-            매달 빠지는 돈
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-muted-foreground">
+              이번 달 고정지출
+            </p>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground tabular-nums">
+              <span aria-hidden className="size-1.5 rounded-full bg-primary" />총{" "}
+              {activeItems.length}개 항목
+            </span>
+          </div>
+          <p className="mt-2 flex items-baseline gap-1">
+            <span className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
+              {formatNumber(total)}
+            </span>
+            <span className="text-[19px] font-bold">원</span>
           </p>
-          <p className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
-            {formatKRW(total)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            총 {activeItems.length}개 항목 · 가용 예산 계산에 반영돼요
-          </p>
+          {/* Annual conversion sits on a recessed plane so the monthly number
+              stays the single dominant figure (DESIGN §3). amount × 12; items
+              with no amount entered contribute 0. */}
+          <div className="mt-5 flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3.5">
+            <span className="text-[12.5px] font-medium text-muted-foreground">
+              연간 환산
+            </span>
+            <span className="text-[18px] font-semibold tabular-nums">
+              {formatKRW(total * 12)}
+            </span>
+          </div>
         </CardContent>
       </Card>
 
       <section className="mt-6 space-y-3">
-        <h2 className="px-1 text-[15px] font-semibold tracking-[-0.015em]">
-          사용 중
-        </h2>
+        <div className="flex items-baseline justify-between px-1">
+          <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
+            사용 중{" "}
+            <span className="font-medium tabular-nums text-muted-foreground/70">
+              {activeItems.length}
+            </span>
+          </h2>
+          {/* Static label — the list is sorted by upcoming payment date. No
+              chevron: there is no sort dropdown, so don't imply one. */}
+          {activeItems.length > 0 ? (
+            <span className="text-[12.5px] font-medium text-muted-foreground">
+              결제일 순
+            </span>
+          ) : null}
+        </div>
         {activeItems.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
             아래 카탈로그에서 사용 중인 구독을 눌러 추가하거나,
@@ -237,9 +299,15 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                   const plan = item.subscription_plan_id
                     ? planById.get(item.subscription_plan_id)
                     : null;
-                  const showDefault =
-                    plan != null && plan.default_amount !== item.amount;
-                  const paymentDayLabel = formatPaymentDay(item.payment_day);
+                  const defaultAmount = plan?.default_amount ?? null;
+                  // "셰어" = the user pays less than the catalog list price
+                  // (e.g. a 4-way Netflix split). Heuristic: amount below the
+                  // plan's default. Manual items have no default, so never tag.
+                  const isShare =
+                    item.amount != null &&
+                    defaultAmount != null &&
+                    item.amount < defaultAmount;
+                  const cycleLabel = formatPaymentDay(item.payment_day);
                   return (
                     <li key={item.id}>
                       <button
@@ -248,21 +316,12 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                         className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted active:bg-muted"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="truncate text-[15px] font-medium leading-tight">
-                              {plan ? plan.service_name : item.name}
-                            </p>
-                            {paymentDayLabel ? (
-                              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
-                                {paymentDayLabel}
-                              </span>
-                            ) : null}
-                          </div>
-                          {(plan?.plan_name ?? item.plan_name) ? (
-                            <p className="mt-0.5 truncate text-[12px] text-muted-foreground leading-tight">
-                              {plan?.plan_name ?? item.plan_name}
-                            </p>
-                          ) : null}
+                          <p className="truncate text-[15px] font-medium leading-tight">
+                            {plan ? plan.service_name : item.name}
+                          </p>
+                          <p className="mt-0.5 truncate text-[12px] leading-tight text-muted-foreground">
+                            {cycleLabel ? `매월 ${cycleLabel}` : "결제일 미정"}
+                          </p>
                         </div>
                         <div className="flex shrink-0 flex-col items-end leading-tight">
                           <span
@@ -276,9 +335,14 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                               ? "금액 미입력"
                               : formatKRW(item.amount)}
                           </span>
-                          {showDefault && item.amount != null ? (
-                            <span className="text-[11px] text-muted-foreground tabular-nums">
-                              원래 가격 {formatKRW(plan.default_amount)}
+                          {item.amount != null ? (
+                            <span className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                              연 {formatKRW(item.amount * 12)}
+                            </span>
+                          ) : null}
+                          {isShare && defaultAmount != null ? (
+                            <span className="text-[11px] tabular-nums text-muted-foreground/70">
+                              원래 {formatKRW(defaultAmount)}
                             </span>
                           ) : null}
                         </div>
@@ -292,45 +356,51 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
         )}
       </section>
 
-      {/* Sticky catalog search + filter + manual-add. Search/filter only
-          narrow the catalog grid below — "사용 중" above is unaffected. */}
-      <div className="sticky top-0 z-20 -mx-5 mt-6 border-b border-border bg-background/90 px-5 pb-2 pt-2 backdrop-blur">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="카탈로그에서 항목 찾기"
-              className="h-10 w-full rounded-full border border-border bg-card pl-9 pr-10 text-[14px] outline-none placeholder:text-muted-foreground focus:border-ring"
-              aria-label="카탈로그 검색"
-            />
-            {query ? (
-              <button
-                type="button"
-                aria-label="검색어 지우기"
-                onClick={() => setQuery("")}
-                className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
-              >
-                <X className="size-3.5" />
-              </button>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={() => setManualOpen(true)}
-            className="flex h-10 shrink-0 items-center gap-1 rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground transition-all duration-150 ease-out hover:bg-primary/90 active:scale-[0.98]"
-          >
-            <Plus className="size-3.5" />
-            <span>직접 추가</span>
-          </button>
+      {/* 직접 추가 — full-width primary CTA (catalog-less items: 월세, 통신비…). */}
+      <button
+        type="button"
+        onClick={() => setManualOpen(true)}
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-primary-foreground shadow-[0_10px_22px_-6px_rgba(0,122,255,0.45)] transition-all duration-150 ease-out hover:bg-primary/90 active:scale-[0.99]"
+      >
+        <Plus className="size-5" strokeWidth={2.6} />
+        <span className="text-[15.5px] font-bold tracking-[-0.01em]">
+          직접 추가하기
+        </span>
+      </button>
+      <p className="mt-2 text-center text-[11.5px] font-medium text-muted-foreground">
+        카탈로그에 없는 항목을 직접 입력해요
+      </p>
+
+      {/* Sticky catalog search + filter. Search/filter only narrow the catalog
+          grid below — "사용 중" above is unaffected. */}
+      <div className="sticky top-0 z-20 -mx-5 mt-4 border-b border-border bg-background/90 px-5 pb-2 pt-2 backdrop-blur">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="카탈로그에서 항목 찾기"
+            className="h-11 w-full rounded-2xl border border-transparent bg-muted pl-9 pr-10 text-[14px] outline-none placeholder:text-muted-foreground focus:border-ring focus:bg-card"
+            aria-label="카탈로그 검색"
+          />
+          {query ? (
+            <button
+              type="button"
+              aria-label="검색어 지우기"
+              onClick={() => setQuery("")}
+              className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
         </div>
         <div className="mt-2 flex items-center gap-2 pb-1">
           {/* "전체" stays pinned outside the scroll so it's always reachable. */}
           <FilterChip
             active={categoryFilter === null}
             onClick={() => setCategoryFilter(null)}
+            count={totalServiceCount}
           >
             전체
           </FilterChip>
@@ -352,6 +422,7 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
                 key={cat}
                 active={categoryFilter === cat}
                 onClick={() => setCategoryFilter(cat)}
+                count={serviceCountByCategory.get(cat)?.size ?? 0}
               >
                 {cat}
               </FilterChip>
@@ -374,38 +445,60 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
           </button>
         </div>
       ) : (
-        grouped.map(({ category, plans: groupPlans }) => (
-          <section key={category} className="mt-6 space-y-3">
-            <h2 className="px-1 text-[15px] font-semibold tracking-[-0.015em]">
-              {category}
-            </h2>
-            <div className="space-y-3">
-              {groupPlansByService(groupPlans).map(
-                ({ serviceName, planList }) => (
-                  <div key={serviceName} className="space-y-1.5">
-                    <h3 className="px-1 text-[12px] font-medium text-muted-foreground">
-                      {serviceName}
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {planList.map((plan) => {
-                        const existing = itemByPlanId.get(plan.id);
-                        const active = existing?.is_active === true;
-                        return (
-                          <CatalogButton
-                            key={plan.id}
-                            plan={plan}
-                            active={active}
-                            onClick={() => handleCatalogClick(plan)}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-          </section>
-        ))
+        grouped.map(({ category, plans: groupPlans }) => {
+          const services = groupPlansByService(groupPlans);
+          return (
+            <section key={category} className="mt-6 space-y-3">
+              <div className="flex items-baseline gap-1.5 px-1">
+                <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
+                  {category}
+                </h2>
+                <span className="text-[12.5px] font-medium tabular-nums text-muted-foreground/70">
+                  {services.length}
+                </span>
+              </div>
+              <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
+                <CardContent className="p-2">
+                  <ul>
+                    {services.map(({ serviceName, planList }, idx) => (
+                      <li key={serviceName}>
+                        <div className="px-3 pb-4 pt-3">
+                          <div className="mb-2 flex items-center gap-1.5">
+                            <h3 className="text-[14px] font-semibold leading-tight">
+                              {serviceName}
+                            </h3>
+                            {OVERSEAS_SERVICES.has(serviceName) ? (
+                              <span className="text-[11px] font-medium text-muted-foreground/70">
+                                해외결제
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {planList.map((plan) => {
+                              const existing = itemByPlanId.get(plan.id);
+                              const active = existing?.is_active === true;
+                              return (
+                                <CatalogButton
+                                  key={plan.id}
+                                  plan={plan}
+                                  active={active}
+                                  onClick={() => handleCatalogClick(plan)}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {idx < services.length - 1 ? (
+                          <div className="mx-3 h-px bg-border" />
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </section>
+          );
+        })
       )}
 
       <p className="mt-8 px-1 text-center text-[11px] leading-relaxed text-muted-foreground">
@@ -445,24 +538,33 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
 type FilterChipProps = {
   active: boolean;
   onClick: () => void;
+  count: number;
   children: React.ReactNode;
 };
 
-function FilterChip({ active, onClick, children }: FilterChipProps) {
+function FilterChip({ active, onClick, count, children }: FilterChipProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "h-8 shrink-0 rounded-full border px-3 text-xs font-medium transition-all duration-150 ease-out",
+        "flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-all duration-150 ease-out",
         "active:scale-[0.98]",
         active
           ? "border-primary bg-primary/10 text-primary"
           : "border-border bg-card text-foreground hover:bg-muted",
       )}
     >
-      {children}
+      <span>{children}</span>
+      <span
+        className={cn(
+          "text-[11px] font-semibold tabular-nums",
+          active ? "text-primary/70" : "text-muted-foreground/70",
+        )}
+      >
+        {count}
+      </span>
     </button>
   );
 }
@@ -480,11 +582,11 @@ function CatalogButton({ plan, active, onClick }: CatalogButtonProps) {
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "group flex max-w-full items-center gap-1.5 rounded-full border px-3.5 py-2 text-left text-[13px] font-medium transition-all duration-150 ease-out",
+        "group flex max-w-full items-center gap-1.5 rounded-[11px] border px-3 py-2 text-left text-[12.5px] font-medium transition-all duration-150 ease-out",
         "active:scale-[0.98]",
         active
           ? "border-primary bg-primary/10 text-primary"
-          : "border-border bg-card text-foreground hover:bg-muted",
+          : "border-transparent bg-muted text-foreground hover:bg-muted/70",
       )}
     >
       {active ? <Check className="size-3.5 shrink-0" /> : null}

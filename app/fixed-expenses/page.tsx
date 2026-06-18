@@ -13,7 +13,7 @@ export default function FixedExpensesPage() {
   return (
     <AppShell withBottomNav>
       <PageHeader
-        eyebrow="매달 빠지는 돈"
+        eyebrow="매달 자동으로 빠지는 돈"
         title="고정지출"
         trailing={
           <Link
