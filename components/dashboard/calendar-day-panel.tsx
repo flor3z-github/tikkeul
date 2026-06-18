@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { AlertCircle, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -366,34 +366,27 @@ export function CalendarDayPanel({
         <div className="mt-3">
           <button
             type="button"
-            onClick={() => {
-              if (undatedItems.length === 1) {
-                openSchedule(undatedItems[0]);
-              } else {
-                setUndatedListOpen((prev) => !prev);
-              }
-            }}
-            aria-expanded={undatedItems.length > 1 ? undatedListOpen : undefined}
-            className="flex w-full items-center gap-2 rounded-2xl border border-dashed border-border px-4 py-3 text-left text-[13px] text-muted-foreground transition-colors active:bg-muted"
+            onClick={() => setUndatedListOpen((prev) => !prev)}
+            aria-expanded={undatedListOpen}
+            className="flex w-full items-center gap-2 rounded-2xl border border-[#ffe3b3] bg-[#fff8ec] px-4 py-3 text-left text-[13px] text-[#8a6400] transition-colors active:bg-[#fdeecb]"
           >
+            <AlertCircle aria-hidden className="size-4 shrink-0 text-[#e08a00]" />
             <span className="flex-1">
               날짜 미정 고정지출{" "}
-              <span className="font-semibold text-foreground">
+              <span className="font-bold text-[#b06f00]">
                 {undatedItems.length}개
               </span>{" "}
               — 날짜를 정하면 여기서 이번 달 금액을 조정할 수 있어요.
             </span>
-            {undatedItems.length > 1 ? (
-              <ChevronDown
-                aria-hidden
-                className={cn(
-                  "size-4 shrink-0 transition-transform duration-200",
-                  undatedListOpen && "rotate-180",
-                )}
-              />
-            ) : null}
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                "size-4 shrink-0 transition-transform duration-200",
+                undatedListOpen && "rotate-180",
+              )}
+            />
           </button>
-          {undatedItems.length > 1 && undatedListOpen ? (
+          {undatedListOpen ? (
             <Card className="mt-2 rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
               <CardContent className="p-2">
                 <ul className="space-y-0.5">
@@ -446,7 +439,7 @@ export function CalendarDayPanel({
                 이 날 기록된 소비가 없어요.
               </p>
             ) : (
-              <ul className="space-y-0.5">
+              <ul className="[&>li+li]:relative [&>li+li]:mt-2 [&>li+li]:pt-2 [&>li+li]:before:absolute [&>li+li]:before:inset-x-6 [&>li+li]:before:top-0 [&>li+li]:before:border-t [&>li+li]:before:border-dashed [&>li+li]:before:border-border [&>li+li]:before:content-['']">
                 {/* Fixed expenses firing this day, pinned above variable
                     spending. Same icon-circle row as a transaction, tagged
                     「고정」; tap (own mode) opens the per-cycle override sheet. */}

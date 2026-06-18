@@ -12,7 +12,6 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { cn } from "@/lib/utils";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { IosInstallSteps } from "@/components/pwa/ios-install-steps";
 
@@ -50,20 +49,18 @@ export function PwaInstallBanner() {
   return (
     <>
       <div
-        className={cn(
-          "mt-4 flex items-center gap-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10",
-        )}
+        className="mt-4 flex items-center gap-3 rounded-2xl bg-accent px-3.5 py-3"
         role="region"
         aria-label="앱 설치 안내"
       >
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="flex size-[30px] shrink-0 items-center justify-center rounded-[9px] bg-card text-primary">
           <Download className="size-5" aria-hidden />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-[13px] font-bold text-accent-foreground">
             홈 화면에 추가하기
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] text-[#5b8def]">
             앱처럼 설치하면 더 빠르게 열려요
           </p>
         </div>

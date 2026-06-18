@@ -84,11 +84,21 @@ type SpendingSummaryProps = {
   trendDeltaWon?: number;
 };
 
-const STATUS_COPY: Record<SpendingStatus, { tone: string; label: string }> = {
-  normal: { tone: "text-muted-foreground", label: "여유롭게 쓰는 중" },
-  caution: { tone: "text-[color:var(--warning)]", label: "주의 구간" },
-  warning: { tone: "text-[color:var(--warning)]", label: "위험 구간" },
-  over: { tone: "text-destructive", label: "예산 초과" },
+// 인라인 rate 라벨용 짧은 상태어. normal은 단어 없이 % 만 표기.
+const STATUS_SHORT: Record<SpendingStatus, string> = {
+  normal: "",
+  caution: "주의",
+  warning: "위험",
+  over: "초과",
+};
+
+// rate 텍스트 색. 밝은 --warning(#ff9500)은 흰 배경 텍스트 대비 미달이라
+// 텍스트용은 진한 주황(#b45309, AA 통과). 바 채움은 --warning 유지(spending-progress).
+const STATUS_RATE_TONE: Record<SpendingStatus, string> = {
+  normal: "text-muted-foreground",
+  caution: "text-[#b45309]",
+  warning: "text-[#b45309]",
+  over: "text-destructive",
 };
 
 const STATUS_DOT: Record<SpendingStatus, string> = {
@@ -182,6 +192,11 @@ export function SpendingSummary({
   const showStatsOverlay =
     Boolean(statsHref) && hasSettings && summary.monthlyIncome !== 0;
 
+  const hasDailyBudget =
+    daysRemainingInCycle != null &&
+    daysRemainingInCycle > 0 &&
+    summary.remainingBudget > 0;
+
   return (
     <Card className="relative rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
       {showStatsOverlay ? (
@@ -205,121 +220,84 @@ export function SpendingSummary({
           </p>
         ) : (
           <>
-            {/* 결과 그룹: hero 숫자 + 추세 한 줄을 한 덩어리로 묶어(공백 좁게)
-                아래 구성(progress) 그룹과 시각적으로 분리한다(피드백 #3). */}
-            <div className="space-y-2">
-              <div
-                key={cycleLabel}
-                className="grid grid-cols-2 items-end gap-3 animate-in fade-in duration-200"
-              >
-                <div className="min-w-0 space-y-1">
-                  <p className="text-[12px] text-muted-foreground">쓴 돈</p>
-                  <p className="text-[clamp(20px,6vw,32px)] font-extrabold leading-none tracking-[-0.04em] tabular-nums whitespace-nowrap">
-                    {formatNumber(summary.totalSpent)}
-                    <span className="ml-1 text-base font-semibold text-muted-foreground">
-                      원
-                    </span>
-                  </p>
-                </div>
-                <div className="min-w-0 space-y-1 text-right">
-                  <p
+            {/* 결과 그룹: 라벨 + 색칠 추세칩 + 단일 총액 */}
+            <div
+              key={cycleLabel}
+              className="space-y-3 animate-in fade-in duration-200"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="pt-0.5 text-[13px] font-medium text-muted-foreground">
+                  {cycleMode === "income_day" ? "이번 주기 쓴 돈" : "이번 달 쓴 돈"}
+                </p>
+                {trend && trend.kind !== "flat" ? (
+                  <span
                     className={cn(
-                      "text-[12px]",
-                      isOver ? "text-destructive" : "text-muted-foreground",
+                      "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-bold",
+                      trend.kind === "down"
+                        ? "bg-[#e8f7ee] text-[#1c8c4d]"
+                        : "bg-destructive/10 text-destructive",
                     )}
                   >
-                    {isOver ? "초과" : "남은 돈"}
-                  </p>
-                  <p
-                    className={cn(
-                      "text-[clamp(16px,4.5vw,22px)] font-medium leading-none tabular-nums whitespace-nowrap",
-                      isOver ? "text-destructive" : "text-muted-foreground",
-                    )}
-                  >
-                    {formatNumber(Math.abs(summary.remainingBudget))}
-                    <span
-                      className={cn(
-                        "ml-1 text-sm font-medium",
-                        isOver
-                          ? "text-destructive/80"
-                          : "text-muted-foreground/80",
-                      )}
-                    >
-                      원
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {trend ? (
-                trend.kind === "flat" ? (
-                  <p className="text-[13px] text-muted-foreground">
-                    {trend.text}
-                  </p>
-                ) : (
-                  <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-                    {trend.kind === "up" ? (
-                      <TrendingUp
-                        aria-hidden
-                        className="size-3.5 shrink-0 text-muted-foreground/70"
-                      />
+                    {trend.kind === "down" ? (
+                      <TrendingDown aria-hidden className="size-3 shrink-0" />
                     ) : (
-                      <TrendingDown
-                        aria-hidden
-                        className="size-3.5 shrink-0 text-muted-foreground/70"
-                      />
+                      <TrendingUp aria-hidden className="size-3 shrink-0" />
                     )}
-                    <span className="min-w-0">
-                      {trend.prefix}
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {trend.amount}
-                      </span>
-                      {trend.suffix}
-                    </span>
-                  </p>
-                )
-              ) : null}
+                    {trend.amount} {trend.kind === "down" ? "덜 씀" : "더 씀"}
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-[38px] font-extrabold leading-none tracking-[-0.03em] tabular-nums whitespace-nowrap">
+                {formatNumber(summary.totalSpent)}
+                <span className="ml-1 text-lg font-bold text-foreground">원</span>
+              </p>
             </div>
 
-            <div className="space-y-2">
+            {/* 예산 바 + 범례 + rate */}
+            <div className="space-y-2.5">
               <SpendingProgress
                 monthlyIncome={summary.effectiveIncome}
                 fixedExpense={fixedExpense}
                 monthlyExpense={monthlyExpense}
                 status={status}
               />
-              <div className="flex items-baseline justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <div className="flex items-center justify-between gap-2 text-[11.5px] tabular-nums">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                     <span
                       aria-hidden
-                      className="size-2 shrink-0 rounded-full bg-foreground/25"
+                      className="size-[7px] shrink-0 rounded-full bg-foreground/25"
                     />
-                    고정 {formatKRW(fixedExpense)}
+                    고정{" "}
+                    <b className="font-semibold text-[#3a3a3c]">
+                      {formatNumber(fixedExpense)}
+                    </b>
                   </span>
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                     <span
                       aria-hidden
                       className={cn(
-                        "size-2 shrink-0 rounded-full",
+                        "size-[7px] shrink-0 rounded-full",
                         STATUS_DOT[status],
                       )}
                     />
-                    소비 {formatKRW(monthlyExpense)}
+                    소비{" "}
+                    <b className="font-semibold text-[#3a3a3c]">
+                      {formatNumber(monthlyExpense)}
+                    </b>
                   </span>
                 </div>
                 <span
                   className={cn(
-                    "font-semibold tabular-nums",
-                    STATUS_COPY[status].tone,
+                    "shrink-0 font-bold tabular-nums",
+                    STATUS_RATE_TONE[status],
                   )}
                 >
-                  {rateRounded}% 사용
+                  {rateRounded}%
+                  {STATUS_SHORT[status] ? ` · ${STATUS_SHORT[status]}` : ""}
                 </span>
               </div>
               {hasExtraIncome ? (
-                // Raised above the stats overlay so the income editor stays
-                // tappable when the card itself links to /stats.
                 <div className="relative z-20">
                   {extraIncomeItems && cycleStartDate && cycleEndDate ? (
                     <IncomeLine
@@ -339,52 +317,70 @@ export function SpendingSummary({
                   )}
                 </div>
               ) : null}
-              {status !== "normal" ? (
-                <p className={cn("text-xs font-medium", STATUS_COPY[status].tone)}>
-                  {STATUS_COPY[status].label}
-                </p>
-              ) : null}
             </div>
 
-            {daysRemainingInCycle != null &&
-            daysRemainingInCycle > 0 &&
-            summary.remainingBudget > 0 ? (
-              <div className="border-t border-dashed border-border pt-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {cycleMode === "income_day"
-                      ? "다음 급여일까지"
-                      : "이번 달이 끝나기까지"}
+            {/* 점선 구분선 (인셋, 앱 기본 divider: border-dashed border-border) */}
+            <div className="border-t border-dashed border-border" />
+
+            {/* 2분할: 남은 돈 | 하루 쓸 수 있는 돈 */}
+            <div className="flex items-stretch">
+              <div className="flex-1 space-y-1">
+                <p
+                  className={cn(
+                    "text-[12px] font-medium",
+                    isOver ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {isOver ? "초과" : "남은 돈"}
+                </p>
+                <p
+                  className={cn(
+                    "text-[19px] font-bold leading-none tabular-nums",
+                    isOver ? "text-destructive" : "text-foreground",
+                  )}
+                >
+                  {formatNumber(Math.abs(summary.remainingBudget))}
+                  <span
+                    className={cn(
+                      "ml-0.5 text-[13px] font-semibold",
+                      isOver ? "text-destructive/80" : "text-muted-foreground",
+                    )}
+                  >
+                    원
                   </span>
-                  <span className="text-xs text-foreground">
-                    남은{" "}
-                    <span className="font-semibold text-primary tabular-nums">
-                      {daysRemainingInCycle}일
-                    </span>{" "}
-                    · 하루{" "}
-                    <span className="font-semibold tabular-nums">
-                      {formatNumber(
-                        Math.floor(
-                          summary.remainingBudget / daysRemainingInCycle,
-                        ),
-                      )}
+                </p>
+              </div>
+              <div className="my-0.5 self-stretch border-l border-dashed border-border" />
+              <div className="flex-[1.2] space-y-1 pl-[18px]">
+                <p className="text-[12px] font-medium text-muted-foreground">
+                  하루 쓸 수 있는 돈
+                  {hasDailyBudget ? (
+                    <span className="text-primary"> · {daysRemainingInCycle}일</span>
+                  ) : null}
+                </p>
+                {hasDailyBudget ? (
+                  <p className="text-[19px] font-bold leading-none tabular-nums text-primary">
+                    {formatNumber(
+                      Math.floor(summary.remainingBudget / daysRemainingInCycle!),
+                    )}
+                    <span className="ml-0.5 text-[13px] font-semibold text-primary">
                       원
                     </span>
-                  </span>
-                </div>
+                  </p>
+                ) : (
+                  <p className="text-[19px] font-bold leading-none text-muted-foreground/50">
+                    —
+                  </p>
+                )}
               </div>
-            ) : null}
+            </div>
 
+            {/* 소비 구성 보기 (affordance only; 카드 전체가 stretched-link) */}
             {showStatsOverlay ? (
-              // Visual cue for the whole-card /stats entry (§12.2). NOT raised
-              // above the stretched-link overlay — the overlay (z-10) still
-              // catches the tap; this row is just the affordance.
-              <div className="flex items-center justify-between border-t border-dashed border-border pt-3 text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
-                  <PieChart className="size-4" />
-                  소비 구성 보기
-                </span>
-                <ChevronRight className="size-4" />
+              <div className="flex items-center gap-1.5 rounded-2xl bg-muted px-3 py-2.5 text-[13px] font-semibold text-[#3a3a3c]">
+                <PieChart className="size-[15px] shrink-0 text-primary" />
+                <span>소비 구성 보기</span>
+                <ChevronRight className="ml-auto size-3.5 shrink-0 text-muted-foreground/50" />
               </div>
             ) : null}
           </>

@@ -59,7 +59,7 @@ export function SpendingProgress({
       aria-valuenow={ariaValue}
       aria-valuemin={0}
       aria-valuemax={100}
-      className="flex h-2 w-full overflow-hidden rounded-full bg-muted"
+      className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted"
     >
       <div
         className="h-full bg-foreground/25 transition-[width,background-color] duration-500 ease-out"
