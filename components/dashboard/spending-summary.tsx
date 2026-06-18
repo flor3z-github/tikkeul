@@ -21,9 +21,11 @@ type SpendingSummaryProps = {
    * This-cycle 돈모으기 contribution (sum of active savings plans' monthly
    * amount). When > 0 the hero becomes the 3-split (모으기/고정/소비): the big
    * number switches to "나간 돈" (= savings + fixed + spend), the bar gains a
-   * green savings segment, the legend gains a 모으기 row, and a green insight
-   * strip appears. 0 → the card is byte-identical to the pre-savings 2-split.
-   * Passed by the section ONLY on the current cycle in own mode (friend = 0).
+   * green savings segment, and the legend becomes a vertical 모으기/고정/소비
+   * list (each with its income share %) plus a 「나간 돈 N%」 total row that
+   * matches the bar fill. 0 → the card is byte-identical to the pre-savings
+   * 2-split. Passed by the section ONLY on the current cycle in own mode
+   * (friend = 0).
    */
   savings?: number;
   /**

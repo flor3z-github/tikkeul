@@ -162,6 +162,29 @@ function depositsThisYear(p: SavingsPlanRow, now: Date): number {
   return Math.max(0, total - priorYears);
 }
 
+/**
+ * Does the plan make a real deposit on calendar date `iso` ('YYYY-MM-DD')? True
+ * iff the date is on/after `start_date` and on/before `maturity_date` (open-
+ * ended when maturity is null). Pure lexicographic compare on ISO date strings
+ * (TZ-safe — same no-`new Date(string)` rule as the rest of this module).
+ *
+ * Used to bound dashboard calendar deposit markers to a plan's life so a cycle
+ * before the plan started or after it matured shows no phantom marker. This is
+ * exact-date — stricter than the month-based `depositCount` the hero uses: the
+ * calendar shows the actual deposit date (e.g. a plan started on the 18th with
+ * payment_day=1 first deposits the NEXT month's 1st), while the hero counts the
+ * start month as a current-cycle commitment. The split mirrors fixed expenses
+ * (hero 고정 is current-cycle; fixed markers span cycles).
+ */
+export function depositsOnDate(
+  p: { start_date: string; maturity_date: string | null },
+  iso: string,
+): boolean {
+  if (iso < p.start_date) return false;
+  if (p.maturity_date != null && iso > p.maturity_date) return false;
+  return true;
+}
+
 function isOngoing(p: SavingsPlanRow, now: Date): boolean {
   if (!p.is_active) return false;
   if (cmpYmd(ymdFromDate(now), parseYmd(p.start_date)) < 0) return false; // not started

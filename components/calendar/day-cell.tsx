@@ -17,6 +17,9 @@ type DayCellProps = {
   isSelected: boolean;
   /** True when at least one fixed expense is scheduled to fire on this day. */
   hasFixedExpense?: boolean;
+  /** True when at least one savings deposit is scheduled on this day (own mode).
+   *  Renders a green dot beside the fixed marker; NOT folded into `amount`. */
+  hasSavings?: boolean;
   onClick: () => void;
   ariaLabel: string;
 };
@@ -37,6 +40,7 @@ export function DayCell({
   isToday,
   isSelected,
   hasFixedExpense = false,
+  hasSavings = false,
   onClick,
   ariaLabel,
 }: DayCellProps) {
@@ -96,14 +100,29 @@ export function DayCell({
             {formatNumber(amount)}
           </span>
         ) : null}
-        {hasFixedExpense ? (
-          <span
-            aria-hidden
-            className={cn(
-              "mt-auto size-1 rounded-full",
-              isSelected ? "bg-primary-foreground/85" : "bg-muted-foreground/60",
-            )}
-          />
+        {hasFixedExpense || hasSavings ? (
+          <span aria-hidden className="mt-auto flex items-center gap-0.5">
+            {hasFixedExpense ? (
+              <span
+                className={cn(
+                  "size-1 rounded-full",
+                  isSelected
+                    ? "bg-primary-foreground/85"
+                    : "bg-muted-foreground/60",
+                )}
+              />
+            ) : null}
+            {hasSavings ? (
+              // 저축 적립일 마커 — 녹색(#1c8c4d). 고정 점과 나란히 뜰 수 있다
+              // (예: 1일 적금 + 월세). amount(소비 합계)엔 더하지 않는다.
+              <span
+                className={cn(
+                  "size-1 rounded-full",
+                  isSelected ? "bg-primary-foreground/85" : "bg-[#1c8c4d]",
+                )}
+              />
+            ) : null}
+          </span>
         ) : null}
       </span>
     </button>

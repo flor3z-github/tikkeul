@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ChevronDown } from "lucide-react";
+import { AlertCircle, ChevronDown, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -62,6 +62,14 @@ export type CalendarFixedExpenseItem = {
   payment_day: number | null;
 };
 
+export type CalendarSavingsItem = {
+  id: string;
+  name: string;
+  /** Monthly contribution; NULL = 금액 미입력. */
+  amount: number | null;
+  payment_day: number | null;
+};
+
 type CalendarDayPanelProps = {
   ym: string;
   initialDay: string;
@@ -109,6 +117,11 @@ type CalendarDayPanelProps = {
    *  calendar day, so the per-day override edit can't reach them. Surfaced as
    *  a nudge pointing to /fixed-expenses to set a payment day. */
   undatedFixedExpenses?: CalendarFixedExpenseItem[];
+  /** Own-mode only: savings deposits scheduled on each YYYY-MM-DD in the visible
+   *  cycle. Renders a green calendar marker + a 「모으기」 day-panel row, but is
+   *  EXCLUDED from the day total and cell classification (저축 ≠ 소비, §12.6).
+   *  Never passed in friend mode (savings is private — §12.10). */
+  savingsByDay?: Record<string, CalendarSavingsItem[]>;
   /** Friend-mode only: transaction id forwarded from a push notification's
    *  `?focus=<id>` param. When set, the panel scrolls the matching row into
    *  view on mount and plays a brief pulse so the viewer can locate the
@@ -139,6 +152,7 @@ export function CalendarDayPanel({
   incomingCommentUnreadByTx,
   fixedExpensesByDay,
   undatedFixedExpenses,
+  savingsByDay,
   focusTxId,
 }: CalendarDayPanelProps) {
   const [selectedDay, setSelectedDay] = useState(initialDay);
@@ -345,6 +359,23 @@ export function CalendarDayPanel({
     return set;
   }, [fixedExpensesByDay]);
 
+  // Savings deposits firing on the selected day + the set of all deposit days.
+  // Deliberately NOT folded into dailyTotals / dayTotal / classification —
+  // savings is not spending, so a deposit day must never read as overspending
+  // (§12.6, §12.10). Drives a green marker + a 「모으기」 day-panel row only.
+  // Code-gated on isOwn (not just data-gated) so a future caller that passes
+  // savingsByDay in friend mode still can't leak savings — savings is private
+  // (§12.10). The section already stubs the friend-mode read empty.
+  const savingsForDay = isOwn ? (savingsByDay?.[selectedDay] ?? []) : [];
+  const savingsDays = useMemo(() => {
+    const set = new Set<string>();
+    if (!isOwn || !savingsByDay) return set;
+    for (const [iso, list] of Object.entries(savingsByDay)) {
+      if (list.length > 0) set.add(iso);
+    }
+    return set;
+  }, [isOwn, savingsByDay]);
+
   return (
     <>
       <div className="mt-3 space-y-1.5 rounded-3xl border border-black/[0.08] bg-card p-3 dark:border-white/[0.10]">
@@ -358,6 +389,7 @@ export function CalendarDayPanel({
           dailyTotals={dailyTotals}
           cycleBudget={cycleBudget}
           fixedExpenseDays={fixedExpenseDays}
+          savingsDays={savingsDays}
           onSelectDay={handleSelectDay}
         />
       </div>
@@ -434,7 +466,9 @@ export function CalendarDayPanel({
 
         <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
           <CardContent className="p-2" ref={listContainerRef}>
-            {dayRows.length === 0 && fixedExpensesForDay.length === 0 ? (
+            {dayRows.length === 0 &&
+            fixedExpensesForDay.length === 0 &&
+            savingsForDay.length === 0 ? (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                 이 날 기록된 소비가 없어요.
               </p>
@@ -506,6 +540,42 @@ export function CalendarDayPanel({
                           {inner}
                         </div>
                       )}
+                    </li>
+                  );
+                })}
+                {/* 저축 적립 — 「모으기」 뱃지(녹색), 고정과 변동 사이. 비-인터랙티브
+                    (편집은 /savings). 그날 합계(dayTotal)·셀 색칠엔 포함하지 않는다
+                    (저축 ≠ 소비, §12.6). */}
+                {savingsForDay.map((item) => {
+                  const amountLabel =
+                    item.amount == null ? "금액 미입력" : formatKRW(item.amount);
+                  return (
+                    <li key={`sv-${item.id}`}>
+                      <div className="flex w-full items-center gap-3 rounded-2xl px-3 py-2">
+                        <span
+                          aria-hidden
+                          className="flex size-10 shrink-0 items-center justify-center rounded-full"
+                          style={{ backgroundColor: "#1c8c4d26", color: "#1c8c4d" }}
+                        >
+                          <PiggyBank className="size-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-1.5 truncate text-[15px] font-medium leading-tight">
+                            <span className="truncate">{item.name}</span>
+                            <span className="shrink-0 rounded-full bg-[#e8f7ee] px-1.5 py-0.5 text-[10px] font-medium text-[#1c8c4d]">
+                              모으기
+                            </span>
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "shrink-0 text-[15px] font-semibold tabular-nums text-[#1c8c4d]",
+                            item.amount == null && "text-muted-foreground/70",
+                          )}
+                        >
+                          {amountLabel}
+                        </span>
+                      </div>
                     </li>
                   );
                 })}

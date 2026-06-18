@@ -10,7 +10,11 @@ import { getMonthlyTransactions } from "@/lib/queries/transactions";
 import { createClient } from "@/lib/supabase/server";
 import type { CycleMode } from "@/lib/utils/calendar";
 import { expandFixedExpensesByDay } from "@/lib/utils/payment-day";
-import type { CalendarFixedExpenseItem } from "@/components/dashboard/calendar-day-panel";
+import { depositsOnDate } from "@/lib/utils/savings";
+import type {
+  CalendarFixedExpenseItem,
+  CalendarSavingsItem,
+} from "@/components/dashboard/calendar-day-panel";
 import type { TransactionFormGroup } from "@/components/transactions/transaction-form-dialog";
 
 type SpendingCalendarSectionProps = {
@@ -128,6 +132,7 @@ export async function SpendingCalendarSection({
     viewerInteractions,
     ownGroupsRes,
     friendFixedRes,
+    savingsRes,
   ] = await Promise.all([
     getMonthlyTransactions(userId, startIso, endIso),
     getCategories(viewerId),
@@ -173,6 +178,25 @@ export async function SpendingCalendarSection({
             category: string | null;
             payment_day: number | null;
             is_overridden: boolean;
+          }>,
+        }),
+    // Own-mode savings deposits for the displayed cycle — green calendar markers
+    // only (NOT folded into any total; §12.6). savings_plans RLS is own-only, so
+    // friend mode never reads this (gated on isOwn here + RLS as a second fence).
+    isOwn
+      ? supabase
+          .from("savings_plans")
+          .select("id, name, amount, payment_day, start_date, maturity_date")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            name: string;
+            amount: number | null;
+            payment_day: number | null;
+            start_date: string;
+            maturity_date: string | null;
           }>,
         }),
   ]);
@@ -280,6 +304,42 @@ export async function SpendingCalendarSection({
     ? fixedExpenseItems.filter((it) => it.payment_day == null)
     : [];
 
+  // Savings deposits expanded to per-day (own mode only; friend mode read above
+  // is stubbed empty). payment_day=null rows self-drop in the expander. These
+  // drive a green calendar marker + a 「모으기」 day-panel row, NEVER a total.
+  //
+  // Carry start_date/maturity_date through the expansion so we can bound each
+  // deposit to the plan's life via `depositsOnDate` (exact-date, TZ-safe). The
+  // expander places a deposit on its payment_day within the cycle; we then drop
+  // any landing before the plan started or after it matured, so a cycle outside
+  // the plan's life shows no phantom marker (a plan started on the 18th with
+  // payment_day=1 first deposits the next month's 1st).
+  const savingsItems = (savingsRes.data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    amount: row.amount == null ? null : Number(row.amount),
+    payment_day: row.payment_day,
+    start_date: row.start_date,
+    maturity_date: row.maturity_date,
+  }));
+  const savingsByDayRaw = expandFixedExpensesByDay(
+    cycleStart,
+    cycleEnd,
+    savingsItems,
+  );
+  const savingsByDay: Record<string, CalendarSavingsItem[]> = {};
+  for (const [iso, items] of Object.entries(savingsByDayRaw)) {
+    const kept = items.filter((it) => depositsOnDate(it, iso));
+    if (kept.length > 0) {
+      savingsByDay[iso] = kept.map((it) => ({
+        id: it.id,
+        name: it.name,
+        amount: it.amount,
+        payment_day: it.payment_day,
+      }));
+    }
+  }
+
   // Resolve member ids and nicknames for every own-mode group in one pass.
   // The form needs each group's members for the visibility selector / nested
   // preview drawer. Friend mode skips entirely — no edit affordance, no FAB.
@@ -369,6 +429,7 @@ export async function SpendingCalendarSection({
       incomingCommentUnreadByTx={incomingCommentUnreadByTx}
       fixedExpensesByDay={fixedExpensesByDay}
       undatedFixedExpenses={undatedFixedExpenses}
+      savingsByDay={savingsByDay}
       focusTxId={focusTxId ?? null}
     />
   );

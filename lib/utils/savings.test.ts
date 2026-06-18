@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   accruedAmount,
   depositCount,
+  depositsOnDate,
   isGoalType,
   progressPct,
   remainingLabel,
@@ -178,5 +179,35 @@ describe("yearSaved", () => {
     });
     expect(yearSaved([p], at(2026, 4, 10))).toBe(300_000); // opening_balance ignored
     expect(thisMonthSaved([p], at(2026, 4, 10))).toBe(100_000); // monthly only
+  });
+});
+
+describe("depositsOnDate (calendar marker lifespan bound)", () => {
+  it("is false before the start date, true on/after it (open-ended)", () => {
+    const p = plan({ start_date: "2026-03-10", maturity_date: null });
+    expect(depositsOnDate(p, "2026-03-09")).toBe(false);
+    expect(depositsOnDate(p, "2026-03-10")).toBe(true); // inclusive
+    expect(depositsOnDate(p, "2030-12-31")).toBe(true); // no upper bound
+  });
+
+  it("is false after the maturity date, true on/before it", () => {
+    const p = plan({ start_date: "2023-08-08", maturity_date: "2028-08-08" });
+    expect(depositsOnDate(p, "2026-01-01")).toBe(true);
+    expect(depositsOnDate(p, "2028-08-08")).toBe(true); // maturity inclusive
+    expect(depositsOnDate(p, "2028-08-09")).toBe(false);
+  });
+
+  it("drops the pre-start deposit when payment_day precedes the start day", () => {
+    // The ISA case: started 2026-06-18, payment_day=1. The expander lands a
+    // deposit on 2026-06-01 (a 1st inside the June cycle), but that date is
+    // before the plan existed — so the calendar must NOT mark it. First real
+    // deposit is 2026-07-01.
+    const isa = plan({
+      start_date: "2026-06-18",
+      payment_day: 1,
+      maturity_date: null,
+    });
+    expect(depositsOnDate(isa, "2026-06-01")).toBe(false);
+    expect(depositsOnDate(isa, "2026-07-01")).toBe(true);
   });
 });
