@@ -270,7 +270,7 @@ export function SpendingSummary({
                     />
                     고정{" "}
                     <b className="font-semibold text-[#3a3a3c]">
-                      {formatNumber(fixedExpense)}
+                      {formatNumber(fixedExpense)}원
                     </b>
                   </span>
                   <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
@@ -283,7 +283,7 @@ export function SpendingSummary({
                     />
                     소비{" "}
                     <b className="font-semibold text-[#3a3a3c]">
-                      {formatNumber(monthlyExpense)}
+                      {formatNumber(monthlyExpense)}원
                     </b>
                   </span>
                 </div>
@@ -355,7 +355,7 @@ export function SpendingSummary({
                 <p className="text-[12px] font-medium text-muted-foreground">
                   하루 쓸 수 있는 돈
                   {hasDailyBudget ? (
-                    <span className="text-primary"> · {daysRemainingInCycle}일</span>
+                    <span className="text-primary"> · {daysRemainingInCycle}일 남음</span>
                   ) : null}
                 </p>
                 {hasDailyBudget ? (
