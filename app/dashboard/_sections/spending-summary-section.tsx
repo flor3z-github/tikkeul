@@ -67,7 +67,7 @@ type SpendingSummarySectionProps = {
   /**
    * Friend-mode: owner granted show_savings_total (and show_spending_total — the
    * data-layer RPC ANDs both). When true the section fetches the friend's
-   * "이번 달 모은 돈" (get_friend_savings_total) and appends a 모으기 line to the
+   * "매달 모으는 돈" (get_friend_savings_total) and appends a 모으기 line to the
    * card. Ignored in own mode (own savings ride the 3-split hero). */
   showSavingsTotal?: boolean;
   /** Friend-mode cycle anchor (anchorYm "YYYY-MM") for get_friend_fixed_total. */

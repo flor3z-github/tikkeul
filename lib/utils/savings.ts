@@ -194,7 +194,7 @@ function isOngoing(p: SavingsPlanRow, now: Date): boolean {
   return true;
 }
 
-/** 히어로 "이번 달 모은 돈" = sum of active, ongoing plans' monthly amount. */
+/** 히어로 "매달 모으는 돈" = sum of active, ongoing plans' monthly amount. */
 export function thisMonthSaved(plans: SavingsPlanRow[], now: Date): number {
   return plans
     .filter((p) => isOngoing(p, now))

@@ -53,7 +53,7 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
       <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
         <CardContent className="p-6">
           <p className="text-sm font-medium text-muted-foreground">
-            이번 달 모은 돈
+            매달 모으는 돈
           </p>
           <p className="mt-2 flex items-baseline gap-1">
             <span className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">

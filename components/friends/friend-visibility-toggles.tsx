@@ -52,7 +52,7 @@ const ROWS: {
   {
     key: "show_savings_total",
     label: "모은 돈 합계",
-    helper: "이번 달 모은 돈(적금·투자) 합계가 친구에게 보여요.",
+    helper: "매달 모으는 돈(적금·투자) 합계가 친구에게 보여요.",
     dependsOn: "show_spending_total",
   },
   {

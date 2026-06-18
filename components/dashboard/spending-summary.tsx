@@ -63,7 +63,7 @@ type SpendingSummaryProps = {
    */
   showFixedBreakdown?: boolean;
   /**
-   * Friend mode only: the friend's "이번 달 모은 돈" total (get_friend_savings_total,
+   * Friend mode only: the friend's "매달 모으는 돈" total (get_friend_savings_total,
    * perm-gated server-side on show_savings_total AND show_spending_total). When
    * > 0 a green 모으기 line is appended under the total. Already an aggregate, so
    * it leaks no income/budget. 0 in own mode (own savings ride the 3-split hero).
@@ -191,7 +191,7 @@ export function SpendingSummary({
                 aria-hidden
                 className="size-2 rounded-full bg-[#1c8c4d]"
               />
-              <span className="text-muted-foreground">이번 달 모은 돈</span>
+              <span className="text-muted-foreground">매달 모으는 돈</span>
               <span className="font-semibold text-[#3a3a3c]">
                 {formatKRW(friendSavings)}
               </span>

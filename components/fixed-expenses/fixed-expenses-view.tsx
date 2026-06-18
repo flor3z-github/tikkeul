@@ -242,7 +242,7 @@ export function FixedExpensesView({ items, plans }: FixedExpensesViewProps) {
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-muted-foreground">
-              이번 달 고정지출
+              매달 고정지출
             </p>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground tabular-nums">
               <span aria-hidden className="size-1.5 rounded-full bg-primary" />총{" "}
