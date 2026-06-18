@@ -146,6 +146,51 @@ export type Database = {
           },
         ];
       };
+      savings_plans: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          amount: number | null;
+          payment_day: number | null;
+          start_date: string;
+          opening_balance: number;
+          goal_amount: number | null;
+          maturity_date: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          user_id: string;
+          name: string;
+          amount?: number | null;
+          payment_day?: number | null;
+          start_date?: string;
+          opening_balance?: number;
+          goal_amount?: number | null;
+          maturity_date?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          amount?: number | null;
+          payment_day?: number | null;
+          start_date?: string;
+          opening_balance?: number;
+          goal_amount?: number | null;
+          maturity_date?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       fixed_expense_overrides: {
         Row: {
           id: string;

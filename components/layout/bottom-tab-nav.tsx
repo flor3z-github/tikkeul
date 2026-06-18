@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Wallet } from "lucide-react";
+import { CalendarDays, Sprout, Wallet } from "lucide-react";
 
 import { LinkPending } from "@/components/layout/nav-progress";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ type Tab = {
 
 const TABS: Tab[] = [
   { href: "/dashboard", label: "소비", Icon: Wallet },
+  { href: "/savings", label: "돈모으기", Icon: Sprout },
   { href: "/fixed-expenses", label: "고정지출", Icon: CalendarDays },
 ];
 
@@ -34,7 +35,7 @@ export function BottomTabNav() {
           paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
         }}
       >
-        <ul className="grid grid-cols-2">
+        <ul className="grid grid-cols-3">
           {TABS.map(({ href, label, Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
