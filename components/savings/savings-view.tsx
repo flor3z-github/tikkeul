@@ -196,6 +196,13 @@ function metaLabel(item: SavingsPlanRow): string {
   return day ? `매월 ${day}` : "적립일 미정";
 }
 
+// 'YYYY-MM-DD' → 'Y.M.D' (leading zeros dropped). Parsed by split, NOT
+// `new Date(string)`, so it stays on the KST wall-clock day (no UTC drift).
+function formatDotDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${y}.${m}.${d}`;
+}
+
 function FreeRow({
   item,
   now,
@@ -233,11 +240,6 @@ function FreeRow({
         >
           {item.amount == null ? "금액 미입력" : formatKRW(monthly)}
         </span>
-        {item.amount != null ? (
-          <span className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
-            연 {formatKRW(monthly * 12)}
-          </span>
-        ) : null}
       </div>
     </button>
   );
@@ -296,13 +298,25 @@ function GoalRow({
               style={{ width: `${pct}%` }}
             />
           </div>
-          {item.goal_amount != null ? (
-            <p className="mt-1.5 text-right text-[11.5px] tabular-nums text-muted-foreground">
-              {formatNumber(current)} /{" "}
-              <span className="font-semibold text-foreground/80">
-                {formatNumber(item.goal_amount)}원
-              </span>
-            </p>
+          {item.maturity_date != null || item.goal_amount != null ? (
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-[11.5px] tabular-nums text-muted-foreground">
+              {item.maturity_date != null ? (
+                <span>
+                  {formatDotDate(item.start_date)} ~{" "}
+                  {formatDotDate(item.maturity_date)}
+                </span>
+              ) : (
+                <span aria-hidden />
+              )}
+              {item.goal_amount != null ? (
+                <span className="shrink-0">
+                  {formatNumber(current)} /{" "}
+                  <span className="font-semibold text-foreground/80">
+                    {formatNumber(item.goal_amount)}원
+                  </span>
+                </span>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}
