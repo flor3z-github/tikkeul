@@ -9,6 +9,7 @@ import {
 } from "@/lib/utils/stats/cycle-breakdown";
 import { clampToElapsedWindow } from "@/lib/utils/stats/elapsed-window";
 import { cycleSpendTrend } from "@/lib/utils/stats/trend";
+import { thisMonthSaved, type SavingsPlanRow } from "@/lib/utils/savings";
 
 type SpendingSummarySectionProps = {
   /** Viewer id resolved by the page from JWT claims — no auth call here. */
@@ -210,23 +211,36 @@ export async function SpendingSummarySection({
   // 가져온다(과거/미래 주기엔 행동 가능한 페이스가 없음). 현재 주기 tx와 병렬로.
   const wantTrend =
     isCurrentCycle && !!prevCycleStart && !!prevCycleEnd && !!prevCycleAnchor;
-  const supabase = wantTrend ? await createClient() : null;
-  const [monthlyResult, prevMonthly, prevFixedRes] = await Promise.all([
-    getMonthlyTransactions(userId, startIso, endIso),
-    wantTrend
-      ? getMonthlyTransactions(
-          userId,
-          prevCycleStart!.toISOString(),
-          prevCycleEnd!.toISOString(),
-        )
-      : Promise.resolve(null),
-    wantTrend
-      ? supabase!.rpc("get_fixed_effective_items", {
-          target: userId,
-          cycle_anchor: prevCycleAnchor!,
-        })
-      : Promise.resolve(null),
-  ]);
+  // Client is needed for the trend RPC and/or the current-cycle savings read.
+  // The 3-split savings bucket only appears on the current cycle (matching how
+  // statsHref/daysRemaining gate), so we skip the savings query on past/future.
+  const supabase = isCurrentCycle ? await createClient() : null;
+  const [monthlyResult, prevMonthly, prevFixedRes, savingsRes] =
+    await Promise.all([
+      getMonthlyTransactions(userId, startIso, endIso),
+      wantTrend
+        ? getMonthlyTransactions(
+            userId,
+            prevCycleStart!.toISOString(),
+            prevCycleEnd!.toISOString(),
+          )
+        : Promise.resolve(null),
+      wantTrend
+        ? supabase!.rpc("get_fixed_effective_items", {
+            target: userId,
+            cycle_anchor: prevCycleAnchor!,
+          })
+        : Promise.resolve(null),
+      isCurrentCycle && supabase
+        ? supabase
+            .from("savings_plans")
+            .select(
+              "id, name, amount, payment_day, start_date, opening_balance, goal_amount, maturity_date, is_active",
+            )
+            .eq("user_id", userId)
+            .eq("is_active", true)
+        : Promise.resolve(null),
+    ]);
 
   if (!monthlyResult.ok) {
     return (
@@ -287,11 +301,32 @@ export async function SpendingSummarySection({
     });
   }
 
+  // 돈모으기 bucket for the 3-split hero. Computed with `now` (today, KST) — the
+  // SAME basis as the /savings tab hero (thisMonthSaved), so both screens agree
+  // on the number. Only the current cycle sets it (past/future → 0 → the card
+  // falls back to the 2-split). thisMonthSaved re-filters is_active + ongoing.
+  let savings = 0;
+  if (savingsRes && !savingsRes.error && savingsRes.data) {
+    const plans: SavingsPlanRow[] = savingsRes.data.map((row) => ({
+      id: row.id,
+      name: row.name,
+      amount: row.amount == null ? null : Number(row.amount),
+      payment_day: row.payment_day ?? null,
+      start_date: row.start_date,
+      opening_balance: Number(row.opening_balance ?? 0),
+      goal_amount: row.goal_amount == null ? null : Number(row.goal_amount),
+      maturity_date: row.maturity_date ?? null,
+      is_active: row.is_active,
+    }));
+    savings = thisMonthSaved(plans, now);
+  }
+
   return (
     <SpendingSummary
       monthlyIncome={ownSettings?.monthlyIncome ?? 0}
       fixedExpense={ownFixedExpense ?? 0}
       monthlyExpense={monthlyResult.monthlyTotal}
+      savings={savings}
       extraIncome={ownExtraIncome ?? 0}
       extraIncomeItems={ownExtraIncomeItems}
       cycleStartDate={cycleStartDate}
