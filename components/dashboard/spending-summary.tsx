@@ -192,7 +192,7 @@ export function SpendingSummary({
                 className="size-2 rounded-full bg-[#1c8c4d]"
               />
               <span className="text-muted-foreground">이번 달 모은 돈</span>
-              <span className="font-semibold text-[#1c8c4d]">
+              <span className="font-semibold text-[#3a3a3c]">
                 {formatKRW(friendSavings)}
               </span>
             </div>
@@ -337,7 +337,7 @@ export function SpendingSummary({
                       <span className="font-medium tabular-nums text-muted-foreground/70">
                         {savingsPct}%
                       </span>
-                      <b className="font-semibold text-[#1c8c4d]">
+                      <b className="font-semibold text-[#3a3a3c]">
                         {formatNumber(summary.savings)}원
                       </b>
                     </span>

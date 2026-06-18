@@ -575,7 +575,7 @@ export function CalendarDayPanel({
                         </div>
                         <span
                           className={cn(
-                            "shrink-0 text-[15px] font-semibold tabular-nums text-[#1c8c4d]",
+                            "shrink-0 text-[15px] font-semibold tabular-nums",
                             item.amount == null && "text-muted-foreground/70",
                           )}
                         >
