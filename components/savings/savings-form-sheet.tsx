@@ -199,7 +199,7 @@ function SavingsFormBody({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <label
             htmlFor="savings-payment-day"
             className="block text-sm font-medium text-muted-foreground"
@@ -212,7 +212,7 @@ function SavingsFormBody({
             onChange={setPaymentDay}
           />
         </div>
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <label
             htmlFor="savings-start-date"
             className="block text-sm font-medium text-muted-foreground"
@@ -225,7 +225,7 @@ function SavingsFormBody({
             value={startDate}
             onChange={(event) => setStartDate(event.target.value)}
             onClick={openNativePicker}
-            className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none focus:border-ring"
+            className="h-12 w-full min-w-0 rounded-2xl border border-border bg-card px-4 text-[15px] outline-none focus:border-ring"
           />
         </div>
       </div>
@@ -235,7 +235,7 @@ function SavingsFormBody({
           hugs the grid like the monthly field's hint. */}
       <div className="space-y-2">
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <label
               htmlFor="savings-goal"
               className="block text-sm font-medium text-muted-foreground"
@@ -248,7 +248,7 @@ function SavingsFormBody({
               onChange={setGoalText}
             />
           </div>
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <label
               htmlFor="savings-maturity"
               className="block text-sm font-medium text-muted-foreground"
@@ -261,7 +261,7 @@ function SavingsFormBody({
               value={maturityDate}
               onChange={(event) => setMaturityDate(event.target.value)}
               onClick={openNativePicker}
-              className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[15px] outline-none focus:border-ring"
+              className="h-12 w-full min-w-0 rounded-2xl border border-border bg-card px-4 text-[15px] outline-none focus:border-ring"
             />
           </div>
         </div>
