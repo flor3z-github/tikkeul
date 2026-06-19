@@ -106,13 +106,6 @@ type TransactionFormDialogProps = {
    *  multi-checkbox over this whole array. */
   groups?: TransactionFormGroup[];
   onSaved?: () => void;
-  /**
-   * When true, render as a nested drawer (`DrawerNestedRoot`) so vaul scales
-   * the parent sheet and the iOS keyboard handler runs at this level too.
-   * Used when this dialog is opened from inside another open BottomSheet
-   * (e.g. the transaction interaction sheet's "수정" button).
-   */
-  nested?: boolean;
 };
 
 export function TransactionFormDialog({
@@ -123,11 +116,9 @@ export function TransactionFormDialog({
   defaultDate,
   groups,
   onSaved,
-  nested = false,
 }: TransactionFormDialogProps) {
-  const Root = nested ? DrawerNestedRoot : Drawer;
   return (
-    <Root open={open} onOpenChange={onOpenChange}>
+    <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-4">
         <DrawerHeader className="sr-only">
           <DrawerTitle>{initial ? "소비 수정" : "소비 추가"}</DrawerTitle>
@@ -152,7 +143,7 @@ export function TransactionFormDialog({
           }}
         />
       </DrawerContent>
-    </Root>
+    </Drawer>
   );
 }
 

@@ -71,7 +71,6 @@ export type DmChatQuoteCard = {
 // be resolved (hard-deleted), in which case the UI shows a "삭제된 메시지" stub.
 export type DmChatReply = {
   id: string;
-  senderId: string;
   content: string;
   deleted: boolean;
 };
@@ -97,7 +96,6 @@ type RenderItem = MessageGroup | DateSeparator;
 type Props = {
   threadId: string;
   viewerId: string;
-  friendId: string;
   friendNickname: string;
   initialMessages: DmChatMessage[];
   prefilledQuote: DmChatQuoteCard | null;
@@ -622,7 +620,6 @@ export function DmChat({
     if (!m) return;
     setPendingReply({
       id: m.id,
-      senderId: m.senderId,
       content: m.content,
       deleted: false,
     });

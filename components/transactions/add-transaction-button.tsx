@@ -82,14 +82,9 @@ const CORNER_RADIUS_PRESSING = PRESSING_SIZE / 2;
 //   box width (content is left-anchored with paddingLeft + icon + gap +
 //   label). With box width 168, that puts the content center at
 //   −(168 − 90) + 28 = −50 from FAB center.
-//   소비 row center: right-half FAB column is 56 wide; the row's center
-//   from FAB center is −(FAB_COL/2 + (EXPANDED_W − FAB_COL)/2) =
-//   −(28 + 56) = −84.
 // Exported so the long-press onboarding guide can highlight 수입 at its
 // real screen position without a DOM measurement.
 export const MINI_SIZE = FAB_SIZE;
-export const MINI_OFFSET_NEAR_X = -84;
-export const MINI_OFFSET_NEAR_Y = 0;
 export const MINI_OFFSET_FAR_X = -50;
 // Vertical distance from the FAB center (bottom row) to the top row's
 // content center. Bottom row center sits at ROW_H_BOTTOM/2 above the box's

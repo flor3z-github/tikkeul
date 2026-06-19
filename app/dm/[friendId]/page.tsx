@@ -166,18 +166,16 @@ export default async function DmThreadPage({
   if (replyToIds.length > 0) {
     const { data: replyRows } = await supabase
       .from("dm_messages")
-      .select("id, sender_id, content")
+      .select("id, content")
       .in("id", replyToIds);
     replyById = new Map(
       ((replyRows ?? []) as Array<{
         id: string;
-        sender_id: string;
         content: string;
       }>).map((row) => [
         row.id,
         {
           id: row.id,
-          senderId: row.sender_id,
           content: row.content,
           deleted: false,
         },
@@ -205,7 +203,6 @@ export default async function DmThreadPage({
     replyTo: row.reply_to_id
       ? (replyById.get(row.reply_to_id) ?? {
           id: row.reply_to_id,
-          senderId: "",
           content: "",
           deleted: true,
         })
@@ -281,7 +278,6 @@ export default async function DmThreadPage({
       <DmChat
         threadId={threadId}
         viewerId={user.id}
-        friendId={friendId}
         friendNickname={friendNickname}
         initialMessages={messages}
         prefilledQuote={prefilledQuote}

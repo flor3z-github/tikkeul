@@ -44,38 +44,14 @@ export type ResolvedDashboardParams = {
 
 export const DEFAULT_CYCLE: CycleSettings = { mode: "calendar", startDay: 1 };
 
-// Payday picker options shown in Settings. '1'..'28' map to a real day-of-month;
-// 'last' is the end-of-month case (말일). 29/30/31 are intentionally NOT offered:
-// a true month-end payer picks 'last' (stored as payday 0), keeping the picker
-// values aligned to the user_settings.payday smallint domain (0=말일, 1..28).
-//
-// These map to the Model B user_settings.payday column (0=말일, 1..28) via
-// paydayCodeToDb / dbToPaydayCode — NOT to cycle_mode/cycle_start_day. The
-// cycle is computed from payday + payroll_rule + public holidays in
-// lib/utils/payday-cycle.ts (getCycleRangeB / resolveDashboardParamsB).
-export type PaydayCode = string; // "1".."28" | "last"
-export const PAYDAY_OPTIONS: { value: PaydayCode; label: string }[] = [
-  ...Array.from({ length: 28 }, (_, i) => {
-    const day = i + 1;
-    return { value: String(day), label: `${day}일` };
-  }),
-  { value: "last", label: "말일 (매월 마지막 날)" },
-];
-
-// Payday picker value -> user_settings.payday smallint (Model B):
-// 'last' -> 0 (말일, shares payment-day.ts PAYMENT_DAY_END_OF_MONTH=0), else the
-// literal day 1..28. Replaces the old paydayToCycle calendar/income_day mapping.
-export function paydayCodeToDb(code: PaydayCode): number {
-  return code === "last" ? 0 : Number(code);
-}
-
-// Inverse of paydayCodeToDb, for the Select's initial value: 0 -> 'last', else
-// the day string. Replaces the old cycleToPayday mapping. Note: after the M2
-// backfill, legacy 말일 payers that were stored under calendar mode surface as
-// payday=1 -> '1일' (lossy, documented); they must re-select 말일 in Settings.
-export function dbToPaydayCode(payday: number): PaydayCode {
-  return payday === 0 ? "last" : String(payday);
-}
+// NOTE: the payday picker UI↔DB mapping (payday code "1".."28"|"last" ⇄
+// user_settings.payday smallint 0=말일/1..28) lives inline in the two
+// consumers — components/settings/settings-form.tsx and
+// app/onboarding/_components/onboarding-flow.tsx. A shared PAYDAY_OPTIONS /
+// paydayCodeToDb / dbToPaydayCode used to live here but had no callers; if a
+// third consumer appears, reinstate a single shared mapper rather than a third
+// inline copy. The cycle itself is computed from payday + payroll_rule + public
+// holidays in lib/utils/payday-cycle.ts (getCycleRangeB / resolveDashboardParamsB).
 
 export function parseYearMonth(ym: string): Date | null {
   const m = YM_RE.exec(ym);

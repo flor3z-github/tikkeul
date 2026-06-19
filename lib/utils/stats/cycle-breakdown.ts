@@ -23,7 +23,7 @@ import type { MonthlyTransaction } from "@/lib/queries/transactions";
  *   - variableTotal(tx) === dashboard `monthlyTotal`
  *   - fixedTotal(items) === dashboard `ownFixedExpense` (Σ amount ?? 0 over ALL
  *     items, pre-filter)
- *   - grandTotal === dashboard `totalSpent`
+ *   - variableTotal + fixedTotal === dashboard `totalSpent`
  */
 
 /** Minimal structural input — only the fields the breakdown reads. `id`/
@@ -268,12 +268,4 @@ export function mapFixedItems(
     if (ak !== bk) return ak.localeCompare(bk);
     return b.amount - a.amount || a.name.localeCompare(b.name);
   });
-}
-
-/** variableTotal + fixedTotal. Equals the dashboard's `totalSpent`. */
-export function grandTotal(
-  transactions: VariableTxInput[],
-  items: FixedEffectiveItem[],
-): number {
-  return variableTotal(transactions) + fixedTotal(items);
 }

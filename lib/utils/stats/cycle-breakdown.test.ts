@@ -4,7 +4,6 @@ import {
   aggregateVariableByCategory,
   fixedDelta,
   fixedTotal,
-  grandTotal,
   mapFixedItems,
   variableTotal,
   type FixedEffectiveItem,
@@ -303,14 +302,5 @@ describe("fixedDelta — 전월比 헤드라인 고정분 (matched-only)", () =>
 
   it("is 0 when there is no previous data", () => {
     expect(fixedDelta([fixed("loan", 180_820)], [])).toBe(0);
-  });
-});
-
-describe("grandTotal", () => {
-  it("equals variableTotal + fixedTotal (dashboard totalSpent)", () => {
-    const txs = [tx("a", 300), tx("b", 200)];
-    const items = [fixed("f1", 1000), fixed("f2", null)];
-    expect(grandTotal(txs, items)).toBe(variableTotal(txs) + fixedTotal(items));
-    expect(grandTotal(txs, items)).toBe(1500);
   });
 });

@@ -97,17 +97,6 @@ export function formatRelativeKoreanDate(input: string | Date): string {
   return koreanShortDateFormatter.format(date);
 }
 
-const koreanMonthFormatter = new Intl.DateTimeFormat("ko-KR", {
-  year: "numeric",
-  month: "long",
-});
-
-export function formatKoreanMonth(input: string | Date): string {
-  const date = typeof input === "string" ? new Date(input) : input;
-  if (Number.isNaN(date.getTime())) return "";
-  return koreanMonthFormatter.format(date);
-}
-
 const CHAT_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
 export function formatChatDateSeparator(input: string | Date): string {
