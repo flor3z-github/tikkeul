@@ -188,11 +188,25 @@ export async function SpendingSummarySection({
       }
     }
 
-    // Savings total for the 모으기 line. Gated by showSavingsTotal; the RPC
-    // re-checks show_savings_total AND show_spending_total server-side and never
-    // exposes income or per-plan rows. Stays 0 on failure or when not granted.
+    // Savings total for the 모으기 line. friendSavings is folded into the 나간 돈
+    // hero (SpendingSummary), so — exactly like own mode's `savings` — it's only
+    // valid on the CURRENT cycle: get_friend_savings_total is a "now" snapshot
+    // (thisMonthSaved, the recurring monthly commitment), whereas 변동/고정 are the
+    // VIEWED cycle's totals. On a past/future friend cycle, folding today's
+    // savings into that cycle's outflow would be wrong (and would mislabel it
+    // 나간 돈). So gate on isCurrentCycle — mirrors the own-mode savings gate, and
+    // collapses past cycles back to 「총 소비」 = 고정+변동 with no 모으기 line.
+    // startIso/endIso are absolute instants (cycleStart/End.toISOString()), so the
+    // ISO round-trip compares the same instant as the own-mode Date compare.
+    const now = nowInSeoul();
+    const isCurrentCycle =
+      now.getTime() >= new Date(startIso).getTime() &&
+      now.getTime() < new Date(endIso).getTime();
+    // Gated by showSavingsTotal AND current cycle; the RPC re-checks
+    // show_savings_total AND show_spending_total server-side and never exposes
+    // income or per-plan rows. Stays 0 on failure, when not granted, or off-cycle.
     let friendSavings = 0;
-    if (showSavingsTotal) {
+    if (showSavingsTotal && isCurrentCycle) {
       const { data: savingsData, error: savingsError } = await supabase.rpc(
         "get_friend_savings_total",
         { target: userId },

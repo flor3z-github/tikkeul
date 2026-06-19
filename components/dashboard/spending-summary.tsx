@@ -146,19 +146,23 @@ export function SpendingSummary({
   trendDeltaWon,
 }: SpendingSummaryProps) {
   if (friendView) {
-    // Friend mode: total spending number. When the owner granted fixed
-    // visibility (showFixedBreakdown), the hero becomes the true total
-    // (고정 + 변동) with a 고정/변동 breakdown line — both are already-permitted
-    // aggregates, so no income/budget/rate leaks. Otherwise the hero stays
-    // variable-only. The surrounding page composition tells the user what else
-    // is hidden — no explicit disclaimer needed here.
-    const friendHero = showFixedBreakdown
+    // Friend mode: total outflow. The spending part is the true total (고정 +
+    // 변동) when the owner granted fixed visibility (showFixedBreakdown), else
+    // variable-only. When the owner also exposed savings (friendSavings > 0)
+    // it's folded into the hero and the label becomes "나간 돈" — mirroring own
+    // mode, where 저축 ≠ 소비 so the honest label for money that left the account
+    // is 나간 돈, not 총 소비. All parts are already-permitted aggregates, so no
+    // income/budget/rate leaks. The surrounding page composition tells the user
+    // what else is hidden — no explicit disclaimer needed here.
+    const friendSpend = showFixedBreakdown
       ? fixedExpense + monthlyExpense
       : monthlyExpense;
+    const friendHero = friendSpend + friendSavings;
+    const friendHeroLabel = friendSavings > 0 ? "나간 돈" : "총 소비";
     return (
       <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
         <CardContent className="space-y-2 p-6">
-          <p className="text-sm font-medium text-muted-foreground">총 소비</p>
+          <p className="text-sm font-medium text-muted-foreground">{friendHeroLabel}</p>
           <p
             key={cycleLabel}
             className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
@@ -184,14 +188,14 @@ export function SpendingSummary({
             </div>
           ) : null}
           {friendSavings > 0 ? (
-            // 모으기 line — 친구가 show_savings_total을 켰을 때만(서버 게이트). 소비
-            // 총액과 별개의 보조 라인. 저축은 "쓴 돈"이 아니므로 총 소비 헤로엔 안 더함.
+            // 모으기 line — 친구가 show_savings_total을 켰을 때만(서버 게이트). 나간 돈
+            // 헤로에 포함된 저축분을 분해해 보여준다(저축은 소비가 아니므로 라벨은 나간 돈).
             <div className="flex items-center gap-1.5 pt-1 text-[12px]">
               <span
                 aria-hidden
                 className="size-2 rounded-full bg-[#1c8c4d]"
               />
-              <span className="text-muted-foreground">매달 모으는 돈</span>
+              <span className="text-muted-foreground">모으기</span>
               <span className="font-semibold text-[#3a3a3c]">
                 {formatKRW(friendSavings)}
               </span>
