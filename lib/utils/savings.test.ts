@@ -127,6 +127,17 @@ describe("progressPct", () => {
     // total = 10 months; by Jun 10 → 6 deposits elapsed → 60%.
     expect(progressPct(p, at(2026, 6, 10))).toBe(60);
   });
+  it("does not reach 100% before the maturity date (caps at 99)", () => {
+    const p = plan({ start_date: "2026-01-10", maturity_date: "2026-11-10" });
+    // Oct 10 → 10 deposits / 10 total = 100, but maturity is Nov 10, and
+    // remainingLabel still reads "만기까지 1개월" — so progress must not claim
+    // completion yet. Capped to 99 until the maturity date is reached.
+    expect(progressPct(p, at(2026, 10, 10))).toBe(99);
+  });
+  it("reaches 100% on the maturity date", () => {
+    const p = plan({ start_date: "2026-01-10", maturity_date: "2026-11-10" });
+    expect(progressPct(p, at(2026, 11, 10))).toBe(100);
+  });
   it("is null for open-ended 자유적립", () => {
     expect(progressPct(plan(), at(2026, 6, 10))).toBeNull();
   });

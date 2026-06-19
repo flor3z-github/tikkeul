@@ -121,7 +121,13 @@ export function progressPct(p: SavingsPlanRow, now: Date): number | null {
     const total = (mat.y - start.y) * 12 + (mat.m - start.m);
     if (total <= 0) return 100;
     const elapsed = depositCount(p, now);
-    return Math.max(0, Math.min(100, Math.round((elapsed / total) * 100)));
+    const pct = Math.max(0, Math.min(100, Math.round((elapsed / total) * 100)));
+    // depositCount counts the start month inclusively while `total` is the
+    // exclusive start→maturity span, so the estimate reaches 100 one cycle
+    // before the maturity date. Don't claim completion before maturity —
+    // otherwise the row renders 100% next to remainingLabel's "만기까지 N개월".
+    if (pct >= 100 && cmpYmd(ymdFromDate(now), mat) < 0) return 99;
+    return pct;
   }
   return null;
 }
