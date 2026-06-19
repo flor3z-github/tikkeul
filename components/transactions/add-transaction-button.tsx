@@ -10,7 +10,7 @@ import {
   TransactionFormDialog,
   type TransactionFormCategory,
   type TransactionFormGroup,
-} from "./transaction-form-dialog";
+} from "@/components/transactions/transaction-form-dialog";
 
 type AddTransactionButtonProps = {
   categories: TransactionFormCategory[];

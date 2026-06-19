@@ -541,7 +541,11 @@ export async function removeFriendAction(
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  if (!friendUserId || friendUserId === user.id) {
+  // Validate the UUID before interpolating it into the PostgREST .or() filter
+  // (mirrors the sibling actions). Server Actions are directly invocable, so
+  // friendUserId is untrusted; a value containing PostgREST filter syntax could
+  // otherwise alter the predicate. RLS still fences the DELETE to own rows.
+  if (!friendUserId || !UUID_RE.test(friendUserId) || friendUserId === user.id) {
     return { ok: false, error: "잘못된 요청이에요." };
   }
 

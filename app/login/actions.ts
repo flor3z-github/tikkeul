@@ -35,7 +35,11 @@ function translateAuthError(message: string): string {
   if (m.includes("unable to validate email address")) {
     return "올바른 이메일 형식이 아니에요.";
   }
-  return message;
+  // Don't surface raw English Supabase errors to the user (e.g. "Database error
+  // saving new user", "Signups not allowed"). Fall back to a generic Korean
+  // message; the original is still logged server-side for diagnostics.
+  console.error("[auth] unmapped error:", message);
+  return "문제가 발생했어요. 잠시 후 다시 시도해주세요.";
 }
 
 export async function signInAction(formData: FormData) {

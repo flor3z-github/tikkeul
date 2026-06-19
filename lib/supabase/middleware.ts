@@ -3,7 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "./database.types";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/offline"];
+// "/auth" is reserved for a future Supabase email-confirm / OAuth callback
+// route (the redirect URL is configured in the Supabase dashboard). "/offline"
+// was removed: there is no /offline route and no offline fallback by design
+// (DESIGN.md §16).
+const PUBLIC_PATHS = ["/login", "/signup", "/auth"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(

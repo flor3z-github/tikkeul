@@ -9,6 +9,7 @@ import {
   type CycleMode,
 } from "@/lib/utils/calendar";
 import { toISODate } from "@/lib/utils/date";
+import { formatNumber } from "@/lib/utils/money";
 
 type SpendingMonthGridProps = {
   ym: string;
@@ -149,7 +150,7 @@ export function SpendingMonthGrid({
                 if (cell.iso === selectedDay) return;
                 onSelectDay(cell.iso);
               }}
-              ariaLabel={`${cell.date.getMonth() + 1}월 ${cell.date.getDate()}일${amount > 0 ? `, 소비 ${amount.toLocaleString()}원` : ""}${hasFixedExpense ? ", 고정지출 예정" : ""}${hasSavings ? ", 저축 예정" : ""}`}
+              ariaLabel={`${cell.date.getMonth() + 1}월 ${cell.date.getDate()}일${amount > 0 ? `, 소비 ${formatNumber(amount)}원` : ""}${hasFixedExpense ? ", 고정지출 예정" : ""}${hasSavings ? ", 저축 예정" : ""}`}
             />
           );
         })}
