@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import {
   deactivateFixedExpenseAction,
+  deleteFixedExpenseAction,
   updateFixedExpenseAction,
 } from "@/app/fixed-expenses/actions";
 import {
@@ -150,7 +151,13 @@ function ActiveItemBody({ item, catalogDefaultAmount, onDone }: BodyProps) {
   function handleDeactivate() {
     setConfirmDeleteOpen(false);
     startActionTransition(async () => {
-      const result = await deactivateFixedExpenseAction(item.id);
+      // Catalog items keep the row (is_active=false) so re-enabling from the
+      // catalog restores the amount. Manual items have no catalog entry to
+      // restore from, so a soft deactivate would orphan an unrecoverable row
+      // (gone from the active list, no way back) — hard delete instead.
+      const result = isCatalog
+        ? await deactivateFixedExpenseAction(item.id)
+        : await deleteFixedExpenseAction(item.id);
       if (result.ok) {
         toast.success("삭제됐어요.");
         onDone();
