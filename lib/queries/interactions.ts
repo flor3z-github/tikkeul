@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 // to decide which DM messages render as "reactions" rather than text.
 const EMOJI_ONLY = /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+$/u;
 
-export type ViewerInteraction = {
+type ViewerInteraction = {
   /** Viewer's most recent emoji-only reaction on this transaction, if any. */
   lastEmoji: string | null;
   /** Viewer's most recent text comment on this transaction, if any. The full
@@ -102,7 +102,7 @@ export async function getViewerInteractionsByTransaction(
   return result;
 }
 
-export type IncomingInteraction = {
+type IncomingInteraction = {
   /** Most recent text comment a friend left on the owner's transaction. */
   lastComment: string;
   /** dm_messages.id of that comment — deep-link target for /dm/<sender>?message=. */

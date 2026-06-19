@@ -55,7 +55,7 @@ export type FixedEffectiveItem = {
 };
 
 /** One transaction inside a category, for the inline drill-down list. */
-export type VariableBreakdownItem = {
+type VariableBreakdownItem = {
   id: string;
   amount: number;
   spentAt: string;

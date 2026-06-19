@@ -11,7 +11,7 @@
 
 export type ReleaseItemType = "feature" | "improve" | "design" | "fix";
 
-export type ReleaseItem = {
+type ReleaseItem = {
   type: ReleaseItemType;
   text: string;
 };

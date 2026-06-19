@@ -74,7 +74,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   ]);
 }
 
-export async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
+async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
   // navigator.serviceWorker.ready never resolves when the SW failed to
   // activate (observed on Samsung Internet). Cap the wait so callers surface a
