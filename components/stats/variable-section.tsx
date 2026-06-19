@@ -29,7 +29,7 @@ export function SectionHeading({
   );
 }
 
-/** 직전 사이클 대비 ±N. up(더 씀)=warning, down(덜 씀)=muted. */
+/** 직전 사이클 대비 ±N. up(더 씀)=destructive(빨강), down(덜 씀)=success(녹색). */
 export function DeltaBadge({ delta }: { delta: number }) {
   const up = delta > 0;
   return (

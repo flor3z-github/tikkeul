@@ -37,7 +37,7 @@ type Props = {
 
 const TOAST_PREVIEW_LIMIT = 30;
 
-export function FriendRealtimeWatcher({
+export function DashboardRealtimeWatcher({
   ownerUserId,
   isOwn,
   nicknameById,

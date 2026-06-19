@@ -119,7 +119,7 @@ export function resolveAnchor(
  * rule, used by getCycleRangeB (label derivation) and resolveDashboardParamsB
  * (label↔nominal conversion for navigation round-trips).
  */
-export function labelMonthIndex(payday: number): number {
+export function labelMonthOffset(payday: number): number {
   return payday === PAYDAY_END_OF_MONTH ? 1 : 0;
 }
 
@@ -177,14 +177,14 @@ export function getCycleRangeB(
       ? "calendar"
       : "income_day";
 
-  // Label month = nominal month + labelMonthIndex(payday). Derived from the
+  // Label month = nominal month + labelMonthOffset(payday). Derived from the
   // nominal month M (not from `start`) so it round-trips with navigation.
-  const labelDate = localMidnight(mYear, mIndex + labelMonthIndex(payday), 1);
+  const labelDate = localMidnight(mYear, mIndex + labelMonthOffset(payday), 1);
   const anchorYm = formatYearMonth(labelDate);
 
   // LABEL is decoupled from `mode` and chosen by PAYDAY (the user's original
   // spec): 1일 / 말일 anchor a whole paycheck-month, so they read as the clean
-  // 「N월」 (말일 → next month via labelMonthIndex) EVEN when the cycle is shifted
+  // 「N월」 (말일 → next month via labelMonthOffset) EVEN when the cycle is shifted
   // off the calendar month (e.g. 12/31–1/30 still shows 「1월」 while its grid
   // starts on the 31st). 2~28 read as the explicit "M/D – M/D" range.
   const usesMonthLabel =
@@ -295,7 +295,7 @@ function currentLabelYm(
  *   B. `?day` absent (MonthSwitcher) → `?ym` is the LABEL month (what the
  *      switcher steps via addMonths(ym, ±1)). Resolve it (or the cycle currently
  *      containing `now`), convert LABEL → NOMINAL by subtracting
- *      labelMonthIndex(payday), then getCycleRangeB(nominal) — its anchorYm ===
+ *      labelMonthOffset(payday), then getCycleRangeB(nominal) — its anchorYm ===
  *      the original label, so the navigation round-trip is exact even for 말일
  *      (+1-month label).
  * Both paths then validate ?day within [start, end) with a today-in-cycle
@@ -336,7 +336,7 @@ export function resolveDashboardParamsB(
     // LABEL → NOMINAL: subtract the 말일 +1-month offset.
     const nominalDate = localMidnight(
       labelDate.getFullYear(),
-      labelDate.getMonth() - labelMonthIndex(payday),
+      labelDate.getMonth() - labelMonthOffset(payday),
       1,
     );
 

@@ -103,7 +103,7 @@ describe("resolveDashboardParamsB — ym-only navigation (MonthSwitcher)", () =>
   });
 
   it("말일 (payday=0) label round-trips through the +1-month offset", () => {
-    // 말일 deposit of Jan labels as 「2월」 (labelMonthIndex=+1). Stepping the
+    // 말일 deposit of Jan labels as 「2월」 (labelMonthOffset=+1). Stepping the
     // switcher to "2026-02" must resolve the Jan-nominal cycle, NOT Feb's.
     const r = resolveDashboardParamsB({ ym: "2026-02" }, 0, "same", NONE, NOW);
     expect(toISODate(r.cycleStart)).toBe("2026-01-31");

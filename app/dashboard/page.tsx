@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { MessageCircle, Settings } from "lucide-react";
 
-import { FriendRealtimeWatcher } from "@/components/dashboard/friend-realtime-watcher";
+import { DashboardRealtimeWatcher } from "@/components/dashboard/dashboard-realtime-watcher";
 import { RefreshOnRestore } from "@/components/dm/refresh-on-restore";
 import { DashboardFriendHeader } from "@/components/dashboard/dashboard-friend-header";
 import { NotificationNudgeCard } from "@/components/dashboard/notification-nudge-card";
@@ -449,7 +449,7 @@ export default async function DashboardPage({
         }
       />
 
-      <FriendRealtimeWatcher
+      <DashboardRealtimeWatcher
         ownerUserId={viewingUserId}
         isOwn={isOwn}
         nicknameById={nicknameById}
