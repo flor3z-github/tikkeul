@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -219,13 +219,10 @@ function SavingsFormBody({
           >
             시작일
           </label>
-          <input
+          <DateField
             id="savings-start-date"
-            type="date"
             value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-            onClick={openNativePicker}
-            className="h-12 w-full min-w-0 rounded-2xl border border-border bg-card px-4 text-[15px] outline-none focus:border-ring"
+            onChange={setStartDate}
           />
         </div>
       </div>
@@ -255,13 +252,10 @@ function SavingsFormBody({
             >
               만기일 <span className="text-muted-foreground/70">(선택)</span>
             </label>
-            <input
+            <DateField
               id="savings-maturity"
-              type="date"
               value={maturityDate}
-              onChange={(event) => setMaturityDate(event.target.value)}
-              onClick={openNativePicker}
-              className="h-12 w-full min-w-0 rounded-2xl border border-border bg-card px-4 text-[15px] outline-none focus:border-ring"
+              onChange={setMaturityDate}
             />
           </div>
         </div>
@@ -346,6 +340,44 @@ function openNativePicker(event: React.MouseEvent<HTMLInputElement>) {
   } catch {
     // Unsupported / blocked — native tap-to-open still works on mobile.
   }
+}
+
+/**
+ * Native `<input type="date">` in a 2-col grid cell.
+ *
+ * iOS Safari does NOT honor `min-width:0`/`width:100%` on a native date input —
+ * the control keeps its intrinsic min-width and overflows the narrow cell,
+ * shoving its right edge (and the calendar icon) off-screen. `appearance-none`
+ * (+ the `-webkit-` fallback for older iOS) strips that native min-width so the
+ * input lays out like the text/amount inputs that already fit in this grid.
+ * Since `appearance-none` also kills the engine's own picker indicator, we hide
+ * the leftover Chrome `::-webkit-calendar-picker-indicator` and render a custom
+ * lucide icon — so the icon shows consistently on iOS *and* Chrome. The icon is
+ * `pointer-events-none` so taps fall through to the input (which opens the
+ * native picker; `onClick` also calls `showPicker()` for desktop).
+ */
+function DateField({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onClick={openNativePicker}
+        className="h-12 w-full min-w-0 appearance-none rounded-2xl border border-border bg-card pl-4 pr-10 text-[15px] outline-none [-webkit-appearance:none] focus:border-ring [&::-webkit-calendar-picker-indicator]:hidden"
+      />
+      <CalendarIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    </div>
+  );
 }
 
 /** Compact right-aligned amount field for the optional goal amount. */

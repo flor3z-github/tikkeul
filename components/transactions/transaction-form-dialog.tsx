@@ -30,12 +30,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Drawer,
   DrawerContent,
@@ -50,7 +44,7 @@ import {
   CategoryPickerDrawer,
   type CategoryMutation,
 } from "@/components/transactions/category-picker-drawer";
-import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
+import { toISODate } from "@/lib/utils/date";
 import {
   formatAmountInput,
   formatNumber,
@@ -170,7 +164,12 @@ type FormBodyProps = {
   onSaved: () => void;
 };
 
-function parseDefaultDate(value: string | undefined): Date | null {
+// Lenient 'YYYY-MM-DD' → local-midnight Date (no future check). Parsed by
+// components, NOT `new Date(string)`, so it stays on the wall-clock day.
+// Used by the date input's onChange so EVERY valid pick updates the field —
+// rejecting a value there would leave the controlled input stuck on its prior
+// value (the "date won't change" bug). The picker is bounded by `max` instead.
+function parseISODate(value: string | undefined): Date | null {
   if (!value) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!m) return null;
@@ -181,6 +180,14 @@ function parseDefaultDate(value: string | undefined): Date | null {
   if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) {
     return null;
   }
+  return dt;
+}
+
+// The incoming `defaultDate` prop must never seed a future spending date, so
+// this layer adds the future rejection on top of the lenient parse.
+function parseDefaultDate(value: string | undefined): Date | null {
+  const dt = parseISODate(value);
+  if (!dt) return null;
   if (dt.getTime() > Date.now()) return null;
   return dt;
 }
@@ -189,6 +196,17 @@ function pickCreateDefaultDate(defaultDate: string | undefined): Date {
   const fromDefault = parseDefaultDate(defaultDate);
   if (!fromDefault) return new Date();
   return fromDefault;
+}
+
+// Open the OS-native date picker on tap. iOS/Samsung open it on tap already;
+// since we hide the engine's own picker indicator, this also covers desktop
+// (showPicker() must run inside a user gesture — onClick qualifies).
+function openNativePicker(event: React.MouseEvent<HTMLInputElement>) {
+  try {
+    event.currentTarget.showPicker?.();
+  } catch {
+    // Unsupported / blocked — native tap-to-open still works on mobile.
+  }
 }
 
 function deriveInitialVisibilityChoice(
@@ -249,7 +267,6 @@ function TransactionFormBody({
     deriveInitialSelectedGroupIds(initial, groups),
   );
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
@@ -540,53 +557,32 @@ function TransactionFormBody({
           </span>
         </div>
 
-        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-          <PopoverTrigger
-            type="button"
-            className="flex h-12 w-full items-center gap-3 px-4 text-left outline-none transition-colors hover:bg-muted/60"
-          >
-            <CalendarIcon
-              className="size-4 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-            <span className="flex-1 text-[15px] font-medium">
-              {formatKoreanFullDate(spentDate)}
-            </span>
-            <ChevronRight
-              className="size-4 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-auto p-0 [&_button]:pointer-events-auto [&_input]:pointer-events-auto"
-            align="start"
-          >
-            <Calendar
-              mode="single"
-              selected={spentDate}
-              onSelect={(date) => {
-                if (date) {
-                  setSpentDate(new Date(date));
-                  setDatePickerOpen(false);
-                }
-              }}
-              disabled={(date) => {
-                const today = new Date();
-                const dayEnd = new Date(
-                  today.getFullYear(),
-                  today.getMonth(),
-                  today.getDate(),
-                  23,
-                  59,
-                  59,
-                  999,
-                );
-                return date > dayEnd;
-              }}
-              autoFocus
-            />
-          </PopoverContent>
-        </Popover>
+        {/* Native date input (matches the savings form). Lives as a row in
+            the same divide-y card as the memo field. `appearance-none` lets
+            iOS Safari honor the row width (native controls otherwise keep an
+            intrinsic min-width); the engine's own indicator is hidden and the
+            left CalendarIcon is the only icon. `max` blocks future dates the
+            way the old Calendar's `disabled` did; parseDefaultDate re-rejects
+            future/invalid values on change as a belt-and-suspenders guard. */}
+        <div className="flex items-center gap-3 px-4">
+          <CalendarIcon
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+          <input
+            id="transaction-date"
+            type="date"
+            aria-label="날짜"
+            value={toISODate(spentDate)}
+            max={toISODate(new Date())}
+            onChange={(event) => {
+              const next = parseISODate(event.target.value);
+              if (next) setSpentDate(next);
+            }}
+            onClick={openNativePicker}
+            className="h-12 min-w-0 flex-1 appearance-none bg-transparent text-[15px] font-medium outline-none [-webkit-appearance:none] [&::-webkit-calendar-picker-indicator]:hidden"
+          />
+        </div>
 
         <VisibilitySelector
           value={visibilityChoice}
