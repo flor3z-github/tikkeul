@@ -210,8 +210,14 @@ export function NotificationToggle({
 
   function handleChange(next: boolean) {
     if (disabled) return;
-    startTransition(() => {
-      void (next ? turnOn() : turnOff());
+    // Await inside the transition so isPending tracks the full async flow
+    // (requestPermission → subscribeDevice → register → setFlag). A sync
+    // callback that fire-and-forgets the promise lets `pending` flip false
+    // immediately, so `disabled = pending` would NOT block a rapid double-tap
+    // and two concurrent subscribeDevice() calls could race. turnOn/turnOff
+    // handle their own errors, so the awaited promise never rejects here.
+    startTransition(async () => {
+      await (next ? turnOn() : turnOff());
     });
   }
 
