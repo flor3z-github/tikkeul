@@ -17,6 +17,9 @@ const COMMENT_MAX_LENGTH = 500;
 // across read and write paths.
 const EMOJI_ONLY = /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+$/u;
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // A "reaction" is a short DM message whose content is just the emoji and
 // whose quoted_transaction_id points at the friend's transaction. Tapping a
 // reaction in the dashboard picker behaves as a toggle: tapping an emoji
@@ -176,6 +179,47 @@ export async function sendCommentMessageAction(
   if (insertError) return { ok: false, error: insertError.message };
 
   revalidatePath(`/dm/${txRow.user_id}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+// Mark the DM thread that an incoming comment belongs to as read — from the
+// owner's dashboard, without navigating into the thread. Fired when the owner
+// expands an unread comment trace inline (the inline-read equivalent of opening
+// the DM). The owner can already SELECT the message (RLS = thread member), so
+// resolving its thread_id here is safe; mark_dm_thread_read updates only the
+// caller's last_read_at side. Mirrors markThreadReadAction's revalidation: the
+// /dm index badge and the dashboard header dot are server-computed and can't
+// self-refresh on a read, so both routes' Router Cache must be busted. Read is
+// thread-unit (same as a DM visit): all of this friend's messages in the thread
+// become read, not just this one comment.
+export async function markIncomingCommentReadAction(
+  messageId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!UUID_RE.test(messageId)) {
+    return { ok: false, error: "잘못된 메시지예요." };
+  }
+
+  const { data: msg, error: msgError } = await supabase
+    .from("dm_messages")
+    .select("thread_id")
+    .eq("id", messageId)
+    .maybeSingle<{ thread_id: string }>();
+  if (msgError) return { ok: false, error: msgError.message };
+  if (!msg) return { ok: false, error: "메시지를 찾을 수 없어요." };
+
+  const { error } = await supabase.rpc("mark_dm_thread_read", {
+    p_thread_id: msg.thread_id,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dm");
   revalidatePath("/dashboard");
   return { ok: true };
 }

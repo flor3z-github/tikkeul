@@ -2,10 +2,18 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Heart, Lock, MessageCircle, Send, Users } from "lucide-react";
+import {
+  ArrowUpRight,
+  Heart,
+  Lock,
+  MessageCircle,
+  Send,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  markIncomingCommentReadAction,
   sendCommentMessageAction,
   sendReactionMessageAction,
 } from "@/app/dashboard/interactions";
@@ -52,8 +60,9 @@ type TransactionItemProps = {
   isOwn: boolean;
   ownerUserId: string;
   /** Own mode: most recent text comment a friend left on this transaction.
-   *  Renders a read-only trace under the summary that deep-links to the DM
-   *  message. Null when no friend has commented. */
+   *  Renders a tappable trace under the summary: tapping the text expands the
+   *  full comment inline (truncate↔full), while a separate [↗] button deep-links
+   *  to the DM message. Null when no friend has commented. */
   incomingComment?: string | null;
   /** Own mode: dm_messages.id for incomingComment — /dm/<sender>?message=<id>. */
   incomingCommentMessageId?: string | null;
@@ -66,12 +75,14 @@ type TransactionItemProps = {
   /** Friend mode: viewer's last emoji-only DM reaction on this transaction.
    *  Renders in place of the empty heart so the viewer sees their own state. */
   lastEmoji?: string | null;
-  /** Friend mode: viewer's most recent text comment. Read-only trace beside
-   *  the message icon so the viewer can recall what they wrote. */
+  /** Friend mode: viewer's most recent text comment. Tappable trace beside the
+   *  message icon — tapping expands the full text in a block below the row so
+   *  the viewer can re-read what they wrote. */
   lastComment?: string | null;
   /** Friend mode: dm_messages.id for the message that produced lastComment.
-   *  Tapping the trace navigates to /dm/<owner>?message=<id>. When this is set
-   *  the row is treated as "comment locked" — the inline comment form does not
+   *  Tapping the pill expands an inline below-row block; the "전체 대화 보기" link
+   *  in that block deep-links to /dm/<owner>?message=<id>. When this is set the
+   *  row is treated as "comment locked" — the inline comment form does not
    *  render, so the DM thread stays the single source of truth. */
   lastCommentMessageId?: string | null;
   /** Friend mode parent-managed exclusive state. */
@@ -162,11 +173,12 @@ function OwnRow({
 }) {
   const [open, setOpen] = useState(false);
   // A friend left a comment on this transaction. Render a trace under the
-  // summary that deep-links to that DM message. All three ids must be present
-  // to build the link; otherwise fall back to the plain row.
+  // summary; tapping it expands the full text inline. All three ids must be
+  // present to build the DM deep-link; otherwise fall back to the plain row.
   const hasIncoming = Boolean(
     incomingComment && incomingCommentMessageId && incomingCommentSenderId,
   );
+
   return (
     <div className="rounded-2xl">
       <button
@@ -179,30 +191,19 @@ function OwnRow({
       >
         <TransactionSummary transaction={transaction} />
       </button>
-      {hasIncoming ? (
-        <a
-          href={`/dm/${incomingCommentSenderId}?message=${incomingCommentMessageId}`}
-          aria-label={`${incomingCommentSenderName}님의 댓글: ${incomingComment} — DM에서 보기`}
-          className={cn(
-            "mx-3 mb-1.5 flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-[12px] transition-colors hover:bg-muted",
-            incomingCommentUnread ? "text-primary" : "text-muted-foreground",
-          )}
-        >
-          <MessageCircle className="size-3.5 shrink-0" aria-hidden />
-          {incomingCommentUnread ? (
-            <span
-              aria-hidden
-              className="size-1.5 shrink-0 rounded-full bg-primary"
-            />
-          ) : null}
-          <span className="shrink-0 font-medium">
-            {incomingCommentSenderName}
-          </span>
-          <span aria-hidden className="shrink-0 text-muted-foreground/50">
-            ·
-          </span>
-          <span className="truncate">{incomingComment}</span>
-        </a>
+      {incomingComment && incomingCommentMessageId && incomingCommentSenderId ? (
+        // Keyed by the message id so a newer comment (which replaces this one as
+        // the most-recent trace under a soft router.refresh that keeps this row
+        // mounted) remounts the trace fresh — resetting expanded/readLocally so
+        // the new, genuinely-unread comment shows its dot and renders collapsed.
+        <IncomingCommentTrace
+          key={incomingCommentMessageId}
+          comment={incomingComment}
+          messageId={incomingCommentMessageId}
+          senderId={incomingCommentSenderId}
+          senderName={incomingCommentSenderName ?? "이름 없음"}
+          unread={incomingCommentUnread}
+        />
       ) : null}
       <TransactionFormDialog
         open={open}
@@ -212,6 +213,94 @@ function OwnRow({
         initial={toFormInitial(transaction)}
         onSaved={() => setOpen(false)}
       />
+    </div>
+  );
+}
+
+// Friend's comment trace on the owner's own transaction. Tapping the text
+// expands the full comment inline (truncate↔full) and, if unread, marks the DM
+// thread read (optimistic row-dot clear + router.refresh for the server-
+// computed header dot). The [↗] stays a separate, always-visible deep-link to
+// the DM thread. Mounted keyed by messageId (see OwnRow) so it resets cleanly
+// when a newer comment replaces this one.
+function IncomingCommentTrace({
+  comment,
+  messageId,
+  senderId,
+  senderName,
+  unread,
+}: {
+  comment: string;
+  messageId: string;
+  senderId: string;
+  senderName: string;
+  unread: boolean;
+}) {
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
+  const [readLocally, setReadLocally] = useState(false);
+  const [, startReadTransition] = useTransition();
+  const showUnread = unread && !readLocally;
+
+  function handleToggle() {
+    const next = !expanded;
+    setExpanded(next);
+    // Expanding to read clears unread (thread-unit, same as a DM visit). Only
+    // fire on expand, only when actually unread, and only once.
+    if (next && unread && !readLocally) {
+      setReadLocally(true);
+      startReadTransition(async () => {
+        const result = await markIncomingCommentReadAction(messageId);
+        if (result.ok) {
+          router.refresh();
+        } else {
+          // Roll back the optimistic clear + surface the error (file convention)
+          // so a later expand can retry.
+          setReadLocally(false);
+          toast.error(result.error);
+        }
+      });
+    }
+  }
+
+  return (
+    <div className="mx-3 mb-1.5 flex items-start gap-1">
+      <button
+        type="button"
+        onClick={handleToggle}
+        aria-label={`${senderName}님의 댓글: ${comment}`}
+        className={cn(
+          "flex min-w-0 flex-1 items-start gap-1.5 rounded-2xl px-2 py-1 text-left text-[12px] transition-colors hover:bg-muted",
+          showUnread ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        <MessageCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        {showUnread ? (
+          <span
+            aria-hidden
+            className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary"
+          />
+        ) : null}
+        <span className="shrink-0 font-medium">{senderName}</span>
+        <span aria-hidden className="shrink-0 text-muted-foreground/50">
+          ·
+        </span>
+        <span
+          className={cn(
+            "min-w-0 flex-1",
+            expanded ? "whitespace-pre-wrap break-words" : "truncate",
+          )}
+        >
+          {comment}
+        </span>
+      </button>
+      <a
+        href={`/dm/${senderId}?message=${messageId}`}
+        aria-label={`${senderName}님과의 DM에서 보기`}
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <ArrowUpRight className="size-3.5" aria-hidden />
+      </a>
     </div>
   );
 }
@@ -248,6 +337,10 @@ function FriendRow({
   const router = useRouter();
   const [reactionPending, startReactionTransition] = useTransition();
   const [commentPending, startCommentTransition] = useTransition();
+  // Inline expand of the viewer's own locked comment trace. The pill stays
+  // compact in the icon row (space-constrained beside the emoji button); the
+  // full text renders in a block below the row when toggled open.
+  const [expanded, setExpanded] = useState(false);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
   // A row is "comment-locked" once the viewer has sent a text comment on it —
@@ -364,18 +457,32 @@ function FriendRow({
           )}
         </button>
         {hasComment ? (
-          <a
-            href={`/dm/${ownerUserId}?message=${lastCommentMessageId}`}
-            aria-label={`댓글: ${lastComment} — DM에서 보기`}
-            onClick={(event) => event.stopPropagation()}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setExpanded((v) => !v);
+            }}
+            aria-expanded={expanded}
+            aria-label={`댓글: ${lastComment}`}
             className="inline-flex h-8 min-w-0 max-w-[60%] items-center gap-1.5 rounded-full px-2 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
           >
             <MessageCircle className="size-4 shrink-0" aria-hidden />
-            <span aria-hidden className="text-[12px] text-muted-foreground/60">
-              ·
-            </span>
-            <span className="truncate text-[12px]">{lastComment}</span>
-          </a>
+            {/* When expanded, the full text shows in the block below — drop the
+                pill's truncated preview so the comment isn't rendered twice; the
+                icon alone stays as the collapse handle. */}
+            {expanded ? null : (
+              <>
+                <span
+                  aria-hidden
+                  className="text-[12px] text-muted-foreground/60"
+                >
+                  ·
+                </span>
+                <span className="truncate text-[12px]">{lastComment}</span>
+              </>
+            )}
+          </button>
         ) : (
           <button
             type="button"
@@ -394,6 +501,25 @@ function FriendRow({
           </button>
         )}
       </div>
+
+      {hasComment && expanded ? (
+        // Below-row reveal of the full comment. Uses the emoji panel's
+        // opacity/transform animation (fade-in + slide-in-from-top), NOT the
+        // comment form's grid 0fr→1fr reveal — height/grid reveals are
+        // GPU-composite-bound and stutter on iOS.
+        <div className="px-3 pb-3 pt-0.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
+          <p className="whitespace-pre-wrap break-words rounded-2xl bg-card px-3 py-2 text-[13px] text-foreground">
+            {lastComment}
+          </p>
+          <a
+            href={`/dm/${ownerUserId}?message=${lastCommentMessageId}`}
+            onClick={(event) => event.stopPropagation()}
+            className="mt-1 inline-flex items-center py-2 text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            전체 대화 보기
+          </a>
+        </div>
+      ) : null}
 
       {isActive && activeMode === "emoji" ? (
         <div className="px-3 pb-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150">
@@ -459,7 +585,7 @@ function FriendRow({
           <div className="flex items-center justify-between gap-2">
             <a
               href={`/dm/${ownerUserId}?quote=${transaction.id}`}
-              className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              className="inline-flex items-center py-2 text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
               전체 대화 보기
             </a>
