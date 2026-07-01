@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
 import { toISODate } from "@/lib/utils/date";
+import { isPaymentMethod, type PaymentMethod } from "@/lib/utils/payment-method";
 
 export type TransactionVisibility = "all" | "groups" | "private";
 
@@ -14,6 +15,13 @@ export type MonthlyTransaction = {
   category_color: string | null;
   spent_at: string;
   memo: string | null;
+  /** 결제수단: 신용/체크. null = 미지정(이 컬럼 도입 전 legacy 행). */
+  payment_method: PaymentMethod | null;
+  /** 할부(installment) 그룹. 일반 거래는 셋 다 null; 할부 자식 행은 같은
+   *  installment_id + seq(1..count) + count. 회차금액 = amount. */
+  installment_id: string | null;
+  installment_seq: number | null;
+  installment_count: number | null;
   visibility: TransactionVisibility;
   /** Group ids linked when visibility === 'groups'. Empty array otherwise.
    *  In friend mode this only contains groups the viewer is a member of (RLS
@@ -36,6 +44,10 @@ type RawRow = {
   category_id: string | null;
   spent_at: string;
   memo: string | null;
+  payment_method: string | null;
+  installment_id: string | null;
+  installment_seq: number | null;
+  installment_count: number | null;
   visibility: TransactionVisibility | null;
   transaction_visibility_groups: { group_id: string }[] | null;
   categories: {
@@ -62,7 +74,7 @@ export const getMonthlyTransactions = cache(
     const { data, error } = await supabase
       .from("transactions")
       .select(
-        "id, amount, category_id, spent_at, memo, visibility, transaction_visibility_groups ( group_id ), categories ( name, icon, color )",
+        "id, amount, category_id, spent_at, memo, payment_method, installment_id, installment_seq, installment_count, visibility, transaction_visibility_groups ( group_id ), categories ( name, icon, color )",
       )
       .eq("user_id", userId)
       .is("deleted_at", null)
@@ -84,6 +96,12 @@ export const getMonthlyTransactions = cache(
       category_color: row.categories?.color ?? null,
       spent_at: row.spent_at,
       memo: row.memo,
+      payment_method: isPaymentMethod(row.payment_method)
+        ? row.payment_method
+        : null,
+      installment_id: row.installment_id,
+      installment_seq: row.installment_seq,
+      installment_count: row.installment_count,
       visibility: row.visibility ?? "all",
       visible_group_ids: (row.transaction_visibility_groups ?? []).map(
         (link) => link.group_id,

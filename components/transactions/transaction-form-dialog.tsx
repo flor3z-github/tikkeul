@@ -7,6 +7,8 @@ import {
   CalendarIcon,
   Check,
   ChevronRight,
+  CreditCard,
+  Layers,
   Pencil,
   Trash2,
   Undo2,
@@ -51,6 +53,12 @@ import {
   parseAmountInput,
 } from "@/lib/utils/money";
 import type { TransactionVisibility } from "@/lib/queries/transactions";
+import {
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_LABELS,
+  isPaymentMethod,
+  type PaymentMethod,
+} from "@/lib/utils/payment-method";
 
 const QUICK_AMOUNTS: { value: number; label: string }[] = [
   { value: 1_000, label: "1천" },
@@ -77,6 +85,10 @@ export type TransactionFormInitial = {
   category_id: string | null;
   spent_at: string;
   memo: string | null;
+  payment_method: PaymentMethod | null;
+  installment_id: string | null;
+  installment_seq: number | null;
+  installment_count: number | null;
   visibility: TransactionVisibility;
   visible_group_ids: string[];
 };
@@ -93,6 +105,20 @@ export type TransactionFormGroup = {
 type VisibilityChoice = "all" | "groups" | "private";
 
 const MEMO_MAX_LENGTH = 100;
+
+// 'create' defaults the 결제수단 to the user's last-used method (persisted),
+// not a fixed value — a hard-coded default would bias the credit/check ratio
+// that /stats measures toward whatever we picked. Edit mode ignores this and
+// prefills from the row instead. Read lazily inside the (client-only) form body
+// initializer; the drawer body only mounts on open so there's no SSR subtree to
+// mismatch.
+const LAST_PAYMENT_METHOD_KEY = "tikkeul:last-payment-method";
+
+function readLastPaymentMethod(): PaymentMethod {
+  if (typeof window === "undefined") return "credit";
+  const saved = window.localStorage.getItem(LAST_PAYMENT_METHOD_KEY);
+  return isPaymentMethod(saved) ? saved : "credit";
+}
 
 type TransactionFormDialogProps = {
   open: boolean;
@@ -251,6 +277,12 @@ function TransactionFormBody({
     return pickCreateDefaultDate(defaultDate);
   });
   const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() =>
+    initial ? (initial.payment_method ?? "credit") : readLastPaymentMethod(),
+  );
+  // 할부 개월. 1 = 일시불(단일 행). >=2 = 신용 할부. Create 모드 + 신용일 때만
+  // 노출되고, 체크로 바꾸면 1로 리셋된다.
+  const [installmentMonths, setInstallmentMonths] = useState<number>(1);
   const [visibilityChoice, setVisibilityChoice] = useState<VisibilityChoice>(
     () => deriveInitialVisibilityChoice(initial),
   );
@@ -395,16 +427,94 @@ function TransactionFormBody({
         categoryId,
         spentAt: toISODate(spentDate),
         memo: memoText,
+        paymentMethod,
+        installmentMonths: paymentMethod === "credit" ? installmentMonths : 1,
         visibility,
         groupIds,
       });
       if (result.ok) {
+        // Remember the chosen method so the next 'create' defaults to it.
+        // Create-only: editing an old row (esp. a legacy null → 'credit') must
+        // not hijack the next new-purchase default.
+        if (mode === "create" && typeof window !== "undefined") {
+          window.localStorage.setItem(LAST_PAYMENT_METHOD_KEY, paymentMethod);
+        }
         toast.success(mode === "edit" ? "수정됐어요." : "추가됐어요.");
         onSaved();
       } else {
         toast.error(result.error);
       }
     });
+  }
+
+  // 할부 자식 거래 편집: 개별 회차 수정은 합을 깨므로 막고(전체삭제만 v1), 정보 +
+  // "할부 전체 삭제"만 보여준다. 삭제 액션(deleteTransactionAction)은 installment_id를
+  // 보고 그룹 전체를 소프트삭제한다.
+  if (mode === "edit" && initial?.installment_id) {
+    return (
+      <div className="space-y-4 pt-4">
+        <div className="space-y-2 rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <Layers
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <span className="text-sm font-medium text-muted-foreground">
+              할부 거래
+            </span>
+          </div>
+          <p className="text-[15px] font-medium">
+            {selectedCategory?.name ?? "기타"} · {initial.installment_count}개월
+            할부 중 {initial.installment_seq}회차
+          </p>
+          <p className="text-[13px] leading-snug text-muted-foreground">
+            이 회차 {formatNumber(initial.amount)}원. 할부는 회차별 수정이 안 돼요 —
+            바꾸려면 전체 삭제 후 다시 등록해주세요.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={() => setConfirmDeleteOpen(true)}
+          disabled={busy}
+          className="h-12 w-full rounded-full text-[15px] font-semibold"
+        >
+          할부 전체 삭제
+        </Button>
+        <AlertDialog
+          open={confirmDeleteOpen}
+          onOpenChange={(open) => {
+            if (!deletePending) setConfirmDeleteOpen(open);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>이 할부를 삭제할까요?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {initial.installment_count}개월 모든 회차가 목록과 합계에서
+                사라져요.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletePending}>취소</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleDelete();
+                }}
+                disabled={deletePending}
+                className={cn(
+                  buttonVariants({ variant: "destructive" }),
+                  "h-12 w-full rounded-full text-[15px] font-semibold",
+                )}
+              >
+                {deletePending ? "삭제 중…" : "삭제"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
   }
 
   return (
@@ -527,6 +637,23 @@ function TransactionFormBody({
           상세 정보
         </label>
         <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+        <PaymentMethodSelector
+          value={paymentMethod}
+          onChange={(next) => {
+            setPaymentMethod(next);
+            // 체크는 할부 불가 — 일시불로 리셋.
+            if (next !== "credit") setInstallmentMonths(1);
+          }}
+        />
+
+        {mode === "create" && paymentMethod === "credit" ? (
+          <InstallmentSelector
+            months={installmentMonths}
+            onChange={setInstallmentMonths}
+            principal={amountValue}
+          />
+        ) : null}
+
         <div className="flex items-center gap-3 px-4">
           <Pencil className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           <input
@@ -672,6 +799,102 @@ function TransactionFormBody({
         onMutated={handleCategoryMutated}
       />
     </form>
+  );
+}
+
+const INSTALLMENT_OPTIONS = [1, 2, 3, 4, 5, 6, 9, 12, 18, 24, 36];
+
+type InstallmentSelectorProps = {
+  months: number;
+  onChange: (months: number) => void;
+  /** 원금 총액 — 월 부담 힌트 계산용. */
+  principal: number;
+};
+
+// 할부 개월 선택(create + 신용일 때만). native <select>로 통일(drawer 안 base-ui
+// Select 금지 — [[select-in-drawer-portal-fix]]). 월 부담 힌트로 금액이 총 원금임을 명시.
+function InstallmentSelector({
+  months,
+  onChange,
+  principal,
+}: InstallmentSelectorProps) {
+  const perMonth =
+    months >= 2 && principal >= months ? Math.floor(principal / months) : 0;
+  return (
+    <div className="space-y-2 px-4 py-3">
+      <div className="flex items-center gap-3">
+        <Layers className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="text-xs font-medium text-muted-foreground">할부</span>
+        <select
+          aria-label="할부 개월"
+          value={months}
+          onChange={(event) => onChange(Number(event.target.value))}
+          className="ml-auto appearance-none rounded-full bg-muted px-3 py-1.5 text-[13px] font-medium outline-none [-webkit-appearance:none]"
+        >
+          {INSTALLMENT_OPTIONS.map((m) => (
+            <option key={m} value={m}>
+              {m === 1 ? "일시불" : `${m}개월`}
+            </option>
+          ))}
+        </select>
+      </div>
+      {months >= 2 && perMonth > 0 ? (
+        <p className="text-[12px] leading-snug text-muted-foreground">
+          월 약 {formatNumber(perMonth)}원 × {months}개월 (첫 회차에 우수리 포함)
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+type PaymentMethodSelectorProps = {
+  value: PaymentMethod;
+  onChange: (next: PaymentMethod) => void;
+};
+
+// 신용/체크 2-세그먼트 토글. VisibilitySelector의 세그먼트 스타일을 그대로 따른다
+// (radiogroup + rounded-full bg-muted pill). drawer 안이라 네이티브 select 대신
+// 버튼 토글을 쓴다 — 2지선다라 토글이 더 빠르고 portal 이슈도 없다.
+function PaymentMethodSelector({ value, onChange }: PaymentMethodSelectorProps) {
+  return (
+    <div className="space-y-2 px-4 py-3">
+      <div className="flex items-center gap-3">
+        <CreditCard
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+        <span className="text-xs font-medium text-muted-foreground">
+          결제수단
+        </span>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label="결제수단"
+        className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1"
+      >
+        {PAYMENT_METHODS.map((method) => {
+          const selected = method === value;
+          return (
+            <button
+              key={method}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(method)}
+              className={cn(
+                "h-9 rounded-full text-[13px] font-medium transition-all duration-150 ease-out",
+                "active:scale-[0.98]",
+                selected
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background",
+              )}
+            >
+              {PAYMENT_METHOD_LABELS[method]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

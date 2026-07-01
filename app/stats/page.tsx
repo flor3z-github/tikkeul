@@ -22,6 +22,7 @@ import {
   type FixedEffectiveItem,
 } from "@/lib/utils/stats/cycle-breakdown";
 import { clampToElapsedWindow } from "@/lib/utils/stats/elapsed-window";
+import { aggregatePaymentSplit } from "@/lib/utils/stats/payment-split";
 
 type FixedRpcRow = {
   id: string;
@@ -200,6 +201,7 @@ export default async function StatsPage({
         fixedTotal={fixTotal}
         variableRows={aggregateVariableByCategory(transactions, prevTransactions)}
         fixedRows={mapFixedItems(fixedItems, prevFixedItems)}
+        paymentSplit={aggregatePaymentSplit(transactions)}
       />
     </AppShell>
   );

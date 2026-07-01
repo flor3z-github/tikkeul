@@ -1,9 +1,11 @@
 import { FixedCategoryBadge } from "@/lib/utils/fixed-category-icon";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
+import { PAYMENT_METHOD_SHORT_LABELS } from "@/lib/utils/payment-method";
 import type {
   FixedBreakdownRow,
   VariableBreakdownRow,
 } from "@/lib/utils/stats/cycle-breakdown";
+import type { PaymentSplit } from "@/lib/utils/stats/payment-split";
 import {
   DeltaBadge,
   SectionHeading,
@@ -17,6 +19,7 @@ type CycleBreakdownViewProps = {
   fixedTotal: number;
   variableRows: VariableBreakdownRow[];
   fixedRows: FixedBreakdownRow[];
+  paymentSplit: PaymentSplit;
 };
 
 /**
@@ -32,9 +35,13 @@ export function CycleBreakdownView({
   fixedTotal,
   variableRows,
   fixedRows,
+  paymentSplit,
 }: CycleBreakdownViewProps) {
   const isEmpty =
     grandTotal === 0 && variableRows.length === 0 && fixedRows.length === 0;
+  // Only show the 결제수단 split once at least one row carries a real method —
+  // an all-미지정 split (every row legacy/untagged) is noise, not a split.
+  const showPaymentSplit = paymentSplit.rows.some((r) => r.method !== "unknown");
 
   return (
     <div className="space-y-6">
@@ -71,6 +78,8 @@ export function CycleBreakdownView({
           variableTotal={variableTotal}
         />
       ) : null}
+
+      {showPaymentSplit ? <PaymentSplitSection split={paymentSplit} /> : null}
 
       {variableRows.length > 0 && fixedRows.length > 0 ? (
         <hr aria-hidden className="border-border" />
@@ -123,5 +132,42 @@ function FixedRow({ row }: { row: FixedBreakdownRow }) {
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * 결제수단 split — 변동지출을 신용/체크/미지정으로 나눈다. 분모는 변동 총액(고정은
+ * 결제수단이 없음)이라 SectionHeading total === variableTotal이고, "변동지출 기준"
+ * 캡션으로 분모를 명시한다. 차트 없이 % + 금액 행만(§12.9 변동 섹션과 동일한
+ * 미니멀 스타일, 막대 없음).
+ */
+function PaymentSplitSection({ split }: { split: PaymentSplit }) {
+  return (
+    <section className="space-y-1">
+      <SectionHeading title="결제수단" total={split.total} />
+      <p className="px-1 text-[12px] text-muted-foreground">변동지출 기준</p>
+      <ul>
+        {split.rows.map((row) => (
+          <li
+            key={row.method}
+            className="flex items-center justify-between gap-3 px-1 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[15px] font-medium">
+                {row.method === "unknown"
+                  ? "미지정"
+                  : PAYMENT_METHOD_SHORT_LABELS[row.method]}
+              </span>
+              <span className="text-[13px] tabular-nums text-muted-foreground">
+                {Math.round(row.share)}%
+              </span>
+            </div>
+            <span className="shrink-0 text-[15px] font-semibold tabular-nums">
+              {formatNumber(row.total)}원
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
