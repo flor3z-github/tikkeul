@@ -22,6 +22,10 @@ export type MonthlyTransaction = {
   installment_id: string | null;
   installment_seq: number | null;
   installment_count: number | null;
+  /** N명 나눠내기(정산). 안 나눈 거래는 둘 다 null; 나눈 거래는 인원(2..4) +
+   *  총액(표시용). amount는 항상 내 몫(round(split_total/count))만 담는다. */
+  split_count: number | null;
+  split_total: number | null;
   visibility: TransactionVisibility;
   /** Group ids linked when visibility === 'groups'. Empty array otherwise.
    *  In friend mode this only contains groups the viewer is a member of (RLS
@@ -48,6 +52,8 @@ type RawRow = {
   installment_id: string | null;
   installment_seq: number | null;
   installment_count: number | null;
+  split_count: number | null;
+  split_total: number | null;
   visibility: TransactionVisibility | null;
   transaction_visibility_groups: { group_id: string }[] | null;
   categories: {
@@ -74,7 +80,7 @@ export const getMonthlyTransactions = cache(
     const { data, error } = await supabase
       .from("transactions")
       .select(
-        "id, amount, category_id, spent_at, memo, payment_method, installment_id, installment_seq, installment_count, visibility, transaction_visibility_groups ( group_id ), categories ( name, icon, color )",
+        "id, amount, category_id, spent_at, memo, payment_method, installment_id, installment_seq, installment_count, split_count, split_total, visibility, transaction_visibility_groups ( group_id ), categories ( name, icon, color )",
       )
       .eq("user_id", userId)
       .is("deleted_at", null)
@@ -102,6 +108,8 @@ export const getMonthlyTransactions = cache(
       installment_id: row.installment_id,
       installment_seq: row.installment_seq,
       installment_count: row.installment_count,
+      split_count: row.split_count,
+      split_total: row.split_total != null ? Number(row.split_total) : null,
       visibility: row.visibility ?? "all",
       visible_group_ids: (row.transaction_visibility_groups ?? []).map(
         (link) => link.group_id,

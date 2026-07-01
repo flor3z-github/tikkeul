@@ -14,7 +14,10 @@ type SplitChipsProps = {
   baseAmount: number;
   /** Current value in the amount input. Used to highlight matching chip. */
   currentValue: number;
-  onPick: (next: number) => void;
+  /** `next` = baseAmount/n (rounded). `people` = the chosen N (1 = 혼자 다). The
+   *  transaction split flow needs N to persist split_count; the fixed-expense
+   *  callers pass a 1-arg handler and ignore it (safe param-count widening). */
+  onPick: (next: number, people: number) => void;
 };
 
 /**
@@ -39,7 +42,7 @@ export function SplitChips({
           <button
             key={n}
             type="button"
-            onClick={() => onPick(computed)}
+            onClick={() => onPick(computed, n)}
             aria-pressed={active}
             className={cn(
               "h-9 rounded-full border px-3 text-xs font-medium tabular-nums transition-all duration-150 ease-out",

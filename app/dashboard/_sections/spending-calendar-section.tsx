@@ -427,6 +427,19 @@ export async function SpendingCalendarSection({
       }));
   }
 
+  // 친구 모드: N명 나눠내기 표시 메타(총액·인원)를 렌더뿐 아니라 페이로드에서도
+  // 제거한다. 사용자 결정은 "친구에게 총액·인원 숨김"인데, showSplit=false로 렌더만
+  // 가리면 split_total/split_count가 RSC props로 여전히 실려 나간다. amount는 이미
+  // 뷰어에게 보이는 내 몫만 담고 있어 이 둘을 null로 지워도 무손실이다. own 모드는
+  // 그대로 통과.
+  const visibleTransactions = isOwn
+    ? monthlyResult.transactions
+    : monthlyResult.transactions.map((tx) => ({
+        ...tx,
+        split_count: null,
+        split_total: null,
+      }));
+
   return (
     <CalendarDayPanel
       key={`${ym}-${cycleMode}-${initialDay}`}
@@ -436,7 +449,7 @@ export async function SpendingCalendarSection({
       cycleEnd={cycleEnd}
       cycleMode={cycleMode}
       cycleLabel={cycleLabel}
-      transactions={monthlyResult.transactions}
+      transactions={visibleTransactions}
       categories={categoriesResult.categories}
       groups={groups}
       cycleBudget={cycleBudget}

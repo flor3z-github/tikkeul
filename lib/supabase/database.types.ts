@@ -268,6 +268,8 @@ export type Database = {
           installment_id: string | null;
           installment_seq: number | null;
           installment_count: number | null;
+          split_count: number | null;
+          split_total: number | null;
           visibility: "all" | "groups" | "private";
           deleted_at: string | null;
           created_at: string;
@@ -284,6 +286,8 @@ export type Database = {
           installment_id?: string | null;
           installment_seq?: number | null;
           installment_count?: number | null;
+          split_count?: number | null;
+          split_total?: number | null;
           visibility?: "all" | "groups" | "private";
           deleted_at?: string | null;
           created_at?: string;
@@ -300,6 +304,8 @@ export type Database = {
           installment_id?: string | null;
           installment_seq?: number | null;
           installment_count?: number | null;
+          split_count?: number | null;
+          split_total?: number | null;
           visibility?: "all" | "groups" | "private";
           deleted_at?: string | null;
           created_at?: string;
@@ -669,6 +675,8 @@ export type Database = {
           p_visibility: "all" | "groups" | "private";
           p_group_ids: string[] | null;
           p_payment_method?: string | null;
+          p_split_count?: number | null;
+          p_split_total?: number | null;
         };
         Returns: undefined;
       };
@@ -682,6 +690,8 @@ export type Database = {
           p_visibility: "all" | "groups" | "private";
           p_group_ids: string[] | null;
           p_payment_method?: string | null;
+          p_split_count?: number | null;
+          p_split_total?: number | null;
         };
         Returns: undefined;
       };

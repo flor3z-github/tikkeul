@@ -41,6 +41,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { SplitChips } from "@/components/fixed-expenses/split-chips";
 import { CategoryIcon } from "@/lib/utils/category-icon";
 import {
   CategoryPickerDrawer,
@@ -88,6 +89,8 @@ export type TransactionFormInitial = {
   installment_id: string | null;
   installment_seq: number | null;
   installment_count: number | null;
+  split_count: number | null;
+  split_total: number | null;
   visibility: TransactionVisibility;
   visible_group_ids: string[];
 };
@@ -283,6 +286,19 @@ function TransactionFormBody({
   // 할부 개월. 1 = 일시불(단일 행). >=2 = 신용 할부. Create 모드 + 신용일 때만
   // 노출되고, 체크로 바꾸면 1로 리셋된다.
   const [installmentMonths, setInstallmentMonths] = useState<number>(1);
+  // N명 나눠내기(정산). splitCount 1 = 안 나눔. >=2 = N명이 나눔 → amount칸엔 내 몫만
+  // 담기고, splitTotal(총액)은 표시용으로 보관한다. 편집 진입 시 저장된 값으로 복원.
+  const [splitCount, setSplitCount] = useState<number>(() =>
+    initial?.split_count && initial.split_count >= 2 ? initial.split_count : 1,
+  );
+  const [splitTotal, setSplitTotal] = useState<number | null>(() =>
+    initial?.split_count && initial.split_count >= 2
+      ? (initial.split_total ?? null)
+      : null,
+  );
+  const [splitOpen, setSplitOpen] = useState<boolean>(() =>
+    Boolean(initial?.split_count && initial.split_count >= 2),
+  );
   const [visibilityChoice, setVisibilityChoice] = useState<VisibilityChoice>(
     () => deriveInitialVisibilityChoice(initial),
   );
@@ -298,6 +314,12 @@ function TransactionFormBody({
   const [quickHistory, setQuickHistory] = useState<number[]>([]);
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
+  // 나누기 기준 총액. 나눈 상태면 저장된 총액(splitTotal), 아니면 지금 입력값 자체가
+  // "총액 후보"다 — 인원 칩을 누르면 이 값을 총액으로 삼아 내 몫으로 쪼갠다.
+  const splitBaseAmount = splitCount > 1 ? (splitTotal ?? amountValue) : amountValue;
+  // 할부와 나눠내기는 상호배타(v1). 할부는 create+신용일 때만.
+  const installmentActive =
+    mode === "create" && paymentMethod === "credit" && installmentMonths >= 2;
   const busy = pending || deletePending;
   // The 'groups' choice requires at least one selected group — submitting
   // an empty list would silently make the row no-one-visible. Block it here
@@ -401,6 +423,30 @@ function TransactionFormBody({
     setAmountText(formatAmountInput(event.target.value));
     // Manual edits make the quick-add history unreliable — drop it.
     setQuickHistory([]);
+    // 금액을 직접 고치면 "총액/N" 분할 관계가 깨진다 — 분할 해제(수정된 값이 곧
+    // 새 기준 총액이 된다). 편집 진입 초기 세팅(useState)엔 이 핸들러가 안 걸린다.
+    if (splitCount > 1) {
+      setSplitCount(1);
+      setSplitTotal(null);
+    }
+  }
+
+  // 인원 칩 선택. splitBaseAmount를 총액으로 삼아 내 몫(round)을 금액칸에 넣고,
+  // 총액·인원은 표시/전송용 state로 보관한다. people=1(혼자 다)이면 분할 해제하고
+  // 금액을 총액으로 복원한다.
+  function handlePickSplit(next: number, people: number) {
+    const base = splitBaseAmount;
+    if (base <= 0) return;
+    if (people <= 1) {
+      setAmountText(formatNumber(base));
+      setSplitCount(1);
+      setSplitTotal(null);
+    } else {
+      setAmountText(formatNumber(next));
+      setSplitCount(people);
+      setSplitTotal(base);
+    }
+    setQuickHistory([]);
   }
 
   function handleSelectVisibility(next: VisibilityChoice) {
@@ -428,7 +474,12 @@ function TransactionFormBody({
         spentAt: toISODate(spentDate),
         memo: memoText,
         paymentMethod,
-        installmentMonths: paymentMethod === "credit" ? installmentMonths : 1,
+        // 나눠내기가 켜져 있으면 할부는 강제로 일시불(상호배타 — 서버도 막지만
+        // 클라이언트에서 먼저 정리).
+        installmentMonths:
+          paymentMethod === "credit" && splitCount < 2 ? installmentMonths : 1,
+        splitCount: splitCount >= 2 ? splitCount : null,
+        splitTotal: splitCount >= 2 ? splitTotal : null,
         visibility,
         groupIds,
       });
@@ -592,6 +643,70 @@ function TransactionFormBody({
         </div>
       </div>
 
+      {/* N명 나눠내기(정산). 기본은 접힌 토글 한 줄 — 소비 대부분은 혼자라 빠른입력
+          경로를 깔끔히 유지한다(§12.3). 펼치면 총액/N 인원 칩. 할부와는 상호배타라
+          할부가 켜진 동안엔 통째로 숨긴다. */}
+      {!installmentActive ? (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setSplitOpen((v) => !v)}
+            aria-expanded={splitOpen}
+            className="flex w-full items-center gap-2 px-1 text-left"
+          >
+            <Users
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <span className="text-sm font-medium text-muted-foreground">
+              여러 명이 나눠 냈어요
+            </span>
+            {splitCount > 1 ? (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                {splitCount}명
+              </span>
+            ) : null}
+            <ChevronRight
+              className={cn(
+                "ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+                splitOpen && "rotate-90",
+              )}
+              aria-hidden
+            />
+          </button>
+          {splitOpen ? (
+            <div className="space-y-2 rounded-2xl bg-muted px-4 py-3">
+              {splitBaseAmount > 0 ? (
+                <>
+                  <SplitChips
+                    baseAmount={splitBaseAmount}
+                    currentValue={amountValue}
+                    onPick={handlePickSplit}
+                  />
+                  <p className="text-[12px] leading-snug text-muted-foreground">
+                    {splitCount > 1 && splitTotal ? (
+                      <>
+                        총 {formatNumber(splitTotal)}원을 {splitCount}명이 나눠서 ·
+                        내 몫{" "}
+                        <span className="font-semibold text-foreground">
+                          {formatNumber(amountValue)}원
+                        </span>
+                      </>
+                    ) : (
+                      "총액을 넣고 인원을 고르면 내 몫만 기록돼요."
+                    )}
+                  </p>
+                </>
+              ) : (
+                <p className="text-[12px] leading-snug text-muted-foreground">
+                  먼저 위에 총액을 입력해주세요.
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         <label className="block px-1 text-xs font-medium text-muted-foreground">
           카테고리
@@ -646,7 +761,7 @@ function TransactionFormBody({
           }}
         />
 
-        {mode === "create" && paymentMethod === "credit" ? (
+        {mode === "create" && paymentMethod === "credit" && splitCount === 1 ? (
           <InstallmentSelector
             months={installmentMonths}
             onChange={setInstallmentMonths}

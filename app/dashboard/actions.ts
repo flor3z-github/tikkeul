@@ -14,6 +14,7 @@ import { nowInSeoul } from "@/lib/utils/date";
 import { isValidPaymentDay } from "@/lib/utils/payment-day";
 import { isPaymentMethod, type PaymentMethod } from "@/lib/utils/payment-method";
 import { installmentSchedule } from "@/lib/utils/installment";
+import { isValidSplitCount } from "@/lib/utils/split";
 
 export type TransactionActionResult =
   | { ok: true }
@@ -29,6 +30,10 @@ type SubmitInput = {
   /** 할부 개월 수. undefined/1 = 일시불(단일 행). >=2 = 신용 할부(N 자식 행,
    *  create 시에만 적용 — 편집에는 무시). */
   installmentMonths?: number;
+  /** N명 나눠내기(정산). 나눴을 때만 count(2..4) + total(총액)이 온다. amount는
+   *  이미 내 몫(round(total/count))으로 계산돼 들어온다. 안 나눴으면 둘 다 생략. */
+  splitCount?: number | null;
+  splitTotal?: number | null;
   visibility?: TransactionVisibility;
   groupIds?: string[] | null;
 };
@@ -96,6 +101,29 @@ export async function submitTransactionAction(
   }
   const paymentMethod = input.paymentMethod;
 
+  // N명 나눠내기(정산): 폼은 나눴을 때만 count(2..4)+total을 보낸다. amount는 이미 내
+  // 몫으로 계산돼 들어오므로 여기선 표시용 메타(count/total)만 검증한다. 안 나눴으면 둘
+  // 다 null로 떨어진다. 변조 클라이언트가 잘못된 조합을 넣지 못하게 서버 경계에서 막는다.
+  let splitCount: number | null = null;
+  let splitTotal: number | null = null;
+  if (input.splitCount != null && input.splitCount >= 2) {
+    if (!isValidSplitCount(input.splitCount)) {
+      return { ok: false, error: "나눌 인원은 2~4명이에요." };
+    }
+    if (
+      input.splitTotal == null ||
+      !Number.isFinite(input.splitTotal) ||
+      input.splitTotal <= 0
+    ) {
+      return { ok: false, error: "나눠낼 총액을 확인해주세요." };
+    }
+    if (input.splitTotal < input.amount) {
+      return { ok: false, error: "나눠낼 총액이 내 몫보다 작을 수 없어요." };
+    }
+    splitCount = input.splitCount;
+    splitTotal = Math.round(input.splitTotal);
+  }
+
   const visibility: TransactionVisibility =
     input.visibility && VALID_VISIBILITIES.includes(input.visibility)
       ? input.visibility
@@ -132,6 +160,8 @@ export async function submitTransactionAction(
       p_visibility: visibility,
       p_group_ids: groupIds.length > 0 ? groupIds : null,
       p_payment_method: paymentMethod,
+      p_split_count: splitCount,
+      p_split_total: splitTotal,
     });
     if (error) return { ok: false, error: error.message };
   } else {
@@ -139,6 +169,12 @@ export async function submitTransactionAction(
     // 원자 생성한다. 신용 전용. (create 경로에서만 — 편집엔 할부 없음.)
     const months = input.installmentMonths;
     if (months != null && months >= 2) {
+      if (splitCount !== null) {
+        return {
+          ok: false,
+          error: "할부와 나눠내기는 함께 쓸 수 없어요.",
+        };
+      }
       if (paymentMethod !== "credit") {
         return { ok: false, error: "할부는 신용카드만 가능해요." };
       }
@@ -185,6 +221,8 @@ export async function submitTransactionAction(
       p_visibility: visibility,
       p_group_ids: groupIds.length > 0 ? groupIds : null,
       p_payment_method: paymentMethod,
+      p_split_count: splitCount,
+      p_split_total: splitTotal,
     });
     if (error) return { ok: false, error: error.message };
   }

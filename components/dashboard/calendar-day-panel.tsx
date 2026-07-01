@@ -309,6 +309,8 @@ export function CalendarDayPanel({
           installment_id: tx.installment_id,
           installment_seq: tx.installment_seq,
           installment_count: tx.installment_count,
+          split_count: tx.split_count,
+          split_total: tx.split_total,
           visibility: tx.visibility,
           visible_group_ids: tx.visible_group_ids,
         })),

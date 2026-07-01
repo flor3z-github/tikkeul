@@ -27,7 +27,7 @@ import {
 } from "@/components/transactions/transaction-form-dialog";
 import { CategoryIcon } from "@/lib/utils/category-icon";
 import { cn } from "@/lib/utils";
-import { formatKRW } from "@/lib/utils/money";
+import { formatKRW, formatNumber } from "@/lib/utils/money";
 import type { TransactionVisibility } from "@/lib/queries/transactions";
 import type { PaymentMethod } from "@/lib/utils/payment-method";
 
@@ -44,6 +44,8 @@ export type TransactionListRow = {
   installment_id: string | null;
   installment_seq: number | null;
   installment_count: number | null;
+  split_count: number | null;
+  split_total: number | null;
   visibility: TransactionVisibility;
   visible_group_ids: string[];
 };
@@ -194,7 +196,7 @@ function OwnRow({
           hasIncoming ? "pt-2 pb-1" : "py-2",
         )}
       >
-        <TransactionSummary transaction={transaction} />
+        <TransactionSummary transaction={transaction} showSplit />
       </button>
       {incomingComment && incomingCommentMessageId && incomingCommentSenderId ? (
         // Keyed by the message id so a newer comment (which replaces this one as
@@ -615,8 +617,12 @@ function FriendRow({
 
 function TransactionSummary({
   transaction,
+  showSplit = false,
 }: {
   transaction: TransactionListRow;
+  /** own 모드에서만 N명 나눠내기 총액·인원을 노출한다. 친구는 이미 내 몫(amount)을
+   *  보므로 총액·인원은 숨긴다(§12.8 비공개 최소화). */
+  showSplit?: boolean;
 }) {
   return (
     <div className="flex w-full items-center gap-3">
@@ -663,6 +669,15 @@ function TransactionSummary({
             {transaction.memo}
           </p>
         ) : null}
+        {showSplit && transaction.split_count && transaction.split_total ? (
+          <p className="flex items-center gap-1 truncate text-[12px] text-muted-foreground">
+            <Users className="size-3 shrink-0" aria-hidden />
+            <span className="truncate">
+              총 {formatNumber(transaction.split_total)}원 ·{" "}
+              {transaction.split_count}명 나눔
+            </span>
+          </p>
+        ) : null}
       </div>
       <span className="text-[15px] font-semibold tabular-nums">
         {formatKRW(Number(transaction.amount))}
@@ -682,6 +697,8 @@ function toFormInitial(tx: TransactionListRow): TransactionFormInitial {
     installment_id: tx.installment_id,
     installment_seq: tx.installment_seq,
     installment_count: tx.installment_count,
+    split_count: tx.split_count,
+    split_total: tx.split_total,
     visibility: tx.visibility,
     visible_group_ids: tx.visible_group_ids,
   };
