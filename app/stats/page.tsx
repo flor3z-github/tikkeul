@@ -8,6 +8,7 @@ import { CycleBreakdownView } from "@/components/stats/cycle-breakdown-view";
 import { getHolidays, holidayRangeForAnchor } from "@/lib/queries/holidays";
 import { getMonthlyTransactions } from "@/lib/queries/transactions";
 import { createClient } from "@/lib/supabase/server";
+import { parseYearMonth } from "@/lib/utils/calendar";
 import { nowInSeoul } from "@/lib/utils/date";
 import {
   getPreviousCycleB,
@@ -58,7 +59,7 @@ function mapFixedRpcRows(data: unknown): FixedEffectiveItem[] {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type StatsSearchParams = Promise<{ viewing?: string }>;
+type StatsSearchParams = Promise<{ viewing?: string; ym?: string }>;
 
 export default async function StatsPage({
   searchParams,
@@ -79,10 +80,18 @@ export default async function StatsPage({
   const viewerId = claimsData?.claims?.sub ?? null;
   if (!viewerId) redirect("/login");
 
-  // Cycle resolution: same payday engine as the dashboard. v1 shows the current
-  // cycle only (no switcher) — the entry point is gated to the current cycle on
-  // the dashboard side, so the top total always matches what the card showed.
-  const { yearStart, yearEnd } = holidayRangeForAnchor(new Date().getFullYear());
+  // Cycle resolution: same payday engine as the dashboard. `?ym` is the LABEL
+  // month threaded from the dashboard CTA (it carries the currently-viewed
+  // cycle's ym), so /stats renders the SAME cycle the card showed and the top
+  // total always matches. Absent/invalid ym → resolveDashboardParamsB falls back
+  // to the cycle containing `now`. There's no in-page switcher: month navigation
+  // lives on the dashboard, and the entry CTA passes its ym here.
+  // Holidays for the VIEWED anchor year ±1, not the current year — a past/future
+  // cycle in another year needs that year's holidays for correct business-day
+  // adjustment (mirrors the dashboard's anchorYear). Absent/invalid ym → current.
+  const anchorYear =
+    parseYearMonth(sp.ym ?? "")?.getFullYear() ?? new Date().getFullYear();
+  const { yearStart, yearEnd } = holidayRangeForAnchor(anchorYear);
   const [settingsRes, holidays] = await Promise.all([
     supabase
       .from("user_settings")
@@ -101,7 +110,7 @@ export default async function StatsPage({
 
   const now = nowInSeoul();
   const { ym, cycleStart, cycleEnd, cycleLabel } = resolveDashboardParamsB(
-    {},
+    { ym: sp.ym },
     payday,
     rule,
     holidays,
@@ -169,19 +178,31 @@ export default async function StatsPage({
   // per-row deltas then naturally hide unchanged/new items.
   const hasPrevBaseline =
     prevMonthly.ok && prevMonthly.transactions.length > 0;
-  // 변동 전월比는 같은 경과 시점끼리 비교한다(§12.9): 진행 중인 이번 사이클은
-  // "지금까지" 쓴 부분합인데 직전은 완료된 전체합이라, 직전 변동을 이번 사이클이
-  // 지난 경과 시간만큼만 잘라 비교한다(고정은 결제일 step이라 자르지 않음 — 아래
-  // prevFixedItems는 전액 유지). 이번 사이클 측은 자르지 않는다: 상단 총액이
-  // 대시보드 monthlyTotal과 정확히 같아야 하는 불변식(§12.9) 보존 + 미래일자 거래
-  // 엣지 때문.
+  // 보고 있는 주기가 지금 살고 있는 주기인지. 완료된 과거 주기면 전월比 클램프를
+  // 끄고 전체 vs 전체로 비교한다(아래).
+  const isLiveCycle =
+    now.getTime() >= cycleStart.getTime() &&
+    now.getTime() < cycleEnd.getTime();
+  // 변동 전월比 컷오프는 보고 있는 주기가 진행 중일 때만 적용한다(§12.9): 진행 중인
+  // 주기는 "지금까지" 쓴 부분합인데 직전은 완료된 전체합이라, 직전 변동을 이번 주기가
+  // 지난 경과 시간만큼만 잘라 같은 시점끼리 비교한다(고정은 결제일 step이라 자르지
+  // 않음 — 아래 prevFixedItems는 전액 유지). 진행 중 주기 측은 자르지 않는다: 상단
+  // 총액이 대시보드 monthlyTotal과 정확히 같아야 하는 불변식(§12.9) 보존 + 미래일자
+  // 거래 엣지 때문.
+  //   완료된 과거 주기(isLiveCycle=false)는 컷오프를 끈다: elapsed-window 클램프의
+  // 전제("이번 측은 부분합")가 사라져 양쪽 다 완료된 전체합이므로 전체 vs 전체가
+  // 맞다. clampToElapsedWindow는 elapsed 기반이라, 직전 주기가 이번보다 길면(예:
+  // Jan 31일 vs Feb 28일) 방금 닫힌 주기를 이른 시점에 볼 때 직전 꼬리 며칠이 잘려
+  // 델타가 "증가" 쪽으로 편향된다 — 과거 주기에선 자르지 않아야 이를 막는다.
   const prevTransactions = hasPrevBaseline
-    ? clampToElapsedWindow(
-        prevMonthly.transactions,
-        cycleStart,
-        prevCycle.start,
-        now,
-      )
+    ? isLiveCycle
+      ? clampToElapsedWindow(
+          prevMonthly.transactions,
+          cycleStart,
+          prevCycle.start,
+          now,
+        )
+      : prevMonthly.transactions
     : undefined;
   // 고정 per-row delta는 직전 fixed RPC가 성공했을 때만 켠다 — 실패 시 prev가
   // 0으로 읽혀 delta가 부풀려지는 것 차단. 변동 delta는 prevMonthly에만 의존.

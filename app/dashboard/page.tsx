@@ -478,6 +478,7 @@ export default async function DashboardPage({
               cycleEndDate={cycleEndDate}
               showSpendingTotal={perms.spendingTotal}
               showSpendingItems={perms.spendingItems}
+              ym={ym}
               cycleStart={cycleStart}
               cycleEnd={cycleEnd}
               cycleMode={cycleMode}

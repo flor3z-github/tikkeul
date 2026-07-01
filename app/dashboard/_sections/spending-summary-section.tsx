@@ -73,6 +73,13 @@ type SpendingSummarySectionProps = {
   /** Friend-mode cycle anchor (anchorYm "YYYY-MM") for get_friend_fixed_total. */
   cycleAnchor?: string;
   /**
+   * Own-mode LABEL month ("YYYY-MM") of the displayed cycle, threaded into the
+   * /stats entry CTA (`/stats?ym=`). Lets the 소비 구성 화면 render the SAME cycle
+   * the card shows — not just the current one. Absent in friend mode (stats is
+   * own-only). See statsHref below.
+   */
+  ym?: string;
+  /**
    * Cycle bounds and mode for the pace line ("이번 달이 끝나기까지 · 남은 N일 ·
    * 하루 X원"). Used only in own mode; friend mode never receives or shows
    * pace info because it derives from `remainingBudget` (privacy).
@@ -109,6 +116,7 @@ export async function SpendingSummarySection({
   showFixed = false,
   showSavingsTotal = false,
   cycleAnchor,
+  ym,
   cycleStart,
   cycleEnd,
   cycleMode,
@@ -233,15 +241,21 @@ export async function SpendingSummarySection({
   // Own mode. `now` (KST) drives BOTH the current-cycle gate and the prev-cycle
   // elapsed clamp so they agree.
   const now = nowInSeoul();
-  // Whether the displayed cycle is the one we're living in. Gates the pace line,
-  // the /stats entry point, AND the 토스式 추세 — stats/추세 always resolve the
-  // CURRENT cycle, so we only show them when the card itself shows that cycle
-  // (otherwise a past-month card total would mismatch).
+  // Whether the displayed cycle is the one we're living in. Gates the pace line
+  // AND the 토스式 추세 — 추세 has no actionable pace on a past/future cycle, so we
+  // only compute it for the live cycle. (The /stats CTA is NO LONGER gated on
+  // this: it now threads `ym` so /stats renders whatever cycle the card shows —
+  // see statsHref below. It's gated on cycleStarted instead, to hide future
+  // cycles whose composition is empty.)
   const isCurrentCycle =
     !!cycleStart &&
     !!cycleEnd &&
     now.getTime() >= cycleStart.getTime() &&
     now.getTime() < cycleEnd.getTime();
+  // The displayed cycle has begun (current or past). Future cycles (cycleStart
+  // in the future) have no spending to compose, so the /stats entry is hidden.
+  const cycleStarted =
+    !!cycleStart && now.getTime() >= cycleStart.getTime();
 
   // 토스式 총액 추세는 own + 현재 주기 + 직전 주기 bounds가 있을 때만 직전 tx/fixed를
   // 가져온다(과거/미래 주기엔 행동 가능한 페이스가 없음). 현재 주기 tx와 병렬로.
@@ -372,7 +386,7 @@ export async function SpendingSummarySection({
       cycleLabel={cycleLabel}
       daysRemainingInCycle={daysRemaining}
       cycleMode={cycleMode}
-      statsHref={isCurrentCycle ? "/stats" : undefined}
+      statsHref={cycleStarted && ym ? `/stats?ym=${ym}` : undefined}
       trendDeltaWon={trendDeltaWon}
     />
   );
