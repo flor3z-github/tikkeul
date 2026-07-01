@@ -296,9 +296,9 @@ function TransactionFormBody({
       ? (initial.split_total ?? null)
       : null,
   );
-  const [splitOpen, setSplitOpen] = useState<boolean>(() =>
-    Boolean(initial?.split_count && initial.split_count >= 2),
-  );
+  // 나눠내기 인원 선택은 nested drawer(공개범위 「부분」의 GroupPickerDrawer와 동일
+  // 패턴)로 처리해 폼 세로 길이를 늘리지 않는다. 트리거 행만 폼에 남는다.
+  const [splitPickerOpen, setSplitPickerOpen] = useState(false);
   const [visibilityChoice, setVisibilityChoice] = useState<VisibilityChoice>(
     () => deriveInitialVisibilityChoice(initial),
   );
@@ -643,68 +643,33 @@ function TransactionFormBody({
         </div>
       </div>
 
-      {/* N명 나눠내기(정산). 기본은 접힌 토글 한 줄 — 소비 대부분은 혼자라 빠른입력
-          경로를 깔끔히 유지한다(§12.3). 펼치면 총액/N 인원 칩. 할부와는 상호배타라
-          할부가 켜진 동안엔 통째로 숨긴다. */}
+      {/* N명 나눠내기(정산). 폼 세로를 늘리지 않도록 한 줄 트리거 행만 두고, 인원 칩은
+          nested drawer(공개범위 「부분」의 GroupPickerDrawer와 동일 패턴)로 뺀다. 할부와는
+          상호배타라 할부가 켜진 동안엔 행 자체를 숨긴다. */}
       {!installmentActive ? (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setSplitOpen((v) => !v)}
-            aria-expanded={splitOpen}
-            className="flex w-full items-center gap-2 px-1 text-left"
-          >
-            <Users
-              className="size-4 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-            <span className="text-sm font-medium text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => setSplitPickerOpen(true)}
+          className="flex h-14 w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 text-left transition-colors hover:bg-muted/60 active:scale-[0.99]"
+        >
+          <Users className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          {splitCount > 1 && splitTotal ? (
+            <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
+              {splitCount}명이 나눔 ·{" "}
+              <span className="text-muted-foreground">
+                내 몫 {formatNumber(amountValue)}원
+              </span>
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-muted-foreground">
               여러 명이 나눠 냈어요
             </span>
-            {splitCount > 1 ? (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                {splitCount}명
-              </span>
-            ) : null}
-            <ChevronRight
-              className={cn(
-                "ml-auto size-4 shrink-0 text-muted-foreground transition-transform duration-150",
-                splitOpen && "rotate-90",
-              )}
-              aria-hidden
-            />
-          </button>
-          {splitOpen ? (
-            <div className="space-y-2 rounded-2xl bg-muted px-4 py-3">
-              {splitBaseAmount > 0 ? (
-                <>
-                  <SplitChips
-                    baseAmount={splitBaseAmount}
-                    currentValue={amountValue}
-                    onPick={handlePickSplit}
-                  />
-                  <p className="text-[12px] leading-snug text-muted-foreground">
-                    {splitCount > 1 && splitTotal ? (
-                      <>
-                        총 {formatNumber(splitTotal)}원을 {splitCount}명이 나눠서 ·
-                        내 몫{" "}
-                        <span className="font-semibold text-foreground">
-                          {formatNumber(amountValue)}원
-                        </span>
-                      </>
-                    ) : (
-                      "총액을 넣고 인원을 고르면 내 몫만 기록돼요."
-                    )}
-                  </p>
-                </>
-              ) : (
-                <p className="text-[12px] leading-snug text-muted-foreground">
-                  먼저 위에 총액을 입력해주세요.
-                </p>
-              )}
-            </div>
-          ) : null}
-        </div>
+          )}
+          <ChevronRight
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+        </button>
       ) : null}
 
       <div className="space-y-2">
@@ -903,6 +868,16 @@ function TransactionFormBody({
         groups={groups}
         selectedIds={selectedGroupIds}
         onChange={setSelectedGroupIds}
+      />
+
+      <SplitPickerDrawer
+        open={splitPickerOpen}
+        onOpenChange={setSplitPickerOpen}
+        baseAmount={splitBaseAmount}
+        currentValue={amountValue}
+        splitCount={splitCount}
+        splitTotal={splitTotal}
+        onPick={handlePickSplit}
       />
 
       <CategoryPickerDrawer
@@ -1117,6 +1092,78 @@ function VisibilitySelector({
         ) : null}
       </div>
     </div>
+  );
+}
+
+type SplitPickerDrawerProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** 나누기 기준 총액(splitBaseAmount). 0이면 아직 금액 미입력. */
+  baseAmount: number;
+  /** 금액칸 현재값 — 활성 칩 하이라이트에 쓴다. */
+  currentValue: number;
+  splitCount: number;
+  splitTotal: number | null;
+  /** (next, people) — SplitChips가 baseAmount/N과 선택 인원 N을 넘긴다. */
+  onPick: (next: number, people: number) => void;
+};
+
+// N명 나눠내기 인원 선택 nested drawer(공개범위 「부분」의 GroupPickerDrawer와 동일
+// DrawerNestedRoot 패턴). 칩을 누르면 즉시 적용하고 닫는다(단일 선택이라 버퍼/커밋
+// 불필요). 금액 미입력이면 안내만 띄운다.
+function SplitPickerDrawer({
+  open,
+  onOpenChange,
+  baseAmount,
+  currentValue,
+  splitCount,
+  splitTotal,
+  onPick,
+}: SplitPickerDrawerProps) {
+  return (
+    <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
+        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
+          <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
+            나눠서 냈어요
+          </DrawerTitle>
+          <DrawerDescription className="text-[13px] text-muted-foreground">
+            총액을 인원수로 나눠 내 몫만 기록해요. 총액·인원은 친구에게 보이지
+            않아요.
+          </DrawerDescription>
+        </DrawerHeader>
+
+        {baseAmount > 0 ? (
+          <div className="space-y-3">
+            <SplitChips
+              baseAmount={baseAmount}
+              currentValue={currentValue}
+              onPick={(next, people) => {
+                onPick(next, people);
+                onOpenChange(false);
+              }}
+            />
+            <p className="text-[13px] leading-snug text-muted-foreground">
+              {splitCount > 1 && splitTotal ? (
+                <>
+                  총 {formatNumber(splitTotal)}원을 {splitCount}명이 나눠서 · 내
+                  몫{" "}
+                  <span className="font-semibold text-foreground">
+                    {formatNumber(currentValue)}원
+                  </span>
+                </>
+              ) : (
+                "인원을 고르면 금액칸이 내 몫으로 바뀌어요."
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className="rounded-2xl bg-muted px-4 py-6 text-center text-[13px] text-muted-foreground">
+            먼저 금액을 입력한 뒤 인원을 나눠주세요.
+          </p>
+        )}
+      </DrawerContent>
+    </DrawerNestedRoot>
   );
 }
 
