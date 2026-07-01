@@ -264,6 +264,10 @@ export type Database = {
           category_id: string | null;
           spent_at: string;
           memo: string | null;
+          payment_method: string | null;
+          installment_id: string | null;
+          installment_seq: number | null;
+          installment_count: number | null;
           visibility: "all" | "groups" | "private";
           deleted_at: string | null;
           created_at: string;
@@ -276,6 +280,10 @@ export type Database = {
           category_id?: string | null;
           spent_at: string;
           memo?: string | null;
+          payment_method?: string | null;
+          installment_id?: string | null;
+          installment_seq?: number | null;
+          installment_count?: number | null;
           visibility?: "all" | "groups" | "private";
           deleted_at?: string | null;
           created_at?: string;
@@ -288,6 +296,10 @@ export type Database = {
           category_id?: string | null;
           spent_at?: string;
           memo?: string | null;
+          payment_method?: string | null;
+          installment_id?: string | null;
+          installment_seq?: number | null;
+          installment_count?: number | null;
           visibility?: "all" | "groups" | "private";
           deleted_at?: string | null;
           created_at?: string;
@@ -656,6 +668,7 @@ export type Database = {
           p_memo: string | null;
           p_visibility: "all" | "groups" | "private";
           p_group_ids: string[] | null;
+          p_payment_method?: string | null;
         };
         Returns: undefined;
       };
@@ -665,6 +678,24 @@ export type Database = {
           p_amount: number;
           p_category_id: string | null;
           p_spent_at: string;
+          p_memo: string | null;
+          p_visibility: "all" | "groups" | "private";
+          p_group_ids: string[] | null;
+          p_payment_method?: string | null;
+        };
+        Returns: undefined;
+      };
+      create_installment_transactions: {
+        Args: {
+          p_installment_id: string;
+          p_count: number;
+          p_rows: {
+            id: string;
+            amount: number;
+            spent_at: string;
+            seq: number;
+          }[];
+          p_category_id: string | null;
           p_memo: string | null;
           p_visibility: "all" | "groups" | "private";
           p_group_ids: string[] | null;

@@ -12,6 +12,8 @@ import {
 } from "@/lib/utils/category-icon";
 import { nowInSeoul } from "@/lib/utils/date";
 import { isValidPaymentDay } from "@/lib/utils/payment-day";
+import { isPaymentMethod, type PaymentMethod } from "@/lib/utils/payment-method";
+import { installmentSchedule } from "@/lib/utils/installment";
 
 export type TransactionActionResult =
   | { ok: true }
@@ -23,6 +25,10 @@ type SubmitInput = {
   categoryId: string | null;
   spentAt: string; // ISO date or ISO datetime
   memo?: string | null;
+  paymentMethod: PaymentMethod;
+  /** 할부 개월 수. undefined/1 = 일시불(단일 행). >=2 = 신용 할부(N 자식 행,
+   *  create 시에만 적용 — 편집에는 무시). */
+  installmentMonths?: number;
   visibility?: TransactionVisibility;
   groupIds?: string[] | null;
 };
@@ -83,6 +89,13 @@ export async function submitTransactionAction(
     return { ok: false, error: `메모는 ${MEMO_MAX_LENGTH}자까지 입력할 수 있어요.` };
   }
 
+  // 결제수단은 필수 — 폼이 항상 신용/체크 중 하나를 보내지만, 변조된 클라이언트가
+  // 빈 값/잘못된 값을 넣지 못하게 서버 경계에서 한 번 더 막는다.
+  if (!isPaymentMethod(input.paymentMethod)) {
+    return { ok: false, error: "결제수단을 선택해주세요." };
+  }
+  const paymentMethod = input.paymentMethod;
+
   const visibility: TransactionVisibility =
     input.visibility && VALID_VISIBILITIES.includes(input.visibility)
       ? input.visibility
@@ -118,9 +131,50 @@ export async function submitTransactionAction(
       p_memo: memo,
       p_visibility: visibility,
       p_group_ids: groupIds.length > 0 ? groupIds : null,
+      p_payment_method: paymentMethod,
     });
     if (error) return { ok: false, error: error.message };
   } else {
+    // 할부(installment): months>=2 이면 원금을 N회차 자식 행으로 펼쳐 한 RPC로
+    // 원자 생성한다. 신용 전용. (create 경로에서만 — 편집엔 할부 없음.)
+    const months = input.installmentMonths;
+    if (months != null && months >= 2) {
+      if (paymentMethod !== "credit") {
+        return { ok: false, error: "할부는 신용카드만 가능해요." };
+      }
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.spentAt);
+      if (!m) return { ok: false, error: "올바른 날짜를 입력해주세요." };
+      // 구매일을 로컬 벽시계 날짜로 파싱 → 스케줄이 매달 같은 day에 회차를 놓는다.
+      const firstDate = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      let schedule;
+      try {
+        schedule = installmentSchedule(input.amount, months, firstDate);
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "할부 계산 오류",
+        };
+      }
+      const rows = schedule.map((entry) => ({
+        id: randomUUID(),
+        amount: entry.amount,
+        spent_at: `${entry.spentAt}T00:00:00Z`,
+        seq: entry.seq,
+      }));
+      const { error } = await supabase.rpc("create_installment_transactions", {
+        p_installment_id: randomUUID(),
+        p_count: months,
+        p_rows: rows,
+        p_category_id: input.categoryId,
+        p_memo: memo,
+        p_visibility: visibility,
+        p_group_ids: groupIds.length > 0 ? groupIds : null,
+      });
+      if (error) return { ok: false, error: error.message };
+      revalidatePath("/dashboard");
+      return { ok: true };
+    }
+
     const id = randomUUID();
     const { error } = await supabase.rpc("create_transaction_with_visibility", {
       p_id: id,
@@ -130,6 +184,7 @@ export async function submitTransactionAction(
       p_memo: memo,
       p_visibility: visibility,
       p_group_ids: groupIds.length > 0 ? groupIds : null,
+      p_payment_method: paymentMethod,
     });
     if (error) return { ok: false, error: error.message };
   }
@@ -189,6 +244,11 @@ export async function searchTransactionsByMemoAction(
     .is("deleted_at", null)
     .not("memo", "is", null)
     .ilike("memo", pattern)
+    // Exclude future-dated rows — 할부(installment) materializes future 회차 that
+    // share the memo; without this bound they'd surface at the top (spent_at desc).
+    // nowInSeoul (not UTC now): spent_at is stored at KST-date midnight UTC, so a
+    // raw UTC now would drop today's rows during 00:00–09:00 KST on a UTC host.
+    .lte("spent_at", nowInSeoul().toISOString())
     .order("spent_at", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(SEARCH_LIMIT + 1);
@@ -238,12 +298,24 @@ export async function deleteTransactionAction(
 
   if (!id) return { ok: false, error: "삭제할 항목이 없어요." };
 
-  const { error } = await supabase
+  // 할부 자식이면 그룹 전체를 삭제한다(개별 회차 삭제는 합을 깨므로 불가 — v1은
+  // 전체 삭제만). 일반 거래는 단일 행. RLS로 user_id 펜스.
+  const { data: row } = await supabase
     .from("transactions")
-    .update({ deleted_at: new Date().toISOString() })
+    .select("installment_id")
     .eq("id", id)
     .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  const deletion = supabase
+    .from("transactions")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("user_id", user.id)
     .is("deleted_at", null);
+  const { error } = row?.installment_id
+    ? await deletion.eq("installment_id", row.installment_id)
+    : await deletion.eq("id", id);
 
   if (error) return { ok: false, error: error.message };
 

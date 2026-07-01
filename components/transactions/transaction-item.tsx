@@ -29,6 +29,7 @@ import { CategoryIcon } from "@/lib/utils/category-icon";
 import { cn } from "@/lib/utils";
 import { formatKRW } from "@/lib/utils/money";
 import type { TransactionVisibility } from "@/lib/queries/transactions";
+import type { PaymentMethod } from "@/lib/utils/payment-method";
 
 export type TransactionListRow = {
   id: string;
@@ -39,6 +40,10 @@ export type TransactionListRow = {
   category_color: string | null;
   spent_at: string;
   memo: string | null;
+  payment_method: PaymentMethod | null;
+  installment_id: string | null;
+  installment_seq: number | null;
+  installment_count: number | null;
   visibility: TransactionVisibility;
   visible_group_ids: string[];
 };
@@ -636,6 +641,11 @@ function TransactionSummary({
           <span className="truncate">
             {transaction.category_name ?? "기타"}
           </span>
+          {transaction.installment_count ? (
+            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+              {transaction.installment_seq}/{transaction.installment_count}회차
+            </span>
+          ) : null}
           {transaction.visibility === "private" ? (
             <Lock
               className="size-3 shrink-0 text-muted-foreground"
@@ -668,6 +678,10 @@ function toFormInitial(tx: TransactionListRow): TransactionFormInitial {
     category_id: tx.category_id,
     spent_at: tx.spent_at,
     memo: tx.memo,
+    payment_method: tx.payment_method,
+    installment_id: tx.installment_id,
+    installment_seq: tx.installment_seq,
+    installment_count: tx.installment_count,
     visibility: tx.visibility,
     visible_group_ids: tx.visible_group_ids,
   };
