@@ -54,7 +54,6 @@ import {
 } from "@/lib/utils/money";
 import type { TransactionVisibility } from "@/lib/queries/transactions";
 import {
-  PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
   isPaymentMethod,
   type PaymentMethod,
@@ -107,17 +106,18 @@ type VisibilityChoice = "all" | "groups" | "private";
 const MEMO_MAX_LENGTH = 100;
 
 // 'create' defaults the 결제수단 to the user's last-used method (persisted),
-// not a fixed value — a hard-coded default would bias the credit/check ratio
-// that /stats measures toward whatever we picked. Edit mode ignores this and
-// prefills from the row instead. Read lazily inside the (client-only) form body
-// initializer; the drawer body only mounts on open so there's no SSR subtree to
-// mismatch.
+// not a fixed value — persisting the last pick keeps the /stats credit/check
+// ratio honest for repeat users. The cold-start fallback (no saved value yet)
+// is 'debit' (체크): most everyday spending is on a check card, so it's the
+// safer neutral seed than credit. Edit mode ignores this and prefills from the
+// row instead. Read lazily inside the (client-only) form body initializer; the
+// drawer body only mounts on open so there's no SSR subtree to mismatch.
 const LAST_PAYMENT_METHOD_KEY = "tikkeul:last-payment-method";
 
 function readLastPaymentMethod(): PaymentMethod {
-  if (typeof window === "undefined") return "credit";
+  if (typeof window === "undefined") return "debit";
   const saved = window.localStorage.getItem(LAST_PAYMENT_METHOD_KEY);
-  return isPaymentMethod(saved) ? saved : "credit";
+  return isPaymentMethod(saved) ? saved : "debit";
 }
 
 type TransactionFormDialogProps = {
@@ -278,7 +278,7 @@ function TransactionFormBody({
   });
   const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() =>
-    initial ? (initial.payment_method ?? "credit") : readLastPaymentMethod(),
+    initial ? (initial.payment_method ?? "debit") : readLastPaymentMethod(),
   );
   // 할부 개월. 1 = 일시불(단일 행). >=2 = 신용 할부. Create 모드 + 신용일 때만
   // 노출되고, 체크로 바꾸면 1로 리셋된다.
@@ -852,27 +852,26 @@ type PaymentMethodSelectorProps = {
   onChange: (next: PaymentMethod) => void;
 };
 
-// 신용/체크 2-세그먼트 토글. VisibilitySelector의 세그먼트 스타일을 그대로 따른다
-// (radiogroup + rounded-full bg-muted pill). drawer 안이라 네이티브 select 대신
-// 버튼 토글을 쓴다 — 2지선다라 토글이 더 빠르고 portal 이슈도 없다.
+// 토글 표시 순서(체크→신용). cold-start 기본값이 체크라 좌측에 둔다. 집계용
+// PAYMENT_METHODS(credit→debit)와 분리 — /stats 버킷 순서는 건드리지 않는다.
+const PAYMENT_METHOD_TOGGLE_ORDER: readonly PaymentMethod[] = ["debit", "credit"];
+
+// 신용/체크 2-세그먼트 토글. 라벨 + 토글을 한 줄에 인라인으로 둔다(세로 압축 —
+// InstallmentSelector의 `flex items-center gap-3` + `ml-auto` 패턴과 동일). drawer
+// 안이라 네이티브 select 대신 버튼 토글 — 2지선다라 토글이 더 빠르고 portal 이슈도 없다.
 function PaymentMethodSelector({ value, onChange }: PaymentMethodSelectorProps) {
   return (
-    <div className="space-y-2 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <CreditCard
-          className="size-4 shrink-0 text-muted-foreground"
-          aria-hidden
-        />
-        <span className="text-xs font-medium text-muted-foreground">
-          결제수단
-        </span>
-      </div>
+    <div className="flex items-center gap-3 px-4 py-3">
+      <CreditCard className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="text-xs font-medium text-muted-foreground">결제수단</span>
       <div
         role="radiogroup"
         aria-label="결제수단"
-        className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1"
+        className="ml-auto inline-flex gap-1 rounded-full bg-muted p-1"
       >
-        {PAYMENT_METHODS.map((method) => {
+        {/* 토글 표시 순서만 체크→신용 (기본값 debit이 좌측). 집계용 전역
+            PAYMENT_METHODS 순서(credit→debit, /stats도 씀)는 그대로 둔다. */}
+        {PAYMENT_METHOD_TOGGLE_ORDER.map((method) => {
           const selected = method === value;
           return (
             <button
@@ -882,7 +881,7 @@ function PaymentMethodSelector({ value, onChange }: PaymentMethodSelectorProps) 
               aria-checked={selected}
               onClick={() => onChange(method)}
               className={cn(
-                "h-9 rounded-full text-[13px] font-medium transition-all duration-150 ease-out",
+                "h-8 rounded-full px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
                 "active:scale-[0.98]",
                 selected
                   ? "bg-primary text-primary-foreground shadow-sm"
