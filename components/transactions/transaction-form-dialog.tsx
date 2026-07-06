@@ -6,6 +6,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import {
   CalendarIcon,
   Check,
+  ChevronDown,
   ChevronRight,
   CreditCard,
   Layers,
@@ -41,7 +42,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
-import { SplitChips } from "@/components/fixed-expenses/split-chips";
+import { computeShare, SPLIT_MAX_PEOPLE } from "@/lib/utils/split";
 import { CategoryIcon } from "@/lib/utils/category-icon";
 import {
   CategoryPickerDrawer,
@@ -296,9 +297,6 @@ function TransactionFormBody({
       ? (initial.split_total ?? null)
       : null,
   );
-  // 나눠내기 인원 선택은 nested drawer(공개범위 「부분」의 GroupPickerDrawer와 동일
-  // 패턴)로 처리해 폼 세로 길이를 늘리지 않는다. 트리거 행만 폼에 남는다.
-  const [splitPickerOpen, setSplitPickerOpen] = useState(false);
   const [visibilityChoice, setVisibilityChoice] = useState<VisibilityChoice>(
     () => deriveInitialVisibilityChoice(initial),
   );
@@ -400,6 +398,13 @@ function TransactionFormBody({
   function handleQuickAdd(value: number) {
     setAmountText((prev) => formatNumber(parseAmountInput(prev) + value));
     setQuickHistory((prev) => [...prev, value]);
+    // 분할 상태에서 빠른 금액을 더하면 "총액/N=내 몫" 관계가 깨진다 — 분할 해제(더해진
+    // 값이 곧 새 금액). 수동 입력(handleAmountChange)과 동일 규칙. StrictMode 이중호출
+    // 방지 위해 updater 밖 평범한 set으로(1/null은 idempotent).
+    if (splitCount > 1) {
+      setSplitCount(1);
+      setSplitTotal(null);
+    }
   }
 
   function handleUndoQuickAdd() {
@@ -417,6 +422,10 @@ function TransactionFormBody({
   function handleClearAmount() {
     setAmountText("");
     setQuickHistory([]);
+    // X로 지우면 분할도 해제한다 — 안 그러면 금액칸은 비었는데 "총 X ÷ N명" 메타/캡션과
+    // select N이 그대로 남아 stale 상태가 된다(재현: 3명 분할 후 X). 무조건 초기화.
+    setSplitCount(1);
+    setSplitTotal(null);
   }
 
   function handleAmountChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -637,18 +646,17 @@ function TransactionFormBody({
             </button>
           ))}
         </div>
-        {/* N명 나눠내기(정산) 트리거. 금액을 쪼개는 동작이라 금액 카드 안에 인라인으로
-            두어 폼 세로를 아낀다(단독 섹션 제거). 인원 칩은 SplitPickerDrawer가 담당.
+        {/* N명 나눠내기(정산). 금액 카드 안 인라인 native select로 즉시 적용한다(nested
+            drawer·확정 버튼 없이 — 할부 개월 select와 동일 패턴 [[select-in-drawer-portal-fix]]).
+            select onChange → handlePickSplit → 히어로 숫자가 바로 내 몫으로 바뀐다. 나눈
+            총액은 splitBaseAmount가 보관하므로 인원을 다시 골라도 원래 총액 기준으로 재분할.
             할부와 상호배타 — 할부 켜지면 숨긴다. stopPropagation: 카드 전체가
-            focusAmountInput이라 탭이 새어나가면 안 된다. */}
+            focusAmountInput이라 탭이 select로 새어들어와도 금액 입력에 포커스가 안 튀게. */}
         {!installmentActive ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setSplitPickerOpen(true);
-            }}
-            className="flex w-full items-center gap-2 rounded-xl bg-card px-3 py-2.5 text-left text-[13px] transition-colors hover:bg-background active:scale-[0.99]"
+          <div
+            role="presentation"
+            onClick={(event) => event.stopPropagation()}
+            className="flex w-full items-center gap-2 rounded-xl bg-card px-3 py-2 text-[13px]"
           >
             <Users
               className="size-3.5 shrink-0 text-muted-foreground"
@@ -656,21 +664,40 @@ function TransactionFormBody({
             />
             {splitCount > 1 && splitTotal ? (
               <span className="min-w-0 flex-1 truncate font-medium">
-                {splitCount}명이 나눔 ·{" "}
-                <span className="text-muted-foreground">
-                  내 몫 {formatNumber(amountValue)}원
-                </span>
+                총 {formatNumber(splitTotal)}원 ÷ {splitCount}명
               </span>
             ) : (
               <span className="min-w-0 flex-1 truncate font-medium text-muted-foreground">
-                여러 명이 나눠 냈어요
+                나눠내기
               </span>
             )}
-            <ChevronRight
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-          </button>
+            {/* caret로 "열리는 컨트롤"임을 명시(appearance-none이라 native 화살표가
+                사라지므로 ChevronDown을 얹는다). 할부 select와 동일 처리. */}
+            <div className="relative shrink-0">
+              <select
+                aria-label="나눈 인원"
+                value={splitCount >= 2 ? splitCount : 1}
+                onChange={(event) => {
+                  const people = Number(event.target.value);
+                  handlePickSplit(computeShare(splitBaseAmount, people), people);
+                }}
+                className="appearance-none rounded-full bg-muted py-1.5 pl-3 pr-7 text-[13px] font-medium outline-none [-webkit-appearance:none]"
+              >
+                <option value={1}>안 나눔</option>
+                {Array.from({ length: SPLIT_MAX_PEOPLE - 1 }, (_, i) => i + 2).map(
+                  (n) => (
+                    <option key={n} value={n}>
+                      {n}명
+                    </option>
+                  ),
+                )}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+            </div>
+          </div>
         ) : null}
         </div>
       </div>
@@ -871,16 +898,6 @@ function TransactionFormBody({
         onChange={setSelectedGroupIds}
       />
 
-      <SplitPickerDrawer
-        open={splitPickerOpen}
-        onOpenChange={setSplitPickerOpen}
-        baseAmount={splitBaseAmount}
-        currentValue={amountValue}
-        splitCount={splitCount}
-        splitTotal={splitTotal}
-        onPick={handlePickSplit}
-      />
-
       <CategoryPickerDrawer
         open={categoryPickerOpen}
         onOpenChange={setCategoryPickerOpen}
@@ -975,18 +992,28 @@ function PaymentMethodSelector({
           <span className="shrink-0 pl-7 text-xs font-medium text-muted-foreground">
             할부
           </span>
-          <select
-            aria-label="할부 개월"
-            value={installmentMonths}
-            onChange={(event) => onInstallmentChange(Number(event.target.value))}
-            className="ml-auto appearance-none rounded-full bg-muted px-3 py-1.5 text-[13px] font-medium outline-none [-webkit-appearance:none]"
-          >
-            {INSTALLMENT_OPTIONS.map((m) => (
-              <option key={m} value={m}>
-                {m === 1 ? "일시불" : `${m}개월`}
-              </option>
-            ))}
-          </select>
+          {/* caret로 열리는 컨트롤임을 명시(appearance-none이 native 화살표를 지우므로).
+              나눈 인원 select와 동일 처리. */}
+          <div className="relative ml-auto">
+            <select
+              aria-label="할부 개월"
+              value={installmentMonths}
+              onChange={(event) =>
+                onInstallmentChange(Number(event.target.value))
+              }
+              className="appearance-none rounded-full bg-muted py-1.5 pl-3 pr-7 text-[13px] font-medium outline-none [-webkit-appearance:none]"
+            >
+              {INSTALLMENT_OPTIONS.map((m) => (
+                <option key={m} value={m}>
+                  {m === 1 ? "일시불" : `${m}개월`}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+          </div>
         </div>
       ) : null}
       {showInstallment && installmentMonths >= 2 && perMonth > 0 ? (
@@ -1105,78 +1132,6 @@ function VisibilitySelector({
         ) : null}
       </div>
     </div>
-  );
-}
-
-type SplitPickerDrawerProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** 나누기 기준 총액(splitBaseAmount). 0이면 아직 금액 미입력. */
-  baseAmount: number;
-  /** 금액칸 현재값 — 활성 칩 하이라이트에 쓴다. */
-  currentValue: number;
-  splitCount: number;
-  splitTotal: number | null;
-  /** (next, people) — SplitChips가 baseAmount/N과 선택 인원 N을 넘긴다. */
-  onPick: (next: number, people: number) => void;
-};
-
-// N명 나눠내기 인원 선택 nested drawer(공개범위 「부분」의 GroupPickerDrawer와 동일
-// DrawerNestedRoot 패턴). 칩을 누르면 즉시 적용하고 닫는다(단일 선택이라 버퍼/커밋
-// 불필요). 금액 미입력이면 안내만 띄운다.
-function SplitPickerDrawer({
-  open,
-  onOpenChange,
-  baseAmount,
-  currentValue,
-  splitCount,
-  splitTotal,
-  onPick,
-}: SplitPickerDrawerProps) {
-  return (
-    <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
-        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
-          <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
-            나눠서 냈어요
-          </DrawerTitle>
-          <DrawerDescription className="text-[13px] text-muted-foreground">
-            총액을 인원수로 나눠 내 몫만 기록해요. 총액·인원은 친구에게 보이지
-            않아요.
-          </DrawerDescription>
-        </DrawerHeader>
-
-        {baseAmount > 0 ? (
-          <div className="space-y-3">
-            <SplitChips
-              baseAmount={baseAmount}
-              currentValue={currentValue}
-              onPick={(next, people) => {
-                onPick(next, people);
-                onOpenChange(false);
-              }}
-            />
-            <p className="text-[13px] leading-snug text-muted-foreground">
-              {splitCount > 1 && splitTotal ? (
-                <>
-                  총 {formatNumber(splitTotal)}원을 {splitCount}명이 나눠서 · 내
-                  몫{" "}
-                  <span className="font-semibold text-foreground">
-                    {formatNumber(currentValue)}원
-                  </span>
-                </>
-              ) : (
-                "인원을 고르면 금액칸이 내 몫으로 바뀌어요."
-              )}
-            </p>
-          </div>
-        ) : (
-          <p className="rounded-2xl bg-muted px-4 py-6 text-center text-[13px] text-muted-foreground">
-            먼저 금액을 입력한 뒤 인원을 나눠주세요.
-          </p>
-        )}
-      </DrawerContent>
-    </DrawerNestedRoot>
   );
 }
 

@@ -4,13 +4,13 @@
 // 쿼리는 이 행을 일반 거래로 그대로 취급한다(할부 B1과 같은 철학 — 쿼리 무변경).
 //
 // 반올림 우수리(최대 people-1원)는 소비 인식 앱 특성상 무시한다(예산 정확도에
-// 영향 없음). 칩이 보여주는 1/N 금액과 기록되는 내 몫이 항상 일치하도록 SplitChips의
-// Math.round(baseAmount/n)과 동일한 식을 쓴다.
+// 영향 없음). 폼 select가 보여주는 1/N 미리보기 금액과 기록되는 내 몫이 항상 일치하도록
+// 미리보기·기록 모두 이 computeShare(총액/N round)를 쓴다.
 
 /** 나눌 수 있는 최소 인원(2명). 1명 = 나누지 않음(no-split). */
 export const SPLIT_MIN_PEOPLE = 2;
-/** 나눌 수 있는 최대 인원. 폼 칩(2~4명)과 DB CHECK가 공유하는 단일 소스. */
-export const SPLIT_MAX_PEOPLE = 4;
+/** 나눌 수 있는 최대 인원. 폼 select(2~10명)와 DB CHECK가 공유하는 단일 소스. */
+export const SPLIT_MAX_PEOPLE = 10;
 
 /** split_count로 유효한 값인지(2..SPLIT_MAX_PEOPLE 정수). null/1 등 no-split은 false. */
 export function isValidSplitCount(value: unknown): value is number {
