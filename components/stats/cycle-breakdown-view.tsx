@@ -1,6 +1,7 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { FixedCategoryBadge } from "@/lib/utils/fixed-category-icon";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
-import { PAYMENT_METHOD_SHORT_LABELS } from "@/lib/utils/payment-method";
 import type {
   FixedBreakdownRow,
   VariableBreakdownRow,
@@ -9,6 +10,7 @@ import type { PaymentSplit } from "@/lib/utils/stats/payment-split";
 import {
   DeltaBadge,
   SectionHeading,
+  SectionListCard,
   VariableSection,
 } from "@/components/stats/variable-section";
 
@@ -20,6 +22,11 @@ type CycleBreakdownViewProps = {
   variableRows: VariableBreakdownRow[];
   fixedRows: FixedBreakdownRow[];
   paymentSplit: PaymentSplit;
+  /** 이번 달 모으기액(저축+투자, 현재 사이클일 때만 > 0). 대시보드 「나간 돈」은 모으기를
+   *  포함하지만 /stats 총액은 「총 소비」(고정+변동)라 모으기가 빠진다 — 그 괴리를
+   *  히어로에 명시한다. 코드 식별자는 savings_plans/thisMonthSaved 도메인을 따르지만
+   *  사용자 카피는 브랜드어 「모으기」로 통일(저축은 투자를 배제하는 좁은 말). */
+  savingsExcluded?: number;
 };
 
 /**
@@ -36,6 +43,7 @@ export function CycleBreakdownView({
   variableRows,
   fixedRows,
   paymentSplit,
+  savingsExcluded = 0,
 }: CycleBreakdownViewProps) {
   const isEmpty =
     grandTotal === 0 && variableRows.length === 0 && fixedRows.length === 0;
@@ -45,26 +53,34 @@ export function CycleBreakdownView({
 
   return (
     <div className="space-y-6">
-      {/* 상단 총 소비 — 대시보드 '쓴 돈'과 정확히 같은 값. */}
-      <div className="space-y-1.5">
-        <p className="text-sm font-medium text-muted-foreground">
-          {cycleLabel} 총 소비
-        </p>
-        <p
-          key={cycleLabel}
-          className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
-        >
-          {formatNumber(grandTotal)}
-          <span className="ml-1 text-xl font-semibold text-muted-foreground">
-            원
-          </span>
-        </p>
-        {!isEmpty ? (
-          <p className="text-[13px] text-muted-foreground">
-            변동 {formatKRW(variableTotal)} · 고정 {formatKRW(fixedTotal)}
+      {/* 상단 총 소비 — 대시보드 '쓴 돈'과 정확히 같은 값. 대시보드 SpendingSummary
+          히어로와 같은 카드 셸(진행바만 없음). */}
+      <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
+        <CardContent className="space-y-1.5 px-6 py-4">
+          <p className="text-sm font-medium text-muted-foreground">
+            {cycleLabel} 총 소비
           </p>
-        ) : null}
-      </div>
+          <p
+            key={cycleLabel}
+            className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums animate-in fade-in duration-200"
+          >
+            {formatNumber(grandTotal)}
+            <span className="ml-1 text-xl font-semibold text-muted-foreground">
+              원
+            </span>
+          </p>
+          {!isEmpty ? (
+            <p className="text-[13px] text-muted-foreground">
+              변동 {formatKRW(variableTotal)} · 고정 {formatKRW(fixedTotal)}
+            </p>
+          ) : null}
+          {savingsExcluded > 0 ? (
+            <p className="text-[12px] text-muted-foreground/80">
+              모으기 {formatKRW(savingsExcluded)}은 소비가 아니라 따로 빠져요
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {isEmpty ? (
         <p className="rounded-2xl border border-dashed border-border bg-card/50 px-4 py-10 text-center text-sm text-muted-foreground">
@@ -76,23 +92,32 @@ export function CycleBreakdownView({
         <VariableSection
           variableRows={variableRows}
           variableTotal={variableTotal}
+          paymentSplit={showPaymentSplit ? paymentSplit : null}
         />
       ) : null}
 
-      {showPaymentSplit ? <PaymentSplitSection split={paymentSplit} /> : null}
-
-      {variableRows.length > 0 && fixedRows.length > 0 ? (
-        <hr aria-hidden className="border-border" />
-      ) : null}
-
       {fixedRows.length > 0 ? (
-        <section className="space-y-1">
-          <SectionHeading title="고정지출" total={fixedTotal} />
-          <ul>
-            {fixedRows.map((row) => (
-              <FixedRow key={row.id} row={row} />
-            ))}
-          </ul>
+        <section className="space-y-3">
+          <SectionHeading
+            title="고정지출"
+            total={fixedTotal}
+            hint={
+              fixedRows.some((r) => r.delta != null && r.delta !== 0)
+                ? "↑↓ 직전 주기 대비"
+                : undefined
+            }
+          />
+          <SectionListCard>
+            <ul>
+              {fixedRows.map((row, i) => (
+                <FixedRow
+                  key={row.id}
+                  row={row}
+                  groupBreak={i > 0 && row.category !== fixedRows[i - 1].category}
+                />
+              ))}
+            </ul>
+          </SectionListCard>
         </section>
       ) : null}
     </div>
@@ -105,10 +130,24 @@ export function CycleBreakdownView({
  * 이름/금액 centering에 영향 없음 — delta 위치는 추후 재검토. 아이콘(40px)이 최대
  * 높이라 행 높이는 통일.
  */
-function FixedRow({ row }: { row: FixedBreakdownRow }) {
+function FixedRow({
+  row,
+  groupBreak = false,
+}: {
+  row: FixedBreakdownRow;
+  /** 앞 행과 카탈로그 그룹(`category`)이 바뀌는 경계 — 소제목 없이(§12.9 line 1238)
+   *  hairline 구분선으로 그룹을 가른다(line 1246이 구분선 허용). 같은 fallback 아이콘이
+   *  연속돼 정렬이 버그처럼 읽히는 것을 막는다. */
+  groupBreak?: boolean;
+}) {
   const showDelta = row.delta != null && row.delta !== 0;
   return (
-    <li className="flex items-center gap-3 px-1 py-2">
+    <li
+      className={cn(
+        "flex items-center gap-3 px-1 py-2",
+        groupBreak && "mt-1.5 border-t border-dashed border-border/70 pt-3.5",
+      )}
+    >
       <FixedCategoryBadge category={row.category} />
       <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
         <div className="min-w-0">
@@ -135,39 +174,3 @@ function FixedRow({ row }: { row: FixedBreakdownRow }) {
   );
 }
 
-/**
- * 결제수단 split — 변동지출을 신용/체크/미지정으로 나눈다. 분모는 변동 총액(고정은
- * 결제수단이 없음)이라 SectionHeading total === variableTotal이고, "변동지출 기준"
- * 캡션으로 분모를 명시한다. 차트 없이 % + 금액 행만(§12.9 변동 섹션과 동일한
- * 미니멀 스타일, 막대 없음).
- */
-function PaymentSplitSection({ split }: { split: PaymentSplit }) {
-  return (
-    <section className="space-y-1">
-      <SectionHeading title="결제수단" total={split.total} />
-      <p className="px-1 text-[12px] text-muted-foreground">변동지출 기준</p>
-      <ul>
-        {split.rows.map((row) => (
-          <li
-            key={row.method}
-            className="flex items-center justify-between gap-3 px-1 py-2"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-[15px] font-medium">
-                {row.method === "unknown"
-                  ? "미지정"
-                  : PAYMENT_METHOD_SHORT_LABELS[row.method]}
-              </span>
-              <span className="text-[13px] tabular-nums text-muted-foreground">
-                {Math.round(row.share)}%
-              </span>
-            </div>
-            <span className="shrink-0 text-[15px] font-semibold tabular-nums">
-              {formatNumber(row.total)}원
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}

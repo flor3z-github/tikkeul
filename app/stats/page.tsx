@@ -15,6 +15,7 @@ import {
   resolveDashboardParamsB,
   type PayrollRule,
 } from "@/lib/utils/payday-cycle";
+import { thisMonthSaved, type SavingsPlanRow } from "@/lib/utils/savings";
 import {
   aggregateVariableByCategory,
   fixedTotal,
@@ -125,7 +126,14 @@ export default async function StatsPage({
   const prevStartIso = prevCycle.start.toISOString();
   const prevEndIso = prevCycle.end.toISOString();
 
-  const [monthlyResult, fixedRes, prevMonthly, prevFixedRes] =
+  // 보고 있는 주기가 지금 살고 있는 주기인지 — 전월比 클램프(아래)와 저축 노출을 모두
+  // 게이트한다. 완료된 과거 주기는 전월比를 전체 vs 전체로 비교하고, 저축(이번 달 흐름)도
+  // 띄우지 않는다(과거 주기의 저축 문구는 의미가 없음).
+  const isLiveCycle =
+    now.getTime() >= cycleStart.getTime() &&
+    now.getTime() < cycleEnd.getTime();
+
+  const [monthlyResult, fixedRes, prevMonthly, prevFixedRes, savingsRes] =
     await Promise.all([
       getMonthlyTransactions(viewerId, startIso, endIso),
       supabase.rpc("get_fixed_effective_items", {
@@ -137,6 +145,17 @@ export default async function StatsPage({
         target: viewerId,
         cycle_anchor: prevCycle.anchorYm,
       }),
+      // 저축은 대시보드와 동일하게 현재 사이클에서만 노출(§12.6) — /stats 총 소비(고정+변동)
+      // 와 대시보드 「나간 돈」(+저축)의 괴리를 히어로에 설명하기 위한 값.
+      isLiveCycle
+        ? supabase
+            .from("savings_plans")
+            .select(
+              "id, name, amount, payment_day, start_date, opening_balance, goal_amount, maturity_date, is_active",
+            )
+            .eq("user_id", viewerId)
+            .eq("is_active", true)
+        : Promise.resolve(null),
     ]);
 
   const backToDashboard = (
@@ -178,11 +197,6 @@ export default async function StatsPage({
   // per-row deltas then naturally hide unchanged/new items.
   const hasPrevBaseline =
     prevMonthly.ok && prevMonthly.transactions.length > 0;
-  // 보고 있는 주기가 지금 살고 있는 주기인지. 완료된 과거 주기면 전월比 클램프를
-  // 끄고 전체 vs 전체로 비교한다(아래).
-  const isLiveCycle =
-    now.getTime() >= cycleStart.getTime() &&
-    now.getTime() < cycleEnd.getTime();
   // 변동 전월比 컷오프는 보고 있는 주기가 진행 중일 때만 적용한다(§12.9): 진행 중인
   // 주기는 "지금까지" 쓴 부분합인데 직전은 완료된 전체합이라, 직전 변동을 이번 주기가
   // 지난 경과 시간만큼만 잘라 같은 시점끼리 비교한다(고정은 결제일 step이라 자르지
@@ -212,6 +226,13 @@ export default async function StatsPage({
       ? mapFixedRpcRows(prevFixedRes.data)
       : undefined;
 
+  // 이번 달 모으기액(저축+투자) — 대시보드 「나간 돈」이 접는 값과 같은 산식
+  // (thisMonthSaved). 현재 사이클이 아니면 savingsRes=null이라 0 → 히어로 문구가 안 뜬다.
+  const savingsExcluded =
+    savingsRes?.data != null
+      ? thisMonthSaved(savingsRes.data as SavingsPlanRow[], now)
+      : 0;
+
   return (
     <AppShell>
       {backToDashboard}
@@ -223,6 +244,7 @@ export default async function StatsPage({
         variableRows={aggregateVariableByCategory(transactions, prevTransactions)}
         fixedRows={mapFixedItems(fixedItems, prevFixedItems)}
         paymentSplit={aggregatePaymentSplit(transactions)}
+        savingsExcluded={savingsExcluded}
       />
     </AppShell>
   );
