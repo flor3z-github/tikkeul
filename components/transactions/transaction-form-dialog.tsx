@@ -571,9 +571,6 @@ function TransactionFormBody({
   return (
     <form onSubmit={handleSubmit} className="space-y-4 pt-4">
       <div className="space-y-2">
-        <label className="block px-1 text-sm font-medium text-muted-foreground">
-          지출 금액
-        </label>
         <div
           role="presentation"
           onClick={focusAmountInput}
@@ -640,37 +637,43 @@ function TransactionFormBody({
             </button>
           ))}
         </div>
+        {/* N명 나눠내기(정산) 트리거. 금액을 쪼개는 동작이라 금액 카드 안에 인라인으로
+            두어 폼 세로를 아낀다(단독 섹션 제거). 인원 칩은 SplitPickerDrawer가 담당.
+            할부와 상호배타 — 할부 켜지면 숨긴다. stopPropagation: 카드 전체가
+            focusAmountInput이라 탭이 새어나가면 안 된다. */}
+        {!installmentActive ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSplitPickerOpen(true);
+            }}
+            className="flex w-full items-center gap-2 rounded-xl bg-card px-3 py-2.5 text-left text-[13px] transition-colors hover:bg-background active:scale-[0.99]"
+          >
+            <Users
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            {splitCount > 1 && splitTotal ? (
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {splitCount}명이 나눔 ·{" "}
+                <span className="text-muted-foreground">
+                  내 몫 {formatNumber(amountValue)}원
+                </span>
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 truncate font-medium text-muted-foreground">
+                여러 명이 나눠 냈어요
+              </span>
+            )}
+            <ChevronRight
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+          </button>
+        ) : null}
         </div>
       </div>
-
-      {/* N명 나눠내기(정산). 폼 세로를 늘리지 않도록 한 줄 트리거 행만 두고, 인원 칩은
-          nested drawer(공개범위 「부분」의 GroupPickerDrawer와 동일 패턴)로 뺀다. 할부와는
-          상호배타라 할부가 켜진 동안엔 행 자체를 숨긴다. */}
-      {!installmentActive ? (
-        <button
-          type="button"
-          onClick={() => setSplitPickerOpen(true)}
-          className="flex h-14 w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 text-left transition-colors hover:bg-muted/60 active:scale-[0.99]"
-        >
-          <Users className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          {splitCount > 1 && splitTotal ? (
-            <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
-              {splitCount}명이 나눔 ·{" "}
-              <span className="text-muted-foreground">
-                내 몫 {formatNumber(amountValue)}원
-              </span>
-            </span>
-          ) : (
-            <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-muted-foreground">
-              여러 명이 나눠 냈어요
-            </span>
-          )}
-          <ChevronRight
-            className="size-4 shrink-0 text-muted-foreground"
-            aria-hidden
-          />
-        </button>
-      ) : null}
 
       <div className="space-y-2">
         <label className="block px-1 text-xs font-medium text-muted-foreground">
@@ -724,15 +727,13 @@ function TransactionFormBody({
             // 체크는 할부 불가 — 일시불로 리셋.
             if (next !== "credit") setInstallmentMonths(1);
           }}
+          showInstallment={
+            mode === "create" && paymentMethod === "credit" && splitCount === 1
+          }
+          installmentMonths={installmentMonths}
+          onInstallmentChange={setInstallmentMonths}
+          principal={amountValue}
         />
-
-        {mode === "create" && paymentMethod === "credit" && splitCount === 1 ? (
-          <InstallmentSelector
-            months={installmentMonths}
-            onChange={setInstallmentMonths}
-            principal={amountValue}
-          />
-        ) : null}
 
         <div className="flex items-center gap-3 px-4">
           <Pencil className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -894,95 +895,106 @@ function TransactionFormBody({
 
 const INSTALLMENT_OPTIONS = [1, 2, 3, 4, 5, 6, 9, 12, 18, 24, 36];
 
-type InstallmentSelectorProps = {
-  months: number;
-  onChange: (months: number) => void;
-  /** 원금 총액 — 월 부담 힌트 계산용. */
-  principal: number;
-};
-
-// 할부 개월 선택(create + 신용일 때만). native <select>로 통일(drawer 안 base-ui
-// Select 금지 — [[select-in-drawer-portal-fix]]). 월 부담 힌트로 금액이 총 원금임을 명시.
-function InstallmentSelector({
-  months,
-  onChange,
-  principal,
-}: InstallmentSelectorProps) {
-  const perMonth =
-    months >= 2 && principal >= months ? Math.floor(principal / months) : 0;
-  return (
-    <div className="space-y-2 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <Layers className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="text-xs font-medium text-muted-foreground">할부</span>
-        <select
-          aria-label="할부 개월"
-          value={months}
-          onChange={(event) => onChange(Number(event.target.value))}
-          className="ml-auto appearance-none rounded-full bg-muted px-3 py-1.5 text-[13px] font-medium outline-none [-webkit-appearance:none]"
-        >
-          {INSTALLMENT_OPTIONS.map((m) => (
-            <option key={m} value={m}>
-              {m === 1 ? "일시불" : `${m}개월`}
-            </option>
-          ))}
-        </select>
-      </div>
-      {months >= 2 && perMonth > 0 ? (
-        <p className="text-[12px] leading-snug text-muted-foreground">
-          월 약 {formatNumber(perMonth)}원 × {months}개월 (첫 회차에 우수리 포함)
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 type PaymentMethodSelectorProps = {
   value: PaymentMethod;
   onChange: (next: PaymentMethod) => void;
+  /** create + 신용 + 비분할일 때만 할부 select를 이 행에 노출. */
+  showInstallment: boolean;
+  installmentMonths: number;
+  onInstallmentChange: (months: number) => void;
+  /** 원금 총액 — 월 부담 힌트 계산용. */
+  principal: number;
 };
 
 // 토글 표시 순서(체크→신용). cold-start 기본값이 체크라 좌측에 둔다. 집계용
 // PAYMENT_METHODS(credit→debit)와 분리 — /stats 버킷 순서는 건드리지 않는다.
 const PAYMENT_METHOD_TOGGLE_ORDER: readonly PaymentMethod[] = ["debit", "credit"];
 
-// 신용/체크 2-세그먼트 토글. 라벨 + 토글을 한 줄에 인라인으로 둔다(세로 압축 —
-// InstallmentSelector의 `flex items-center gap-3` + `ml-auto` 패턴과 동일). drawer
-// 안이라 네이티브 select 대신 버튼 토글 — 2지선다라 토글이 더 빠르고 portal 이슈도 없다.
-function PaymentMethodSelector({ value, onChange }: PaymentMethodSelectorProps) {
+// 결제수단 2-세그먼트 토글 + (신용일 때) 할부 select를 한 행에 합쳐 세로를 아낀다
+// (할부를 별도 행으로 두지 않는다). 결제수단은 2지선다라 버튼 토글이 빠르고, 할부는
+// 옵션이 많아 네이티브 <select>(drawer 안 base-ui Select 금지 — [[select-in-drawer-portal-fix]]).
+// 월 부담 힌트는 금액이 총 원금임을 알리려고 행 아래 조건부로 붙인다.
+function PaymentMethodSelector({
+  value,
+  onChange,
+  showInstallment,
+  installmentMonths,
+  onInstallmentChange,
+  principal,
+}: PaymentMethodSelectorProps) {
+  const perMonth =
+    installmentMonths >= 2 && principal >= installmentMonths
+      ? Math.floor(principal / installmentMonths)
+      : 0;
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <CreditCard className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="text-xs font-medium text-muted-foreground">결제수단</span>
-      <div
-        role="radiogroup"
-        aria-label="결제수단"
-        className="ml-auto inline-flex gap-1 rounded-full bg-muted p-1"
-      >
-        {/* 토글 표시 순서만 체크→신용 (기본값 debit이 좌측). 집계용 전역
-            PAYMENT_METHODS 순서(credit→debit, /stats도 씀)는 그대로 둔다. */}
-        {PAYMENT_METHOD_TOGGLE_ORDER.map((method) => {
-          const selected = method === value;
-          return (
-            <button
-              key={method}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange(method)}
-              className={cn(
-                "h-8 rounded-full px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
-                "active:scale-[0.98]",
-                selected
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-background",
-              )}
-            >
-              {PAYMENT_METHOD_LABELS[method]}
-            </button>
-          );
-        })}
+    <div className="space-y-2 px-4 py-3">
+      <div className="flex items-center gap-3">
+        <CreditCard
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">
+          결제수단
+        </span>
+        <div
+          role="radiogroup"
+          aria-label="결제수단"
+          className="ml-auto inline-flex gap-1 rounded-full bg-muted p-1"
+        >
+          {/* 토글 표시 순서만 체크→신용 (기본값 debit이 좌측). 집계용 전역
+              PAYMENT_METHODS 순서(credit→debit, /stats도 씀)는 그대로 둔다. */}
+          {PAYMENT_METHOD_TOGGLE_ORDER.map((method) => {
+            const selected = method === value;
+            return (
+              <button
+                key={method}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => onChange(method)}
+                className={cn(
+                  "h-8 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
+                  "active:scale-[0.98]",
+                  selected
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-background",
+                )}
+              >
+                {PAYMENT_METHOD_LABELS[method]}
+              </button>
+            );
+          })}
+        </div>
       </div>
+      {/* 할부는 신용일 때만. 결제수단 토글과 같은 셀 안 둘째 줄에 둔다 — 좁은 폭
+          (360px, iPhone SE 375px)에서 라벨+토글+select 3요소를 한 줄에 넣으면
+          줄바꿈되기 때문. 체크(기본·대다수)는 이 줄이 없어 여전히 1줄이다. pl-7은
+          아이콘(16)+gap(12)=28px라 「결제수단」 라벨과 세로 정렬을 맞춘다. */}
+      {showInstallment ? (
+        <div className="flex items-center gap-3">
+          <span className="shrink-0 pl-7 text-xs font-medium text-muted-foreground">
+            할부
+          </span>
+          <select
+            aria-label="할부 개월"
+            value={installmentMonths}
+            onChange={(event) => onInstallmentChange(Number(event.target.value))}
+            className="ml-auto appearance-none rounded-full bg-muted px-3 py-1.5 text-[13px] font-medium outline-none [-webkit-appearance:none]"
+          >
+            {INSTALLMENT_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {m === 1 ? "일시불" : `${m}개월`}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {showInstallment && installmentMonths >= 2 && perMonth > 0 ? (
+        <p className="pl-7 text-[12px] leading-snug text-muted-foreground">
+          월 약 {formatNumber(perMonth)}원 × {installmentMonths}개월 (첫 회차에
+          우수리 포함)
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1021,47 +1033,48 @@ function VisibilitySelector({
 
   return (
     <div className="space-y-2 px-4 py-3">
+      {/* 세로 압축: 아이콘+라벨과 세그먼트를 한 행에 둔다(결제수단 행과 동일 인라인
+          패턴). 세그먼트는 우측 정렬 pill. 설명줄은 아래 유지 — 비공개=합계 제외,
+          부분=그룹 선택 안내는 프라이버시상 중요해 숨기지 않는다. */}
       <div className="flex items-center gap-3">
-        <Users
-          className="size-4 shrink-0 text-muted-foreground"
-          aria-hidden
-        />
+        <Users className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="text-xs font-medium text-muted-foreground">
           공개 범위
         </span>
-      </div>
-      <div
-        role="radiogroup"
-        aria-label="공개 범위"
-        className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1"
-      >
-        {VISIBILITY_SEGMENTS.map((segment) => {
-          const selected = segment.value === value;
-          const disabled = segment.value === "groups" && !groupsAvailable;
-          return (
-            <button
-              key={segment.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              disabled={disabled}
-              onClick={() => {
-                if (disabled) return;
-                onChange(segment.value);
-              }}
-              className={cn(
-                "h-9 rounded-full text-[13px] font-medium transition-all duration-150 ease-out",
-                "active:scale-[0.98]",
-                selected
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-background",
-                disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
-              )}
-            >
-              {segment.label}
-            </button>
-          );
-        })}
+        <div
+          role="radiogroup"
+          aria-label="공개 범위"
+          className="ml-auto inline-flex gap-1 rounded-full bg-muted p-1"
+        >
+          {VISIBILITY_SEGMENTS.map((segment) => {
+            const selected = segment.value === value;
+            const disabled = segment.value === "groups" && !groupsAvailable;
+            return (
+              <button
+                key={segment.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={disabled}
+                onClick={() => {
+                  if (disabled) return;
+                  onChange(segment.value);
+                }}
+                className={cn(
+                  "h-8 rounded-full px-3 text-[13px] font-medium transition-all duration-150 ease-out",
+                  "active:scale-[0.98]",
+                  selected
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-background",
+                  disabled &&
+                    "cursor-not-allowed opacity-50 hover:bg-transparent",
+                )}
+              >
+                {segment.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="flex items-center justify-between gap-2">
         <p className="text-[12px] leading-snug text-muted-foreground">
