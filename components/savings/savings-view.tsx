@@ -6,14 +6,13 @@ import { Plus, Sprout } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useStableNonNull } from "@/components/ui/bottom-sheet";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
-import { formatPaymentDay } from "@/lib/utils/payment-day";
 import {
-  accruedAmount,
-  isGoalType,
-  progressPct,
+  comparePaymentDayUpcoming,
+  formatPaymentDay,
+} from "@/lib/utils/payment-day";
+import {
   remainingLabel,
   thisMonthSaved,
-  yearSaved,
   type SavingsPlanRow,
 } from "@/lib/utils/savings";
 import { SavingsFormSheet } from "./savings-form-sheet";
@@ -27,11 +26,11 @@ type SavingsViewProps = {
 export function SavingsView({ plans, nowISO }: SavingsViewProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<SavingsPlanRow | null>(null);
-  // Retain the last item so the edit sheet keeps its title/fields during vaul's
-  // close animation (BottomSheet always renders children — see its JSDoc).
+  // Retain the last item so the edit sheet keeps its fields during vaul's close
+  // animation (BottomSheet always renders children — see its JSDoc).
   const stableEdit = useStableNonNull(editItem);
 
-  // Reconstruct `now` from date components so accrual matches the server's KST
+  // Reconstruct `now` from date components so labels match the server's KST
   // reading regardless of the browser timezone (no `new Date(nowISO)` UTC drift).
   const now = useMemo(() => {
     const [y, m, d] = nowISO.split("-").map(Number);
@@ -39,22 +38,33 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
   }, [nowISO]);
 
   const active = useMemo(() => plans.filter((p) => p.is_active), [plans]);
-  const freeItems = useMemo(() => active.filter((p) => !isGoalType(p)), [active]);
-  const goalItems = useMemo(() => active.filter((p) => isGoalType(p)), [active]);
+
+  // Sorted by upcoming 적립일 (fixed-expenses parity). No payment_day → amount desc.
+  const sorted = useMemo(() => {
+    return [...active].sort((a, b) => {
+      const cmp = comparePaymentDayUpcoming(now, a.payment_day, b.payment_day);
+      if (cmp !== 0) return cmp;
+      return (b.amount ?? 0) - (a.amount ?? 0);
+    });
+  }, [active, now]);
 
   const monthSaved = useMemo(() => thisMonthSaved(active, now), [active, now]);
-  const totalYearSaved = useMemo(() => yearSaved(active, now), [active, now]);
-
   const isEmpty = active.length === 0;
 
   return (
     <>
-      {/* HERO — this month's contribution + year-to-date. */}
+      {/* HERO — this month's contribution + item count. */}
       <Card className="rounded-3xl border-black/[0.08] bg-card shadow-none dark:border-white/[0.10]">
         <CardContent className="p-6">
-          <p className="text-sm font-medium text-muted-foreground">
-            매달 모으는 돈
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-muted-foreground">
+              매달 모으는 돈
+            </p>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground tabular-nums">
+              <span aria-hidden className="size-1.5 rounded-full bg-primary" />총{" "}
+              {active.length}개 항목
+            </span>
+          </div>
           <p className="mt-2 flex items-baseline gap-1">
             <span className="text-[40px] font-bold leading-none tracking-[-0.045em] tabular-nums">
               {formatNumber(monthSaved)}
@@ -68,14 +78,6 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
             </span>
             이에요
           </p>
-          <div className="mt-5 flex items-center justify-between rounded-2xl bg-primary/10 px-4 py-3.5">
-            <span className="text-[12.5px] font-semibold text-primary">
-              올해 모은 돈
-            </span>
-            <span className="text-[17px] font-bold tabular-nums">
-              {formatKRW(totalYearSaved)}
-            </span>
-          </div>
         </CardContent>
       </Card>
 
@@ -88,9 +90,9 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
             아직 모으는 항목이 없어요
           </p>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-            적금·투자·목표를 추가하면
+            적금·투자를 추가하면
             <br />
-            매달 모이는 돈을 한눈에 볼 수 있어요.
+            매달 모으는 돈을 한눈에 볼 수 있어요.
           </p>
           <button
             type="button"
@@ -101,28 +103,25 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
             <span className="text-[14px] font-semibold">첫 항목 추가하기</span>
           </button>
         </div>
-      ) : null}
-
-      {/* 섹션 A — 투자·자유 적립 (no goal / no maturity → numbers only). */}
-      {freeItems.length > 0 ? (
+      ) : (
         <section className="mt-6 space-y-3">
           <div className="flex items-baseline justify-between px-1">
             <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
-              투자·자유 적립{" "}
+              모으는 중{" "}
               <span className="font-medium tabular-nums text-muted-foreground/70">
-                {freeItems.length}
+                {active.length}
               </span>
             </h2>
             <span className="text-[12.5px] font-medium text-muted-foreground">
-              만기 없이 모으는 중
+              적립일 순
             </span>
           </div>
           <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
             <CardContent className="p-2">
               <ul className="space-y-0.5">
-                {freeItems.map((item) => (
+                {sorted.map((item) => (
                   <li key={item.id}>
-                    <FreeRow
+                    <SavingsRow
                       item={item}
                       now={now}
                       onClick={() => setEditItem(item)}
@@ -133,39 +132,7 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
             </CardContent>
           </Card>
         </section>
-      ) : null}
-
-      {/* 섹션 B — 달성형 목표 (goal or maturity → progress bar). */}
-      {goalItems.length > 0 ? (
-        <section className="mt-6 space-y-3">
-          <div className="flex items-baseline justify-between px-1">
-            <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
-              달성형 목표{" "}
-              <span className="font-medium tabular-nums text-muted-foreground/70">
-                {goalItems.length}
-              </span>
-            </h2>
-            <span className="text-[12.5px] font-medium text-muted-foreground">
-              목표까지 진행률
-            </span>
-          </div>
-          <Card className="rounded-3xl border-black/[0.08] bg-card py-2 shadow-none dark:border-white/[0.10]">
-            <CardContent className="p-2">
-              <ul className="space-y-0.5">
-                {goalItems.map((item) => (
-                  <li key={item.id}>
-                    <GoalRow
-                      item={item}
-                      now={now}
-                      onClick={() => setEditItem(item)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
+      )}
 
       {/* FAB — add a savings plan. */}
       <button
@@ -196,14 +163,7 @@ function metaLabel(item: SavingsPlanRow): string {
   return day ? `매월 ${day}` : "적립일 미정";
 }
 
-// 'YYYY-MM-DD' → 'Y.M.D' (leading zeros dropped). Parsed by split, NOT
-// `new Date(string)`, so it stays on the KST wall-clock day (no UTC drift).
-function formatDotDate(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return `${y}.${m}.${d}`;
-}
-
-function FreeRow({
+function SavingsRow({
   item,
   now,
   onClick,
@@ -212,8 +172,9 @@ function FreeRow({
   now: Date;
   onClick: () => void;
 }) {
-  const monthly = item.amount ?? 0;
-  const accrued = accruedAmount(item, now);
+  const maturity = remainingLabel(item, now);
+  const metaParts = [metaLabel(item)];
+  if (maturity) metaParts.push(maturity);
   return (
     <button
       type="button"
@@ -225,9 +186,7 @@ function FreeRow({
           {item.name}
         </p>
         <p className="mt-0.5 truncate text-[12px] leading-tight text-muted-foreground">
-          {accrued > 0
-            ? `${metaLabel(item)} · 모은 돈 ${formatKRW(accrued)}`
-            : `${metaLabel(item)} · 만기 없음`}
+          {metaParts.join(" · ")}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end leading-tight">
@@ -238,88 +197,9 @@ function FreeRow({
               : "text-[15px] font-semibold tabular-nums"
           }
         >
-          {item.amount == null ? "금액 미입력" : formatKRW(monthly)}
+          {item.amount == null ? "금액 미입력" : formatKRW(item.amount)}
         </span>
       </div>
-    </button>
-  );
-}
-
-function GoalRow({
-  item,
-  now,
-  onClick,
-}: {
-  item: SavingsPlanRow;
-  now: Date;
-  onClick: () => void;
-}) {
-  const pct = progressPct(item, now);
-  const remaining = remainingLabel(item, now);
-  const current = accruedAmount(item, now);
-  const monthly = item.amount ?? 0;
-  const metaParts = [metaLabel(item)];
-  if (item.amount != null) metaParts.push(`${formatNumber(monthly)}원 적립`);
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full flex-col rounded-2xl px-3 py-3 text-left transition-colors hover:bg-muted active:bg-muted"
-    >
-      <div className="flex w-full items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-medium leading-tight">
-            {item.name}
-          </p>
-          <p className="mt-0.5 truncate text-[12px] leading-tight text-muted-foreground">
-            {metaParts.join(" · ")}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end leading-tight">
-          {pct != null ? (
-            <span className="text-[12.5px] font-bold tabular-nums text-primary">
-              {pct}%
-            </span>
-          ) : null}
-          {remaining ? (
-            <span className="mt-0.5 text-[10.5px] font-medium text-muted-foreground">
-              {remaining}
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      {pct != null ? (
-        <div className="mt-2.5 w-full">
-          <div className="h-[7px] w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          {item.maturity_date != null || item.goal_amount != null ? (
-            <div className="mt-1.5 flex items-center justify-between gap-2 text-[11.5px] tabular-nums text-muted-foreground">
-              {item.maturity_date != null ? (
-                <span>
-                  {formatDotDate(item.start_date)} ~{" "}
-                  {formatDotDate(item.maturity_date)}
-                </span>
-              ) : (
-                <span aria-hidden />
-              )}
-              {item.goal_amount != null ? (
-                <span className="shrink-0">
-                  {formatNumber(current)} /{" "}
-                  <span className="font-semibold text-foreground/80">
-                    {formatNumber(item.goal_amount)}원
-                  </span>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </button>
   );
 }
