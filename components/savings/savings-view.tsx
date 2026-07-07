@@ -164,6 +164,13 @@ function metaLabel(item: SavingsPlanRow): string {
   return day ? `매월 ${day}` : "적립일 미정";
 }
 
+// 'YYYY-MM-DD' → 'Y.M.D' (leading zeros dropped). Parsed by split, NOT
+// `new Date(string)`, so it stays on the KST wall-clock day (no UTC drift).
+function formatDotDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${y}.${m}.${d}`;
+}
+
 function SavingsRow({
   item,
   now,
@@ -206,7 +213,7 @@ function SavingsRow({
           </span>
         </div>
       </div>
-      {pct != null ? (
+      {pct != null && item.maturity_date != null ? (
         <div className="mt-2.5 w-full">
           <div
             role="progressbar"
@@ -221,6 +228,9 @@ function SavingsRow({
               style={{ width: `${pct}%` }}
             />
           </div>
+          <p className="mt-1.5 text-[11px] tabular-nums text-muted-foreground">
+            {formatDotDate(item.start_date)} ~ {formatDotDate(item.maturity_date)}
+          </p>
         </div>
       ) : null}
     </button>
