@@ -62,7 +62,7 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
               매달 모으는 돈
             </p>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground tabular-nums">
-              <span aria-hidden className="size-1.5 rounded-full bg-primary" />총{" "}
+              <span aria-hidden className="size-1.5 rounded-full bg-[#1c8c4d]" />총{" "}
               {active.length}개 항목
             </span>
           </div>
@@ -74,7 +74,7 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
           </p>
           <p className="mt-2 text-[12px] text-muted-foreground">
             쓴 게 아니라{" "}
-            <span className="font-semibold text-primary">
+            <span className="font-semibold text-[#1c8c4d]">
               다시 내 자산이 되는 돈
             </span>
             이에요
@@ -84,8 +84,8 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
 
       {isEmpty ? (
         <div className="mt-8 rounded-3xl border border-dashed border-border px-5 py-10 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10">
-            <Sprout className="size-6 text-primary" />
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#1c8c4d]/10">
+            <Sprout className="size-6 text-[#1c8c4d]" />
           </div>
           <p className="mt-4 text-[15px] font-semibold">
             아직 모으는 항목이 없어요
@@ -224,7 +224,7 @@ function SavingsRow({
             className="h-[7px] w-full overflow-hidden rounded-full bg-muted"
           >
             <div
-              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+              className="h-full rounded-full bg-[#1c8c4d] transition-[width] duration-500 ease-out"
               style={{ width: `${pct}%` }}
             />
           </div>
