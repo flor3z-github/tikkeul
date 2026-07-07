@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   depositsOnDate,
+  maturityProgressPct,
   remainingLabel,
   thisMonthSaved,
   type SavingsPlanRow,
@@ -51,6 +52,30 @@ describe("thisMonthSaved", () => {
   });
   it("treats a NULL amount as 0", () => {
     expect(thisMonthSaved([plan({ amount: null })], at(2026, 6, 10))).toBe(0);
+  });
+});
+
+describe("maturityProgressPct", () => {
+  it("is the day-based elapsed fraction from start to maturity", () => {
+    const p = plan({ start_date: "2026-01-10", maturity_date: "2026-11-10" });
+    // Jan10→Jun10 = 151 days of the 304-day term → 49.67% → 50.
+    expect(maturityProgressPct(p, at(2026, 6, 10))).toBe(50);
+  });
+  it("clamps to 0 before the start date", () => {
+    const p = plan({ start_date: "2026-03-10", maturity_date: "2026-11-10" });
+    expect(maturityProgressPct(p, at(2026, 1, 1))).toBe(0);
+  });
+  it("reaches 100 on the maturity date and clamps after", () => {
+    const p = plan({ start_date: "2026-01-10", maturity_date: "2026-11-10" });
+    expect(maturityProgressPct(p, at(2026, 11, 10))).toBe(100);
+    expect(maturityProgressPct(p, at(2026, 12, 1))).toBe(100);
+  });
+  it("treats a degenerate range (maturity <= start) as done", () => {
+    const p = plan({ start_date: "2026-05-05", maturity_date: "2026-05-05" });
+    expect(maturityProgressPct(p, at(2026, 5, 5))).toBe(100);
+  });
+  it("is null with no maturity date (자유 적립/투자)", () => {
+    expect(maturityProgressPct(plan(), at(2026, 6, 10))).toBeNull();
   });
 });
 

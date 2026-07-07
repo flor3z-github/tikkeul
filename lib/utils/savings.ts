@@ -62,6 +62,29 @@ export function remainingLabel(p: SavingsPlanRow, now: Date): string | null {
 }
 
 /**
+ * Time-based progress 0..100 for a 만기(maturity) item: the elapsed fraction of
+ * the start_date → maturity_date term. NULL when there is no maturity_date (a
+ * 자유 적립/투자 has no term to progress against, so no bar). This is NOT a goal-
+ * amount progress (that concept was removed) — only the term clock.
+ *
+ * Day-based so it advances smoothly and lands on exactly 100 at the maturity
+ * date. Day counts use Date.UTC on the split components (pure integer math, no
+ * local-timezone drift — same no-`new Date(string)` discipline as the module).
+ */
+export function maturityProgressPct(p: SavingsPlanRow, now: Date): number | null {
+  if (p.maturity_date == null) return null;
+  const start = parseYmd(p.start_date);
+  const mat = parseYmd(p.maturity_date);
+  const cur = ymdFromDate(now);
+  const startMs = Date.UTC(start.y, start.m - 1, start.d);
+  const matMs = Date.UTC(mat.y, mat.m - 1, mat.d);
+  const curMs = Date.UTC(cur.y, cur.m - 1, cur.d);
+  if (matMs <= startMs) return 100; // degenerate/invalid range → treat as done
+  const pct = ((curMs - startMs) / (matMs - startMs)) * 100;
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
+
+/**
  * Does the plan make a real deposit on calendar date `iso` ('YYYY-MM-DD')? True
  * iff the date is on/after `start_date` and on/before `maturity_date` (open-
  * ended when maturity is null). Pure lexicographic compare on ISO date strings

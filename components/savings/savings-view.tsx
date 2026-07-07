@@ -11,6 +11,7 @@ import {
   formatPaymentDay,
 } from "@/lib/utils/payment-day";
 import {
+  maturityProgressPct,
   remainingLabel,
   thisMonthSaved,
   type SavingsPlanRow,
@@ -173,33 +174,48 @@ function SavingsRow({
   onClick: () => void;
 }) {
   const maturity = remainingLabel(item, now);
+  // Time-based term progress — only 만기 items get a bar (자유 적립/투자 has no
+  // term). NOT goal-amount progress; that concept was removed.
+  const pct = maturityProgressPct(item, now);
   const metaParts = [metaLabel(item)];
   if (maturity) metaParts.push(maturity);
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted active:bg-muted"
+      className="flex w-full flex-col rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted active:bg-muted"
     >
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-medium leading-tight">
-          {item.name}
-        </p>
-        <p className="mt-0.5 truncate text-[12px] leading-tight text-muted-foreground">
-          {metaParts.join(" · ")}
-        </p>
+      <div className="flex w-full items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-medium leading-tight">
+            {item.name}
+          </p>
+          <p className="mt-0.5 truncate text-[12px] leading-tight text-muted-foreground">
+            {metaParts.join(" · ")}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end leading-tight">
+          <span
+            className={
+              item.amount == null
+                ? "text-[15px] font-semibold tabular-nums text-muted-foreground/70"
+                : "text-[15px] font-semibold tabular-nums"
+            }
+          >
+            {item.amount == null ? "금액 미입력" : formatKRW(item.amount)}
+          </span>
+        </div>
       </div>
-      <div className="flex shrink-0 flex-col items-end leading-tight">
-        <span
-          className={
-            item.amount == null
-              ? "text-[15px] font-semibold tabular-nums text-muted-foreground/70"
-              : "text-[15px] font-semibold tabular-nums"
-          }
-        >
-          {item.amount == null ? "금액 미입력" : formatKRW(item.amount)}
-        </span>
-      </div>
+      {pct != null ? (
+        <div className="mt-2.5 w-full">
+          <div className="h-[7px] w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
     </button>
   );
 }
