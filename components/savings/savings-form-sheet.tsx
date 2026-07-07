@@ -286,7 +286,8 @@ function openNativePicker(event: React.MouseEvent<HTMLInputElement>) {
 }
 
 /**
- * Native `<input type="date">` in a 2-col grid cell.
+ * Native `<input type="date">` — used both standalone (만기일) and inside a
+ * 2-col grid cell (시작일). The min-width fix below matters for the grid case.
  *
  * iOS Safari does NOT honor `min-width:0`/`width:100%` on a native date input —
  * the control keeps its intrinsic min-width and overflows the narrow cell,

@@ -67,4 +67,16 @@ describe("depositsOnDate (calendar marker lifespan bound)", () => {
     expect(depositsOnDate(p, "2028-08-08")).toBe(true); // maturity inclusive
     expect(depositsOnDate(p, "2028-08-09")).toBe(false);
   });
+
+  it("excludes a pre-start deposit date (payment_day before the start day)", () => {
+    // ISA case: started 2026-06-18, payment_day=1. The June-cycle 1st (6/01)
+    // is before the plan existed → no marker; first real deposit is 7/01.
+    const isa = plan({
+      start_date: "2026-06-18",
+      payment_day: 1,
+      maturity_date: null,
+    });
+    expect(depositsOnDate(isa, "2026-06-01")).toBe(false);
+    expect(depositsOnDate(isa, "2026-07-01")).toBe(true);
+  });
 });
