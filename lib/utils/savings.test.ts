@@ -61,6 +61,10 @@ describe("maturityProgressPct", () => {
     // Jan10→Jun10 = 151 days of the 304-day term → 49.67% → 50.
     expect(maturityProgressPct(p, at(2026, 6, 10))).toBe(50);
   });
+  it("is exactly 0 on the start date", () => {
+    const p = plan({ start_date: "2026-03-10", maturity_date: "2026-11-10" });
+    expect(maturityProgressPct(p, at(2026, 3, 10))).toBe(0);
+  });
   it("clamps to 0 before the start date", () => {
     const p = plan({ start_date: "2026-03-10", maturity_date: "2026-11-10" });
     expect(maturityProgressPct(p, at(2026, 1, 1))).toBe(0);

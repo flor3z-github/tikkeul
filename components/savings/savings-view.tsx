@@ -208,7 +208,14 @@ function SavingsRow({
       </div>
       {pct != null ? (
         <div className="mt-2.5 w-full">
-          <div className="h-[7px] w-full overflow-hidden rounded-full bg-muted">
+          <div
+            role="progressbar"
+            aria-label="만기까지 진행률"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="h-[7px] w-full overflow-hidden rounded-full bg-muted"
+          >
             <div
               className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
               style={{ width: `${pct}%` }}
