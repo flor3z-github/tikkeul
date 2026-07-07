@@ -151,7 +151,7 @@ export default async function StatsPage({
         ? supabase
             .from("savings_plans")
             .select(
-              "id, name, amount, payment_day, start_date, opening_balance, goal_amount, maturity_date, is_active",
+              "id, name, amount, payment_day, start_date, maturity_date, is_active",
             )
             .eq("user_id", viewerId)
             .eq("is_active", true)

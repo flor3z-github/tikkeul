@@ -14,7 +14,7 @@ export async function SavingsSection() {
   const { data, error } = await supabase
     .from("savings_plans")
     .select(
-      "id, name, amount, payment_day, start_date, opening_balance, goal_amount, maturity_date, is_active",
+      "id, name, amount, payment_day, start_date, maturity_date, is_active",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
@@ -34,8 +34,6 @@ export async function SavingsSection() {
     amount: row.amount == null ? null : Number(row.amount),
     payment_day: row.payment_day ?? null,
     start_date: row.start_date,
-    opening_balance: Number(row.opening_balance ?? 0),
-    goal_amount: row.goal_amount == null ? null : Number(row.goal_amount),
     maturity_date: row.maturity_date ?? null,
     is_active: row.is_active,
   }));

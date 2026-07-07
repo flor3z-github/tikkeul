@@ -92,8 +92,6 @@ type SavingsInput = {
   amount: number | null;
   payment_day?: number | null;
   start_date: string;
-  opening_balance?: number | null;
-  goal_amount?: number | null;
   maturity_date?: string | null;
 };
 
@@ -101,8 +99,6 @@ function validateInput(input: SavingsInput, name: string): SavingsActionResult |
   return (
     validateName(name) ??
     validateAmount(input.amount, "월 적립액") ??
-    validateAmount(input.opening_balance, "지금까지 모은 돈") ??
-    validateAmount(input.goal_amount, "목표 금액") ??
     validatePaymentDay(input.payment_day) ??
     validateDate(input.start_date, "시작일", { required: true }) ??
     validateDate(input.maturity_date, "만기일", { required: false })
@@ -125,8 +121,6 @@ export async function addSavingsPlanAction(
     amount: normalizeAmount(input.amount),
     payment_day: input.payment_day ?? null,
     start_date: input.start_date,
-    opening_balance: normalizeAmount(input.opening_balance) ?? 0,
-    goal_amount: normalizeAmount(input.goal_amount),
     maturity_date: input.maturity_date || null,
     is_active: true,
   });
@@ -155,8 +149,6 @@ export async function updateSavingsPlanAction(
       amount: normalizeAmount(input.amount),
       payment_day: input.payment_day ?? null,
       start_date: input.start_date,
-      opening_balance: normalizeAmount(input.opening_balance) ?? 0,
-      goal_amount: normalizeAmount(input.goal_amount),
       maturity_date: input.maturity_date || null,
     })
     .eq("id", input.id)
