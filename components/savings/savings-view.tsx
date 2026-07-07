@@ -228,9 +228,12 @@ function SavingsRow({
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="mt-1.5 text-[11px] tabular-nums text-muted-foreground">
-            {formatDotDate(item.start_date)} ~ {formatDotDate(item.maturity_date)}
-          </p>
+          {/* Dates anchor the bar ends — 시작일 left, 만기일 right — so the fill
+              visually reads as "from start to maturity". */}
+          <div className="mt-1.5 flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
+            <span>{formatDotDate(item.start_date)}</span>
+            <span>{formatDotDate(item.maturity_date)}</span>
+          </div>
         </div>
       ) : null}
     </button>
