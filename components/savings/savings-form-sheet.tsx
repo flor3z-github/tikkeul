@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { formatAmountInput, formatNumber, parseAmountInput } from "@/lib/utils/money";
+import { formatNumber, parseAmountInput } from "@/lib/utils/money";
 import type { SavingsPlanRow } from "@/lib/utils/savings";
 
 type SavingsFormSheetProps = {
@@ -82,14 +82,6 @@ function SavingsFormBody({
     initial?.payment_day ?? null,
   );
   const [startDate, setStartDate] = useState(initial?.start_date ?? todayISO);
-  const [openingText, setOpeningText] = useState(
-    initial && initial.opening_balance > 0
-      ? formatNumber(initial.opening_balance)
-      : "",
-  );
-  const [goalText, setGoalText] = useState(
-    initial?.goal_amount != null ? formatNumber(initial.goal_amount) : "",
-  );
   const [maturityDate, setMaturityDate] = useState(initial?.maturity_date ?? "");
 
   const [savePending, startSaveTransition] = useTransition();
@@ -97,16 +89,9 @@ function SavingsFormBody({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const amountValue = useMemo(() => parseAmountInput(amountText), [amountText]);
-  const goalValue = useMemo(() => parseAmountInput(goalText), [goalText]);
-  const openingValue = useMemo(() => parseAmountInput(openingText), [openingText]);
   const amountIsEmpty = amountText.trim().length === 0;
-  const goalIsEmpty = goalText.trim().length === 0;
-  const openingIsEmpty = openingText.trim().length === 0;
   const trimmedName = name.trim();
   const canSubmit = trimmedName.length > 0 && startDate.length > 0 && !savePending;
-
-  // A goal_amount or a maturity_date promotes the item to a 달성형 목표.
-  const isGoalLike = !goalIsEmpty || maturityDate.length > 0;
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,8 +102,6 @@ function SavingsFormBody({
       amount: amountIsEmpty ? null : amountValue,
       payment_day: paymentDay,
       start_date: startDate,
-      opening_balance: openingIsEmpty ? null : openingValue,
-      goal_amount: goalIsEmpty ? null : goalValue,
       maturity_date: maturityDate.length > 0 ? maturityDate : null,
     };
 
@@ -176,25 +159,7 @@ function SavingsFormBody({
         </label>
         <AmountInput value={amountText} onChange={setAmountText} />
         <p className="px-1 text-[12px] text-muted-foreground">
-          매달 모으는 금액이에요. 모은 돈은 적립액으로 계산돼요.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <label
-          htmlFor="savings-opening"
-          className="block text-sm font-medium text-muted-foreground"
-        >
-          지금까지 모은 돈 <span className="text-muted-foreground/70">(선택)</span>
-        </label>
-        <SmallAmountInput
-          id="savings-opening"
-          value={openingText}
-          onChange={setOpeningText}
-        />
-        <p className="px-1 text-[12px] text-muted-foreground">
-          이미 모아둔 게 있으면 입력하세요. 시작일을 몰라도 돼요 — 시작일은 오늘로
-          두면 여기 입력한 금액부터 매달 늘어나요.
+          매달 모으는 금액이에요.
         </p>
       </div>
 
@@ -227,42 +192,20 @@ function SavingsFormBody({
         </div>
       </div>
 
-      {/* Optional goal / maturity — setting either makes this a 달성형 목표.
-          Kept at the same level as 적립일/시작일 (no grouping box); the caption
-          hugs the grid like the monthly field's hint. */}
       <div className="space-y-2">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="min-w-0 space-y-2">
-            <label
-              htmlFor="savings-goal"
-              className="block text-sm font-medium text-muted-foreground"
-            >
-              목표 금액 <span className="text-muted-foreground/70">(선택)</span>
-            </label>
-            <SmallAmountInput
-              id="savings-goal"
-              value={goalText}
-              onChange={setGoalText}
-            />
-          </div>
-          <div className="min-w-0 space-y-2">
-            <label
-              htmlFor="savings-maturity"
-              className="block text-sm font-medium text-muted-foreground"
-            >
-              만기일 <span className="text-muted-foreground/70">(선택)</span>
-            </label>
-            <DateField
-              id="savings-maturity"
-              value={maturityDate}
-              onChange={setMaturityDate}
-            />
-          </div>
-        </div>
+        <label
+          htmlFor="savings-maturity"
+          className="block text-sm font-medium text-muted-foreground"
+        >
+          만기일 <span className="text-muted-foreground/70">(선택)</span>
+        </label>
+        <DateField
+          id="savings-maturity"
+          value={maturityDate}
+          onChange={setMaturityDate}
+        />
         <p className="px-1 text-[12px] text-muted-foreground">
-          {isGoalLike
-            ? "달성형 목표로 표시돼요."
-            : "목표 금액이나 만기일을 정하면 달성형 목표로 진행률이 표시돼요."}
+          청년적금처럼 만기가 있으면 「만기까지 N개월」로 표시돼요.
         </p>
       </div>
 
@@ -307,7 +250,7 @@ function SavingsFormBody({
             <AlertDialogHeader>
               <AlertDialogTitle>이 항목을 삭제할까요?</AlertDialogTitle>
               <AlertDialogDescription>
-                모은 돈 합계에서도 즉시 빠져요.
+                「매달 모으는 돈」 합계에서 빠져요.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -376,31 +319,6 @@ function DateField({
         className="h-12 w-full min-w-0 appearance-none rounded-2xl border border-border bg-card pl-4 pr-10 text-[15px] outline-none [-webkit-appearance:none] focus:border-ring [&::-webkit-calendar-picker-indicator]:hidden"
       />
       <CalendarIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-    </div>
-  );
-}
-
-/** Compact right-aligned amount field for the optional goal amount. */
-function SmallAmountInput({
-  id,
-  value,
-  onChange,
-}: {
-  id: string;
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <div className="flex h-12 items-center gap-1 rounded-2xl border border-border bg-card px-4">
-      <input
-        id={id}
-        inputMode="numeric"
-        value={value}
-        onChange={(event) => onChange(formatAmountInput(event.target.value))}
-        placeholder="0"
-        className="min-w-0 flex-1 bg-transparent text-right text-[15px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-muted-foreground"
-      />
-      <span className="text-[14px] font-medium text-muted-foreground">원</span>
     </div>
   );
 }
