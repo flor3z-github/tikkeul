@@ -31,13 +31,13 @@ const COLLAPSED_H = 52;
 // Icon drops to the collapsed pill's vertical center once the label fades.
 const COLLAPSED_TY = 8;
 
-// Active-tab highlight pill. Fixed per state, NOT per-label-length — width/
-// height are identical across all 4 tabs regardless of "소비" (2 chars) vs
-// "고정지출" (4 chars). Values are POC-tuned starting points (Pretendard
-// 11px label + 20px icon), not exact hugs.
-const HIGHLIGHT_COLLAPSED_SIZE = 36; // circle, collapsed pill (icon only)
-const HIGHLIGHT_EXPANDED_W = 64; // pill width, expanded (icon+label stack)
-const HIGHLIGHT_EXPANDED_H = 48; // pill height, expanded
+// Active-tab highlight. Expanded state fills the tab's entire 25% slot
+// (width = rail/4 via --slot-w below, height = full rail) with the rail's
+// own 32px corner radius — a segmented-control fill, identical across all
+// 4 tabs regardless of label length (2026-07-20 user decision; replaced
+// the earlier 64×48 centered pill). Collapsed state stays an icon-only
+// 36px circle: the shared 32px radius clamps to a circle at that size.
+const HIGHLIGHT_COLLAPSED_SIZE = 36;
 
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const DURATION = "260ms";
@@ -57,6 +57,7 @@ export function BottomTabNav() {
     if (!el) return;
     const apply = () => {
       const railW = el.offsetWidth;
+      el.style.setProperty("--slot-w", `${railW / TABS.length}px`);
       TABS.forEach((_, i) => {
         const expandedCx = ((i + 0.5) / TABS.length) * railW;
         const collapsedCx = railW / 2 + (i - (TABS.length - 1) / 2) * SLOT_W;
@@ -144,24 +145,35 @@ export function BottomTabNav() {
                   transitionTimingFunction: EASE,
                 }}
               >
-                {/* Active-tab background pill. Rendered before Icon/label so
-                    it paints behind them (DOM order = stacking order, no
-                    z-index needed). Centered on the Link's own box — width/
-                    height are fixed per collapsed state (spec §3.3), never
-                    per-label, so no content measurement is required. Only
-                    opacity is transitioned; width/height snap instantly with
-                    the collapse morph (box-size transition ban, spec §3-1).
-                    pointer-events-none so it never steals taps even where it
-                    visually overflows the 48px hit-box into slot padding. */}
+                {/* Active-tab background pill. -z-10 puts this in the
+                    negative-z paint layer of the Link's own stacking context
+                    (Link always has a transform, so it always establishes
+                    one) — without it, this positioned span would paint ABOVE
+                    the non-positioned Icon/label regardless of DOM order
+                    (CSS2.1 painting layers: positioned z-index:auto
+                    descendants paint after non-positioned in-flow ones).
+                    Centered on the Link's own box — expanded size is the
+                    full 25% slot (width from --slot-w set by the rail
+                    ResizeObserver, height 100% of the rail), never
+                    per-label, so no content measurement is required. The
+                    rounded-[32px] radius must stay in sync with the rail's
+                    rounded-[32px] (곡률 동일); on the 36px collapsed circle
+                    it clamps to a circle. Only opacity is transitioned;
+                    width/height snap instantly with the collapse morph
+                    (box-size transition ban, spec §3-1). pointer-events-none
+                    so it never steals taps even where it visually overflows
+                    the 48px hit-box into slot padding. */}
                 <span
                   aria-hidden
                   className={cn(
-                    "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10",
+                    "pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2 rounded-[32px] bg-primary/10",
                     "transition-opacity motion-reduce:transition-none",
                   )}
                   style={{
-                    width: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : HIGHLIGHT_EXPANDED_W,
-                    height: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : HIGHLIGHT_EXPANDED_H,
+                    width: collapsed
+                      ? HIGHLIGHT_COLLAPSED_SIZE
+                      : "var(--slot-w, calc((100vw - 40px) / 4))",
+                    height: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : "100%",
                     opacity: active ? 1 : 0,
                     transitionDuration: DURATION,
                     transitionTimingFunction: EASE,
