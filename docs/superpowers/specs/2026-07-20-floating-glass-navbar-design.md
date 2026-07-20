@@ -35,7 +35,7 @@
 
 이 저장소의 검증된 교훈 (iOS PWA 실측):
 
-1. **box-size(width/height) 애니메이션은 iOS Safari에서 60fps가 나오지 않는다.** 컴포지터에서 도는 `transform` / `opacity` / `clip-path`만 사용한다. → morph는 폭 transition이 아니라 clip-path + translate 조합으로 구현한다 (§5).
+1. **box-size(width/height) 애니메이션은 iOS Safari에서 60fps가 나오지 않는다.** 컴포지터에서 도는 `transform` / `opacity`만 사용한다. → morph는 폭 transition이 아니라 twin-layer opacity 크로스페이드 + translate 조합으로 구현한다 (§5).
 2. **iOS 키보드가 layout viewport를 스크롤시킨다.** drawer + 텍스트 입력 포커스 시 window scroll 이벤트가 발화하므로, drawer 열림 동안 스크롤 감지를 동결하지 않으면 nav가 drawer 뒤에서 오동작하고 닫은 뒤 잘못된 상태로 남는다. → freeze 메커니즘 (§6).
 3. **시각 변경은 POC + 스크린샷으로 직접 검증**하고, 최종 확인은 iOS 실기기 백로그로 넘긴다 (§10).
 
