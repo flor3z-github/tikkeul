@@ -9,7 +9,11 @@ import { cn } from "@/lib/utils";
 import { formatKoreanShortDate } from "@/lib/utils/date";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
 import { PAYMENT_METHOD_SHORT_LABELS } from "@/lib/utils/payment-method";
-import type { VariableBreakdownRow } from "@/lib/utils/stats/cycle-breakdown";
+import {
+  sortVariableItems,
+  type VariableBreakdownRow,
+  type VariableItemSortMode,
+} from "@/lib/utils/stats/cycle-breakdown";
 import type { PaymentSplit } from "@/lib/utils/stats/payment-split";
 
 const NEUTRAL_SWATCH = "#8E8E93";
@@ -95,6 +99,10 @@ export function VariableSection({
 }) {
   // null = 모두 닫힘. 키는 categoryId(미분류는 "__uncat__").
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Section-global sort for the expanded drill-down lists. Default "amount"
+  // preserves the pre-toggle behavior; in-memory only (no localStorage) since
+  // sorting is a transient exploration state, not a lasting preference.
+  const [sortMode, setSortMode] = useState<VariableItemSortMode>("amount");
   // delta가 하나라도 있을 때만 기준선 힌트를 단다 — 첫 사이클(전월比 off)엔 노이즈.
   const hasDelta = variableRows.some((r) => r.delta != null && r.delta !== 0);
 
@@ -105,6 +113,7 @@ export function VariableSection({
         total={variableTotal}
         hint={hasDelta ? "↑↓ 직전 주기 같은 때 대비" : undefined}
       />
+      <SortToggle mode={sortMode} onChange={setSortMode} />
       <SectionListCard>
         <ul>
           {variableRows.map((row) => {
@@ -114,6 +123,7 @@ export function VariableSection({
                 key={key}
                 row={row}
                 open={openKey === key}
+                sortMode={sortMode}
                 onToggle={() =>
                   setOpenKey((cur) => (cur === key ? null : key))
                 }
@@ -124,6 +134,45 @@ export function VariableSection({
         {paymentSplit ? <NestedPaymentSplit split={paymentSplit} /> : null}
       </SectionListCard>
     </section>
+  );
+}
+
+const SORT_OPTIONS: { mode: VariableItemSortMode; label: string }[] = [
+  { mode: "amount", label: "금액순" },
+  { mode: "date", label: "날짜순" },
+];
+
+/**
+ * Section-global sort toggle for the expanded transaction lists (§12.9). Two
+ * plain text buttons (no shadcn Tabs — §9) right-aligned between the heading
+ * and the list card; the active mode is emphasized via color/weight only.
+ */
+function SortToggle({
+  mode,
+  onChange,
+}: {
+  mode: VariableItemSortMode;
+  onChange: (mode: VariableItemSortMode) => void;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-3 px-1">
+      {SORT_OPTIONS.map((opt) => (
+        <button
+          key={opt.mode}
+          type="button"
+          aria-pressed={mode === opt.mode}
+          onClick={() => onChange(opt.mode)}
+          className={cn(
+            "text-[12px] transition-colors",
+            mode === opt.mode
+              ? "font-semibold text-foreground"
+              : "text-muted-foreground",
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -168,10 +217,12 @@ function NestedPaymentSplit({ split }: { split: PaymentSplit }) {
 function VariableRow({
   row,
   open,
+  sortMode,
   onToggle,
 }: {
   row: VariableBreakdownRow;
   open: boolean;
+  sortMode: VariableItemSortMode;
   onToggle: () => void;
 }) {
   const swatch = row.color ?? NEUTRAL_SWATCH;
@@ -238,7 +289,7 @@ function VariableRow({
           // 없는 자식 행이 카드 끝까지 튀어나가는 것 방지).
           className="mb-1 ml-[52px] space-y-0.5 border-l border-border pl-3 pr-8 animate-in fade-in slide-in-from-top-1 duration-150"
         >
-          {row.items.map((item) => (
+          {sortVariableItems(row.items, sortMode).map((item) => (
             <li
               key={item.id}
               className="flex items-start justify-between gap-3 py-1.5"
