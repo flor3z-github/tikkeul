@@ -70,7 +70,7 @@ export default async function IncomePage({
     .gte("occurred_on", cycleStartDate)
     .lt("occurred_on", cycleEndDate)
     .order("occurred_on", { ascending: false })
-    .order("id", { ascending: false });
+    .order("created_at", { ascending: false });
 
   const items = (adjustmentsRes.data ?? []).map((row) => ({
     id: row.id,
