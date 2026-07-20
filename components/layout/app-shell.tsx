@@ -32,14 +32,15 @@ export function AppShell({
   withFixedComposer = false,
 }: AppShellProps) {
   // Bottom-fixed UI eats vertical space:
-  // - BottomTabNav: 76px + safe-area
+  // - Floating pill nav: --bottom-nav-clearance (globals.css, safe-area 포함)
   // - FAB: 56px tall, sits 16px above the nav (per add-transaction-button.tsx)
   // - FixedComposer: page owns its own padding; AppShell stays out of the way.
-  // The content needs to scroll past whichever extends higher, plus a small gap.
+  // Padding is constant against the EXPANDED nav — the collapsed pill must
+  // never reflow content.
   const padBottom = withFab
-    ? "pb-[calc(76px+env(safe-area-inset-bottom)+16px+56px+16px)]"
+    ? "pb-[calc(var(--bottom-nav-clearance)+16px+56px+16px)]"
     : withBottomNav
-      ? "pb-[calc(76px+env(safe-area-inset-bottom)+24px)]"
+      ? "pb-[calc(var(--bottom-nav-clearance)+24px)]"
       : withFixedComposer
         ? "pb-0"
         : "pb-28";

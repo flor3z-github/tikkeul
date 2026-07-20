@@ -34,6 +34,13 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* Bottom-nav geometry, single source of truth. FABs and AppShell padding
+     derive from this — change here, not at call sites.
+     12px = pill bottom float margin, 64px = expanded pill height. */
+  --bottom-nav-clearance: calc(env(safe-area-inset-bottom) + 12px + 64px);
+  /* Glass surface (DESIGN.md §4). Light-only today; dark variant is
+     rgba(28, 28, 30, 0.72) when dark mode ships. */
+  --surface-glass: rgba(255, 255, 255, 0.72);
 }
 
 .dark {

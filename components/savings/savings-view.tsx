@@ -141,7 +141,7 @@ export function SavingsView({ plans, nowISO }: SavingsViewProps) {
         onClick={() => setAddOpen(true)}
         aria-label="돈모으기 추가"
         className="fixed right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_24px_-6px_rgba(0,122,255,0.55)] transition-transform duration-150 ease-out active:scale-95"
-        style={{ bottom: "calc(76px + env(safe-area-inset-bottom) + 16px)" }}
+        style={{ bottom: "calc(var(--bottom-nav-clearance) + 16px)" }}
       >
         <Plus className="size-6" strokeWidth={2.6} />
       </button>

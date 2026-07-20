@@ -34,7 +34,7 @@ export function AddTransactionButton({
         onClick={() => setTransactionOpen(true)}
         style={{
           right: 24,
-          bottom: "calc(76px + env(safe-area-inset-bottom) + 16px)",
+          bottom: "calc(var(--bottom-nav-clearance) + 16px)",
           touchAction: "manipulation",
         }}
         className="fixed z-50 flex size-14 items-center justify-center rounded-[28px] bg-primary text-primary-foreground shadow-[0_12px_40px_rgba(0,0,0,0.18)] transition-transform duration-150 ease-out active:scale-95"
