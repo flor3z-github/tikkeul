@@ -335,7 +335,7 @@ typography:
 
 설정·통계·친구는 하단 탭에 넣지 않는다 — 설정은 대시보드 우상단 설정 아이콘, 통계(§12.9)·친구(§12.8)는 각자의 진입점으로 들어간다.
 
-대시보드와 돈모으기에는 추가 Floating Action Button을 화면 오른쪽 아래에 고정한다. FAB은 하단 탭 위로 떠 있게 배치한다(§12.11 수입 화면은 FAB 없이 인라인 버튼만 쓴다).
+대시보드·돈모으기·수입에는 추가 Floating Action Button을 화면 오른쪽 아래에 고정한다. FAB은 하단 탭 위로 떠 있게 배치한다.
 
 ```tsx
 <Button
@@ -616,7 +616,7 @@ body {
 - 활성 탭은 아이콘에 primary 색을 적용하고 라벨은 foreground로, 비활성 탭은 muted-foreground로 표시한다. 돈모으기 탭 아이콘은 새싹(`Sprout`), 수입 탭 아이콘은 손모으기(`HandCoins`)다.
 - 컨테이너 너비는 max-w-md 단일 컬럼과 정렬해야 한다.
 - safe-area-inset-bottom을 고려한 padding을 둔다.
-- 하단 탭이 있는 화면(`/dashboard`, `/fixed-expenses`, `/savings`, `/income`)은 AppShell에 `withBottomNav` prop을 넘긴다. `/settings`는 넘기지 않는다 (탭 노출 X). own 모드 `/dashboard`와 `/savings`는 `withFab`도 함께 넘긴다 — 수입 탭은 FAB 없이 인라인 추가 버튼만 쓴다(§12.11).
+- 하단 탭이 있는 화면(`/dashboard`, `/fixed-expenses`, `/savings`, `/income`)은 AppShell에 `withBottomNav` prop을 넘긴다. `/settings`는 넘기지 않는다 (탭 노출 X). own 모드 `/dashboard`·`/savings`·`/income`은 `withFab`도 함께 넘긴다(§12.11).
 
 대시보드 추가 진입점:
 
@@ -1287,7 +1287,7 @@ PageHeader  eyebrow="이번 주기 들어온 돈"  title="수입"
 [추가 수입 N · 최신순]
    항목 없음: "이번 주기엔 추가 수입이 없어요."
    있으면: +금액 / 날짜·메모, 탭 → 수정·삭제
-[+ 추가 수입 기록]  ← 인라인 버튼(점선 테두리), FAB 아님
+(+) FAB  ← 우하단 고정, 탭 → 추가 수입 기록
 ```
 
 원칙:
@@ -1296,7 +1296,7 @@ PageHeader  eyebrow="이번 주기 들어온 돈"  title="수입"
 - 주기 이동은 대시보드와 같은 주기 해석 엔진(`resolveDashboardParamsB`) + `MonthSwitcher`를 재사용한다(`basePath="/income"`) — 사이클 정의·라벨 규칙은 §12.5a와 동일.
 - **월 수입 행은 현재 주기에서만** 탭 가능하다. 탭하면 월 수입 저장 로직(`saveIncomeAction`)을 재사용하는 BottomSheet(`DrawerContent`)가 열려 금액을 수정한다. 과거 주기에서는 이 행 자체가 렌더되지 않고, 히어로 breakdown에만 **현재 monthly_income 스냅샷**이 근사치로 표시된다 — 월 수입은 이력을 저장하지 않으므로 과거 주기의 "그때 수입"과 다를 수 있다(의도된 한계).
 - **추가 수입 리스트**는 주기 범위(`occurred_on` between 주기 시작·끝) 쿼리라 과거 주기에서도 정확하다. 최신순(날짜 desc) 정렬, 항목 탭 → 생성/수정 공용 다이얼로그(`initial` 키 패턴, 소비 폼과 동일 철학 §12.3)로 수정·삭제. 빈 상태 카피는 "이번 주기엔 추가 수입이 없어요."
-- 추가 버튼은 **리스트 하단 인라인 버튼**(점선 테두리 알약)이다 — 대시보드/돈모으기처럼 화면 우하단 FAB을 쓰지 않는다. `<AppShell withBottomNav>`만 넘기고 `withFab`은 넘기지 않는다.
+- 추가 진입은 **우하단 FAB**이다 — 대시보드/돈모으기와 동일 위치·크기·primary 스타일. `<AppShell withBottomNav withFab>`을 넘긴다. 미래 주기에서는 FAB을 숨긴다(서버가 미래 날짜를 거부하므로 성공할 수 없는 진입점을 노출하지 않는다).
 - 수입은 여전히 transaction이 아니다 — `monthly_income` 단일 숫자 + 추가 수입 기록 모델을 그대로 쓴다. income-as-transactions 제외 원칙은 유지된다(§19).
 - 친구 모드에는 노출되지 않는다 — 하단 탭 자체가 own 모드 전용(`withBottomNav={isOwn}`)이라 친구 뷰에 수입 탭이 뜨는 경로가 없다. `monthly_income` 비공개 원칙(§19)에 별도 가드를 추가할 필요가 없다.
 

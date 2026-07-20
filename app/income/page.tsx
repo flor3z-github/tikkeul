@@ -88,7 +88,7 @@ export default async function IncomePage({
   const addDefaultDate = isCurrentCycle ? toISODate(now) : toISODate(lastDay);
 
   return (
-    <AppShell withBottomNav>
+    <AppShell withBottomNav withFab>
       <PageHeader
         eyebrow="이번 주기 들어온 돈"
         title="수입"

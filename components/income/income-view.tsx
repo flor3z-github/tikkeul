@@ -166,17 +166,22 @@ export function IncomeView({
           </Card>
         )}
 
-        {!isFutureCycle ? (
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-full border border-dashed border-border py-3 text-[14px] font-semibold text-muted-foreground transition-all duration-150 ease-out hover:bg-muted active:scale-[0.99]"
-          >
-            <Plus className="size-4" strokeWidth={2.6} />
-            추가 수입 기록
-          </button>
-        ) : null}
       </section>
+
+      {/* FAB — add an income adjustment (same position/style as /savings).
+          Hidden on future cycles: the server rejects future dates, so an add
+          there could never succeed. */}
+      {!isFutureCycle ? (
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          aria-label="추가 수입 기록"
+          className="fixed right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_24px_-6px_rgba(0,122,255,0.55)] transition-transform duration-150 ease-out active:scale-95"
+          style={{ bottom: "calc(76px + env(safe-area-inset-bottom) + 16px)" }}
+        >
+          <Plus className="size-6" strokeWidth={2.6} />
+        </button>
+      ) : null}
 
       {/* Add / edit share the same drawer, keyed by initial (form-dialog
           pattern). Not nested — no parent drawer on this page. */}
