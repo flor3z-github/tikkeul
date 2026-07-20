@@ -14,6 +14,13 @@ export type NavScrollState = {
 type Options = {
   /** First event after an unfreeze: re-anchor lastY without judging direction. */
   resync?: boolean;
+  /**
+   * Max scrollable Y (scrollHeight - viewport height). iOS bottom rubber-band
+   * lets scrollY overshoot past this; the spring-back then reads as an upward
+   * scroll and wrongly re-expands the nav. Clamping y to [0, maxY] makes the
+   * whole bounce a zero-delta no-op.
+   */
+  maxY?: number;
 };
 
 export function nextNavScrollState(
@@ -23,12 +30,13 @@ export function nextNavScrollState(
   options: Options = {},
 ): NavScrollState {
   if (frozen) return state;
-  if (y < NAV_TOP_THRESHOLD) {
-    if (!state.collapsed && state.lastY === y) return state;
-    return { collapsed: false, lastY: y };
+  const cy = Math.min(Math.max(y, 0), options.maxY ?? Infinity);
+  if (cy < NAV_TOP_THRESHOLD) {
+    if (!state.collapsed && state.lastY === cy) return state;
+    return { collapsed: false, lastY: cy };
   }
-  if (options.resync) return { collapsed: state.collapsed, lastY: y };
-  const delta = y - state.lastY;
+  if (options.resync) return { collapsed: state.collapsed, lastY: cy };
+  const delta = cy - state.lastY;
   if (Math.abs(delta) < NAV_SCROLL_DELTA) return state;
-  return { collapsed: delta > 0, lastY: y };
+  return { collapsed: delta > 0, lastY: cy };
 }

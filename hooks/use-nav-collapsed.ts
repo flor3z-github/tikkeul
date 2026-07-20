@@ -30,6 +30,10 @@ export function useNavCollapsed(): boolean {
         const frozen = navFreeze.frozen;
         const next = nextNavScrollState(state, window.scrollY, frozen, {
           resync: wasFrozen && !frozen,
+          maxY: Math.max(
+            0,
+            document.documentElement.scrollHeight - window.innerHeight,
+          ),
         });
         if (!frozen) wasFrozen = false;
         else wasFrozen = true;
