@@ -6,6 +6,7 @@ import { XIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { navFreeze } from "@/lib/utils/nav-freeze";
 
 // IMPORTANT: every bottom sheet in this app must go through DrawerContent so
 // the iOS keyboard handling below applies. Do NOT call vaul's
@@ -99,6 +100,15 @@ function DrawerContent({
   ...props
 }: DrawerContentProps) {
   const contentRef = React.useRef<HTMLDivElement>(null);
+
+  // Freeze the bottom nav's scroll-collapse while any sheet is mounted.
+  // vaul unmounts Content on close, so mount/unmount is exactly open/close.
+  // Nested sheets stack acquires; the ref-count keeps the nav frozen until
+  // the last one closes.
+  React.useEffect(() => {
+    navFreeze.acquire();
+    return () => navFreeze.release();
+  }, []);
 
   // iOS soft-keyboard handling. Two iOS Safari quirks combine to break a
   // naive bottom sheet:
