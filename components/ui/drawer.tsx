@@ -87,6 +87,19 @@ function DrawerOverlay({
   );
 }
 
+// Mounts only while the sheet is actually open: children of vaul's Portal
+// are unmounted when the drawer is closed, so tying acquire/release to THIS
+// component's lifecycle — not DrawerContent's, which stays mounted even for
+// closed `<Drawer open={false}>` call sites — freezes the nav only while a
+// sheet is really on screen.
+function NavFreezeWhileOpen() {
+  React.useEffect(() => {
+    navFreeze.acquire();
+    return () => navFreeze.release();
+  }, []);
+  return null;
+}
+
 type DrawerContentProps = React.ComponentProps<typeof DrawerPrimitive.Content> & {
   showCloseButton?: boolean;
   showHandle?: boolean;
@@ -100,15 +113,6 @@ function DrawerContent({
   ...props
 }: DrawerContentProps) {
   const contentRef = React.useRef<HTMLDivElement>(null);
-
-  // Freeze the bottom nav's scroll-collapse while any sheet is mounted.
-  // vaul unmounts Content on close, so mount/unmount is exactly open/close.
-  // Nested sheets stack acquires; the ref-count keeps the nav frozen until
-  // the last one closes.
-  React.useEffect(() => {
-    navFreeze.acquire();
-    return () => navFreeze.release();
-  }, []);
 
   // iOS soft-keyboard handling. Two iOS Safari quirks combine to break a
   // naive bottom sheet:
@@ -208,6 +212,7 @@ function DrawerContent({
         )}
         {...props}
       >
+        <NavFreezeWhileOpen />
         {showHandle ? (
           <div
             aria-hidden
