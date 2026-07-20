@@ -81,6 +81,7 @@ export default async function IncomePage({
 
   const isCurrentCycle =
     now.getTime() >= cycleStart.getTime() && now.getTime() < cycleEnd.getTime();
+  const isFutureCycle = now.getTime() < cycleStart.getTime();
   // Add-form default date: today on the live cycle; the cycle's last day
   // (exclusive end − 1) on past cycles so the picker opens inside range.
   const lastDay = new Date(cycleEnd.getTime() - 86_400_000);
@@ -116,6 +117,7 @@ export default async function IncomePage({
         cycleStartDate={cycleStartDate}
         cycleEndDate={cycleEndDate}
         isCurrentCycle={isCurrentCycle}
+        isFutureCycle={isFutureCycle}
         addDefaultDate={addDefaultDate}
       />
     </AppShell>

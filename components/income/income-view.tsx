@@ -27,6 +27,8 @@ type IncomeViewProps = {
   /** YYYY-MM-DD, exclusive cycle end. */
   cycleEndDate: string;
   isCurrentCycle: boolean;
+  // Future cycles can't accept entries — server rejects future dates — so the add button hides.
+  isFutureCycle: boolean;
   /** YYYY-MM-DD pre-fill for the add form (today, or past cycle's last day). */
   addDefaultDate: string;
 };
@@ -44,6 +46,7 @@ export function IncomeView({
   cycleStartDate,
   cycleEndDate,
   isCurrentCycle,
+  isFutureCycle,
   addDefaultDate,
 }: IncomeViewProps) {
   const [addOpen, setAddOpen] = useState(false);
@@ -163,14 +166,16 @@ export function IncomeView({
           </Card>
         )}
 
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-full border border-dashed border-border py-3 text-[14px] font-semibold text-muted-foreground transition-all duration-150 ease-out hover:bg-muted active:scale-[0.99]"
-        >
-          <Plus className="size-4" strokeWidth={2.6} />
-          추가 수입 기록
-        </button>
+        {!isFutureCycle ? (
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-dashed border-border py-3 text-[14px] font-semibold text-muted-foreground transition-all duration-150 ease-out hover:bg-muted active:scale-[0.99]"
+          >
+            <Plus className="size-4" strokeWidth={2.6} />
+            추가 수입 기록
+          </button>
+        ) : null}
       </section>
 
       {/* Add / edit share the same drawer, keyed by initial (form-dialog

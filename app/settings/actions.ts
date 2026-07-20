@@ -97,8 +97,8 @@ export async function saveCycleAction(
 // actions above (which intentionally write partial rows), onboarding writes the
 // settings columns together so we never create a half-filled user_settings row
 // — e.g. payday set but income still 0, which would flip the dashboard into the
-// worse "0원이에요" state. Validation mirrors saveNicknameAction +
-// saveIncomeAction + saveCycleAction.
+// worse "0원이에요" state. Validation mirrors saveNicknameAction + saveCycleAction
+// (income validation mirrors saveIncomeAction, which now lives in app/income/actions.ts).
 export async function saveOnboardingAction(
   nickname: string,
   income: number,
@@ -118,10 +118,11 @@ export async function saveOnboardingAction(
       error: `닉네임은 1~${NICKNAME_MAX_LENGTH}자로 입력해주세요.`,
     };
   }
-  // Stricter than saveIncomeAction's `< 0`: onboarding requires a funded
-  // income (> 0). A 0 here would create a row that flips the dashboard into
-  // the "0원이에요" state — the exact thing this flow exists to prevent. The
-  // client already gates the button on > 0; this is the server-side defense.
+  // Stricter than app/income/actions.ts's saveIncomeAction (`< 0`): onboarding
+  // requires a funded income (> 0). A 0 here would create a row that flips the
+  // dashboard into the "0원이에요" state — the exact thing this flow exists to
+  // prevent. The client already gates the button on > 0; this is the
+  // server-side defense.
   if (!Number.isFinite(income) || income <= 0) {
     return { ok: false, error: "월 수입을 입력해주세요." };
   }
