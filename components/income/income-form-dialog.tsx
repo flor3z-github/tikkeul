@@ -8,7 +8,7 @@ import {
   addIncomeAdjustmentAction,
   deleteIncomeAdjustmentAction,
   updateIncomeAdjustmentAction,
-} from "@/app/dashboard/actions";
+} from "@/app/income/actions";
 import {
   AlertDialog,
   AlertDialogAction,

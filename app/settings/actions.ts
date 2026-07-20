@@ -48,37 +48,6 @@ export async function saveNicknameAction(
   return { ok: true };
 }
 
-export async function saveIncomeAction(income: number): Promise<ActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  if (!Number.isFinite(income) || income < 0) {
-    return { ok: false, error: "0원 이상으로 입력해주세요." };
-  }
-  const monthlyIncome = Math.trunc(income);
-
-  // Partial upsert: only monthly_income. On a first-time insert the other
-  // user_settings columns fall back to their DB defaults (payday=1,
-  // payroll_rule='prev'); on update the untouched columns are preserved.
-  const { error } = await supabase
-    .from("user_settings")
-    .upsert(
-      { user_id: user.id, monthly_income: monthlyIncome },
-      { onConflict: "user_id" },
-    );
-
-  if (error) {
-    return { ok: false, error: error.message };
-  }
-
-  revalidatePath("/dashboard");
-  revalidatePath("/settings");
-  return { ok: true };
-}
-
 export async function saveCycleAction(
   payday: number,
   payrollRule: string,

@@ -3,11 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarSync, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  saveCycleAction,
-  saveIncomeAction,
-  saveNicknameAction,
-} from "@/app/settings/actions";
+import { saveCycleAction, saveNicknameAction } from "@/app/settings/actions";
+import { saveIncomeAction } from "@/app/income/actions";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
