@@ -77,7 +77,11 @@ export function BottomTabNav() {
       <div
         aria-hidden
         className={cn(
-          "absolute inset-0 rounded-[32px]",
+          // pointer-events-none: opacity-0 does not disable hit-testing, so
+          // without it this full-rail layer would swallow taps in the
+          // collapsed pill's transparent side margins. Links carry all
+          // interaction.
+          "pointer-events-none absolute inset-0 rounded-[32px]",
           "border border-white/45 bg-[var(--surface-glass)] shadow-[0_12px_40px_rgba(0,0,0,0.14)]",
           "supports-[backdrop-filter:blur(1px)]:backdrop-blur-xl",
           "supports-[not(backdrop-filter:blur(1px))]:bg-white/95",
@@ -89,7 +93,7 @@ export function BottomTabNav() {
       <div
         aria-hidden
         className={cn(
-          "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full",
+          "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full",
           "border border-white/45 bg-[var(--surface-glass)] shadow-[0_12px_40px_rgba(0,0,0,0.14)]",
           "supports-[backdrop-filter:blur(1px)]:backdrop-blur-xl",
           "supports-[not(backdrop-filter:blur(1px))]:bg-white/95",
