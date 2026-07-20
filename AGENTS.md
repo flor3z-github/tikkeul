@@ -29,7 +29,9 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=   # the sb_publishable_... key, NOT the le
 
 ### Database
 
-Migrations live in `supabase/migrations/` (run in order via the Supabase SQL Editor). `0001_init.sql` creates schema + the `auth.users → profiles` trigger; `0002_rls.sql` enables RLS and per-user policies; `0003_seed_categories.sql` seeds shared categories with `user_id IS NULL`; `0004_remove_subscription_category.sql` drops 구독 (treated as fixed expense).
+Migrations live in `supabase/migrations/`. **Naming & history rules**: the 61 existing files (`20260512100001`–`20260512100061`) are frozen — never rename or delete them; each prefix is a version key in the remote `supabase_migrations.schema_migrations` history (repaired 2026-07-20 to match 1:1), and renaming one re-breaks the Supabase CI check with "Remote migration versions not found in local migrations directory". New migrations get a real timestamp prefix via `supabase migration new <name>` (never continue the `...1000NN` pseudo-sequence), and are applied with `supabase db push` — if one is run manually in the SQL Editor instead, record it with `supabase migration repair --status applied <version>`.
+
+`20260512100001_init.sql` creates schema + the `auth.users → profiles` trigger; `20260512100002_rls.sql` enables RLS and per-user policies; `20260512100003_seed_categories.sql` seeds shared categories with `user_id IS NULL`; `20260512100004_remove_subscription_category.sql` drops 구독 (treated as fixed expense).
 
 `lib/supabase/database.types.ts` is hand-written for the MVP. Replace it with `supabase gen types` output if the schema grows.
 
@@ -56,7 +58,7 @@ Per the Supabase SSR guide notes in `server.ts`/`middleware.ts`: do **not** hois
 
 - Pages are React Server Components that read from Supabase directly (`createClient()` → query). Most use `export const dynamic = "force-dynamic"` because they depend on the session cookie.
 - Mutations go through **Server Actions** colocated under the route (`app/dashboard/actions.ts`, `app/settings/actions.ts`, `app/login/actions.ts`). Actions call `revalidatePath` and return `{ ok: true } | { ok: false; error }` (or `redirect` for auth). Clients dispatch via `useTransition` / `useActionState`.
-- RLS does the authorization — server actions still call `supabase.auth.getUser()` and `redirect("/login")` if absent, but every query/mutation is also fenced by `auth.uid() = user_id` policies in `supabase/migrations/0002_rls.sql`.
+- RLS does the authorization — server actions still call `supabase.auth.getUser()` and `redirect("/login")` if absent, but every query/mutation is also fenced by `auth.uid() = user_id` policies in `supabase/migrations/20260512100002_rls.sql`.
 
 ### Domain model
 
