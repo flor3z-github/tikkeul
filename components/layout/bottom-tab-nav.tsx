@@ -31,13 +31,21 @@ const COLLAPSED_H = 52;
 // Icon drops to the collapsed pill's vertical center once the label fades.
 const COLLAPSED_TY = 8;
 
-// Active-tab highlight. Expanded state fills the tab's entire 25% slot
-// (width = rail/4 via --slot-w below, height = full rail) with the rail's
-// own 32px corner radius — a segmented-control fill, identical across all
-// 4 tabs regardless of label length (2026-07-20 user decision; replaced
-// the earlier 64×48 centered pill). Collapsed state stays an icon-only
-// 36px circle: the shared 32px radius clamps to a circle at that size.
+// Active-tab highlight, Instagram-style: a stadium pill floating INSIDE the
+// rail with a uniform inset on every side (2026-07-20 user decision after a
+// side-by-side with Instagram; replaced the flush segmented fill). Expanded:
+// width = slot − 2×inset, height = rail 64px (h-16 on <nav>) − 2×inset;
+// rounded-full gives radius 24 = rail's 32 − inset, so the gap stays
+// concentric around the rail's end corners. Identical across all 4 tabs
+// regardless of label length. Collapsed: 36px icon-only circle.
+const HIGHLIGHT_INSET = 8;
+const HIGHLIGHT_EXPANDED_H = 64 - HIGHLIGHT_INSET * 2; // 48
 const HIGHLIGHT_COLLAPSED_SIZE = 36;
+// Collapsed highlight must center on the ICON, not the Link box: the faded
+// label still occupies layout, so the icon sits (label line-height 16.5 +
+// gap 4)/2 ≈ 10px above the Link's center. Without this the circle hangs
+// low with the icon at its top edge.
+const HIGHLIGHT_COLLAPSED_TY = -10;
 
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const DURATION = "260ms";
@@ -153,27 +161,31 @@ export function BottomTabNav() {
                     (CSS2.1 painting layers: positioned z-index:auto
                     descendants paint after non-positioned in-flow ones).
                     Centered on the Link's own box — expanded size is the
-                    full 25% slot (width from --slot-w set by the rail
-                    ResizeObserver, height 100% of the rail), never
-                    per-label, so no content measurement is required. The
-                    rounded-[32px] radius must stay in sync with the rail's
-                    rounded-[32px] (곡률 동일); on the 36px collapsed circle
-                    it clamps to a circle. Only opacity is transitioned;
-                    width/height snap instantly with the collapse morph
-                    (box-size transition ban, spec §3-1). pointer-events-none
-                    so it never steals taps even where it visually overflows
-                    the 48px hit-box into slot padding. */}
+                    25% slot shrunk by HIGHLIGHT_INSET on every side (width
+                    from --slot-w set by the rail ResizeObserver), never
+                    per-label, so no content measurement is required.
+                    rounded-full keeps the pill's radius at half its height
+                    (24px expanded = rail's 32px − inset → concentric gap at
+                    the rail's end corners; 18px collapsed circle). Only
+                    opacity is transitioned; width/height snap instantly
+                    with the collapse morph (box-size transition ban, spec
+                    §3-1). pointer-events-none so it never steals taps even
+                    where it visually overflows the 48px hit-box into slot
+                    padding. */}
                 <span
                   aria-hidden
                   className={cn(
-                    "pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2 rounded-[32px] bg-primary/10",
+                    "pointer-events-none absolute left-1/2 top-1/2 -z-10 rounded-full bg-primary/10",
                     "transition-opacity motion-reduce:transition-none",
                   )}
                   style={{
+                    transform: collapsed
+                      ? `translate(-50%, calc(-50% + ${HIGHLIGHT_COLLAPSED_TY}px))`
+                      : "translate(-50%, -50%)",
                     width: collapsed
                       ? HIGHLIGHT_COLLAPSED_SIZE
-                      : "var(--slot-w, calc((100vw - 40px) / 4))",
-                    height: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : "100%",
+                      : `calc(var(--slot-w, calc((100vw - 40px) / 4)) - ${HIGHLIGHT_INSET * 2}px)`,
+                    height: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : HIGHLIGHT_EXPANDED_H,
                     opacity: active ? 1 : 0,
                     transitionDuration: DURATION,
                     transitionTimingFunction: EASE,

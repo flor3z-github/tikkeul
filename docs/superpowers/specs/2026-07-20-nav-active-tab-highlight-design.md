@@ -15,7 +15,7 @@
 | 항목 | 결정 |
 |---|---|
 | 적용 상태 | 확장(라벨 보임) + 축소(아이콘만 남는 컴팩트 pill) 둘 다 |
-| 모양 | **확장: 탭 슬롯 전체를 채우는 세그먼트 필**(폭 = 레일/4 = 25%, 4탭 합 100%; 높이 = 레일 전체; 곡률 = 레일과 동일 32px — 2026-07-20 실기기 확인 후 사용자 재결정, 기존 64×48 중앙 pill 대체). 축소 상태는 아이콘만 감싸는 36px 원형. 라벨별 hug 아님 |
+| 모양 | **확장: 레일 안에 사방 균일 inset(8px)으로 떠 있는 스타디움 pill** — 폭 = 슬롯(레일/4) − 16px, 높이 = 64 − 16 = 48px, `rounded-full`(radius 24 = 레일 32 − inset → 코너 동심). 2026-07-20 3차 결정: 인스타그램과 나란히 비교 후 flush 세그먼트 필(2차)·64×48 중앙 pill(1차) 대체. 축소 상태는 아이콘만 감싸는 36px 원형. 라벨별 hug 아님 |
 | 모션 | 탭별 독립 opacity 크로스페이드. 공유 요소가 탭 사이를 슬라이딩하지 않음 |
 | 색 | `bg-primary/10` 틴트. 아이콘 `text-primary` 색은 기존대로 유지(이중 신호) |
 
@@ -41,11 +41,14 @@
 ```
 <Link className="relative ..." style={translate ...}>   ← relative 추가, 기존 collapse translate 그대로 유지
   <span aria-hidden                                       ← 신규 하이라이트, -z-10으로 Icon/라벨 뒤에 깔림
-    className="pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2
-                rounded-[32px] bg-primary/10 transition-opacity motion-reduce:transition-none"
+    className="pointer-events-none absolute left-1/2 top-1/2 -z-10
+                rounded-full bg-primary/10 transition-opacity motion-reduce:transition-none"
     style={{
-      width: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : "var(--slot-w, calc((100vw - 40px) / 4))",
-      height: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : "100%",
+      transform: collapsed ? `translate(-50%, calc(-50% + ${HIGHLIGHT_COLLAPSED_TY}px))`
+                           : "translate(-50%, -50%)",
+      width: collapsed ? HIGHLIGHT_COLLAPSED_SIZE
+                       : `calc(var(--slot-w, calc((100vw - 40px) / 4)) - ${HIGHLIGHT_INSET * 2}px)`,
+      height: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : HIGHLIGHT_EXPANDED_H,
       opacity: active ? 1 : 0,
       transitionDuration: DURATION,
       transitionTimingFunction: EASE,
@@ -58,24 +61,26 @@
 
 `left-1/2 top-1/2 -translate-x/y-1/2`로 `Link` 중심에 고정 배치 — 라벨 길이와 무관하게 4탭 동일 위치·크기. DOM상 `Icon`/라벨보다 먼저 나오므로 별도 `z-index` 없이 뒤에 깔린다(stacking order). `Link` 자신의 collapse-translate를 그대로 상속하므로 위치 계산 코드를 추가로 두지 않는다. `pointer-events-none`은 collapsed 상태에서 인접 컬럼 여백까지 하이라이트가 넘칠 때 클릭을 가로채지 않기 위한 방어(기존 nav-level glass 레이어와 동일 컨벤션).
 
-### 3.3 크기 — 슬롯 전체 채움 (2026-07-20 실기기 확인 후 사용자 재결정)
+### 3.3 크기 — 레일 안 균일 inset 스타디움 pill (2026-07-20 3차 결정, 인스타그램 비교 후)
 
-1차 결정은 4탭 공통 고정 상수 64×48 중앙 pill이었으나, 실기기(iOS PWA) 확인 후 **탭 슬롯 전체를 채우는 세그먼트 필로 재결정** — 폭 = 레일/4(25%, 4탭 놓으면 100%), 높이 = 레일 전체(64px). 라벨별 hug는 여전히 아님(4탭 리듬 동일 원칙 유지).
-
-- 확장 폭은 기존 collapse-translate용 ResizeObserver가 이미 레일 폭을 재고 있으므로 같은 자리에서 `--slot-w`(= `railW / 4` px) CSS 변수로 내려준다. 마운트 첫 프레임(변수 미설정) 폴백은 `calc((100vw - 40px) / 4)` — `inset-x-5` 레일과 폰 뷰포트에선 정확히 일치, 데스크톱 광폭에서만 잠깐 과대했다가 observer가 즉시 교정.
-- 확장 높이는 `100%`(Link가 레일 높이를 stretch로 채우므로 = 64px).
-- 축소 상태 상수는 하나만 남는다:
+결정 이력: 1차 = 4탭 공통 고정 상수 64×48 중앙 pill → 2차(실기기 확인 후) = 슬롯 전체 flush 세그먼트 필 → **3차(인스타그램 스크린샷과 나란히 비교 후, 최종) = 레일 안에 사방 균일 inset으로 떠 있는 스타디움 pill**. 인스타그램 구조의 요점은 하이라이트가 레일 경계와 분리된 독립 pill이라는 것 — flush 세그먼트가 아니라 사방 갭이 균일해야 한다. 라벨별 hug는 여전히 아님(4탭 리듬 동일 원칙 유지).
 
 ```ts
-const HIGHLIGHT_COLLAPSED_SIZE = 36; // 원형, 축소 pill의 아이콘 전용 하이라이트
+const HIGHLIGHT_INSET = 8;                               // 레일 경계에서 사방 여백
+const HIGHLIGHT_EXPANDED_H = 64 - HIGHLIGHT_INSET * 2;   // 48 — 레일 h-16(64px)과 동기
+const HIGHLIGHT_COLLAPSED_SIZE = 36;                     // 원형, 축소 pill의 아이콘 전용
 ```
+
+- 확장 폭 = `슬롯 폭 − 2×inset`. 슬롯 폭은 기존 collapse-translate용 ResizeObserver가 이미 레일 폭을 재고 있으므로 같은 자리에서 `--slot-w`(= `railW / 4` px) CSS 변수로 내려준다. 마운트 첫 프레임(변수 미설정) 폴백은 `calc((100vw - 40px) / 4)` — `inset-x-5` 레일과 폰 뷰포트에선 정확히 일치, 데스크톱 광폭에서만 잠깐 과대했다가 observer가 즉시 교정. 첫/마지막 탭은 레일 끝에서 8px, 인접 탭 하이라이트끼리는 슬롯 경계 기준 8px+8px 갭.
+- 확장 높이 = 48px (레일 64 − 상하 8px씩).
+- **축소 상태 세로 보정 `HIGHLIGHT_COLLAPSED_TY = -10`**: 라벨은 opacity로만 사라지고 레이아웃엔 남으므로 아이콘이 Link 박스 중심보다 (라벨 line-height 16.5 + gap 4)/2 ≈ 10px 위에 있다. 하이라이트를 Link 중심에 그대로 두면 원이 아이콘 아래로 처짐(2026-07-20 실기기 발견) — 축소 상태에서만 translate로 −10px 올려 아이콘 중심에 맞춘다. 확장 상태는 아이콘+라벨 스택 전체가 대상이라 Link 중심 그대로가 맞음.
 
 크기 값 자체엔 `transition`을 걸지 않는다(§3-1의 box-size transition 금지 원칙) — `collapsed` boolean에 따라 즉시 스냅. active 탭이 스크롤 축소 모프를 통과하는 순간 하이라이트 크기가 한 프레임에 바뀐다(애니메이션 없이, opacity만 페이드). 탭을 그냥 탭(클릭)할 때는 collapsed 상태가 안 바뀌므로 스냅 자체가 없다.
 
 ### 3.4 색·라운드
 
 - 배경: `bg-primary/10` (라이트/다크 공용 — `--primary` 토큰이 이미 다크모드 변수를 가지므로 별도 다크 분기 불필요)
-- radius: `rounded-[32px]` — **레일(`rounded-[32px]`)과 동일 곡률**(2026-07-20 사용자 결정 "곡률도 동일하게"). 첫/마지막 탭에서 하이라이트 모서리가 레일 모서리와 겹치므로 동심(concentric)으로 맞아떨어진다. 축소 36px 원형에선 32px가 절반(18px)을 초과해 CSS 클램프로 자연히 원이 된다 — 상태별 radius 분기 불필요. 레일 곡률을 바꾸면 하이라이트도 같이 바꿀 것
+- radius: `rounded-full` — 확장 상태에서 radius = 높이/2 = 24px = **레일 radius(32) − inset(8)**, 즉 레일 끝 코너에서 갭이 균일하게 도는 동심(concentric) 구조가 자동으로 나온다(인스타그램과 동일 기하). 축소 36px에선 자연히 18px 원. 레일 곡률이나 inset을 바꾸면 이 동심 관계(`레일 radius − inset = 높이/2`)를 유지할 것
 - 기존 아이콘 `text-primary` / 라벨 `text-foreground` 색 로직은 변경 없음(이중 신호 유지)
 
 ### 3.5 motion-reduce / 접근성
