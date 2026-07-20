@@ -189,24 +189,33 @@ export function aggregateVariableByCategory(
 /** Sort mode for the drill-down transaction list on /stats. */
 export type VariableItemSortMode = "date" | "amount";
 
+/** Sort direction for the drill-down transaction list on /stats. */
+export type VariableItemSortDir = "asc" | "desc";
+
 /**
  * Re-sort a category's drill-down items for the /stats section-level toggle.
  * "amount" reproduces the aggregate's default order (amount desc, newest-first
- * tie-break); "date" is newest-first with amount-desc tie-break. ISO-string
- * comparison keeps this layer TZ-agnostic; input is never mutated.
+ * tie-break); "date" is newest-first with amount-desc tie-break. "asc" is the
+ * exact reverse of the corresponding "desc" order (tie-breaks flip with it),
+ * so flipping direction reads as a full list reversal. ISO-string comparison
+ * keeps this layer TZ-agnostic; input is never mutated.
  */
 export function sortVariableItems(
   items: VariableBreakdownItem[],
   mode: VariableItemSortMode,
+  dir: VariableItemSortDir = "desc",
 ): VariableBreakdownItem[] {
+  const sign = dir === "asc" ? -1 : 1;
   const sorted = [...items];
   if (mode === "date") {
     return sorted.sort(
-      (a, b) => b.spentAt.localeCompare(a.spentAt) || b.amount - a.amount,
+      (a, b) =>
+        sign * (b.spentAt.localeCompare(a.spentAt) || b.amount - a.amount),
     );
   }
   return sorted.sort(
-    (a, b) => b.amount - a.amount || b.spentAt.localeCompare(a.spentAt),
+    (a, b) =>
+      sign * (b.amount - a.amount || b.spentAt.localeCompare(a.spentAt)),
   );
 }
 

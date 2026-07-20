@@ -12,6 +12,7 @@ import { PAYMENT_METHOD_SHORT_LABELS } from "@/lib/utils/payment-method";
 import {
   sortVariableItems,
   type VariableBreakdownRow,
+  type VariableItemSortDir,
   type VariableItemSortMode,
 } from "@/lib/utils/stats/cycle-breakdown";
 import type { PaymentSplit } from "@/lib/utils/stats/payment-split";
@@ -100,11 +101,23 @@ export function VariableSection({
   // null = 모두 닫힘. 키는 categoryId(미분류는 "__uncat__").
   const [openKey, setOpenKey] = useState<string | null>(null);
   // Section-global sort for the expanded drill-down lists. Default "amount"
-  // preserves the pre-toggle behavior; in-memory only (no localStorage) since
-  // sorting is a transient exploration state, not a lasting preference.
+  // desc preserves the pre-toggle behavior; in-memory only (no localStorage)
+  // since sorting is a transient exploration state, not a lasting preference.
   const [sortMode, setSortMode] = useState<VariableItemSortMode>("amount");
+  const [sortDir, setSortDir] = useState<VariableItemSortDir>("desc");
   // delta가 하나라도 있을 때만 기준선 힌트를 단다 — 첫 사이클(전월比 off)엔 노이즈.
   const hasDelta = variableRows.some((r) => r.delta != null && r.delta !== 0);
+
+  // Tap the inactive mode → switch to it, direction reset to desc (the natural
+  // reading order for both modes); tap the active mode again → flip direction.
+  const handleSortTap = (mode: VariableItemSortMode) => {
+    if (mode === sortMode) {
+      setSortDir((dir) => (dir === "desc" ? "asc" : "desc"));
+    } else {
+      setSortMode(mode);
+      setSortDir("desc");
+    }
+  };
 
   return (
     <section className="space-y-3">
@@ -113,8 +126,8 @@ export function VariableSection({
         total={variableTotal}
         hint={hasDelta ? "↑↓ 직전 주기 같은 때 대비" : undefined}
       />
-      <SortToggle mode={sortMode} onChange={setSortMode} />
       <SectionListCard>
+        <SortToggle mode={sortMode} dir={sortDir} onTap={handleSortTap} />
         <ul>
           {variableRows.map((row) => {
             const key = row.categoryId ?? "__uncat__";
@@ -124,6 +137,7 @@ export function VariableSection({
                 row={row}
                 open={openKey === key}
                 sortMode={sortMode}
+                sortDir={sortDir}
                 onToggle={() =>
                   setOpenKey((cur) => (cur === key ? null : key))
                 }
@@ -144,34 +158,46 @@ const SORT_OPTIONS: { mode: VariableItemSortMode; label: string }[] = [
 
 /**
  * Section-global sort toggle for the expanded transaction lists (§12.9). Two
- * plain text buttons (no shadcn Tabs — §9) right-aligned between the heading
- * and the list card; the active mode is emphasized via color/weight only.
+ * plain text buttons (no shadcn Tabs — §9) right-aligned at the top of the
+ * list card; the active mode is emphasized via color/weight and carries a
+ * ↓/↑ direction arrow — tapping it again flips the direction.
  */
 function SortToggle({
   mode,
-  onChange,
+  dir,
+  onTap,
 }: {
   mode: VariableItemSortMode;
-  onChange: (mode: VariableItemSortMode) => void;
+  dir: VariableItemSortDir;
+  onTap: (mode: VariableItemSortMode) => void;
 }) {
   return (
-    <div className="flex items-center justify-end gap-3 px-1">
-      {SORT_OPTIONS.map((opt) => (
-        <button
-          key={opt.mode}
-          type="button"
-          aria-pressed={mode === opt.mode}
-          onClick={() => onChange(opt.mode)}
-          className={cn(
-            "text-[12px] transition-colors",
-            mode === opt.mode
-              ? "font-semibold text-foreground"
-              : "text-muted-foreground",
-          )}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="flex items-center justify-end gap-3 px-1 pb-1">
+      {SORT_OPTIONS.map((opt) => {
+        const active = mode === opt.mode;
+        return (
+          <button
+            key={opt.mode}
+            type="button"
+            aria-pressed={active}
+            aria-label={
+              active
+                ? `${opt.label} ${dir === "desc" ? "내림차순" : "오름차순"}, 누르면 방향 전환`
+                : opt.label
+            }
+            onClick={() => onTap(opt.mode)}
+            className={cn(
+              "text-[12px] transition-colors",
+              active
+                ? "font-semibold text-foreground"
+                : "text-muted-foreground",
+            )}
+          >
+            {opt.label}
+            {active ? (dir === "desc" ? " ↓" : " ↑") : null}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -218,11 +244,13 @@ function VariableRow({
   row,
   open,
   sortMode,
+  sortDir,
   onToggle,
 }: {
   row: VariableBreakdownRow;
   open: boolean;
   sortMode: VariableItemSortMode;
+  sortDir: VariableItemSortDir;
   onToggle: () => void;
 }) {
   const swatch = row.color ?? NEUTRAL_SWATCH;
@@ -289,7 +317,7 @@ function VariableRow({
           // 없는 자식 행이 카드 끝까지 튀어나가는 것 방지).
           className="mb-1 ml-[52px] space-y-0.5 border-l border-border pl-3 pr-8 animate-in fade-in slide-in-from-top-1 duration-150"
         >
-          {sortVariableItems(row.items, sortMode).map((item) => (
+          {sortVariableItems(row.items, sortMode, sortDir).map((item) => (
             <li
               key={item.id}
               className="flex items-start justify-between gap-3 py-1.5"

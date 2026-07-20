@@ -340,13 +340,47 @@ describe("sortVariableItems", () => {
     ]);
   });
 
+  it("amount asc: exact reverse of amount desc (tie-break flips too)", () => {
+    const items = [
+      item("a", 100, "2026-06-01T00:00:00.000Z"),
+      item("b", 300, "2026-06-02T00:00:00.000Z"),
+      item("c", 100, "2026-06-03T00:00:00.000Z"),
+    ];
+    expect(
+      sortVariableItems(items, "amount", "asc").map((i) => i.id),
+    ).toEqual(["a", "c", "b"]);
+  });
+
+  it("date asc: oldest first, exact reverse of date desc", () => {
+    const items = [
+      item("a", 500, "2026-06-01T00:00:00.000Z"),
+      item("b", 100, "2026-06-03T00:00:00.000Z"),
+      item("c", 900, "2026-06-03T00:00:00.000Z"),
+    ];
+    expect(sortVariableItems(items, "date", "asc").map((i) => i.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("omitted direction defaults to desc", () => {
+    const items = [
+      item("a", 100, "2026-06-01T00:00:00.000Z"),
+      item("b", 300, "2026-06-02T00:00:00.000Z"),
+    ];
+    expect(sortVariableItems(items, "amount")).toEqual(
+      sortVariableItems(items, "amount", "desc"),
+    );
+  });
+
   it("does not mutate the input array", () => {
     const items = [
       item("a", 100, "2026-06-01T00:00:00.000Z"),
       item("b", 300, "2026-06-02T00:00:00.000Z"),
     ];
     const snapshot = items.map((i) => i.id);
-    sortVariableItems(items, "date");
+    sortVariableItems(items, "date", "asc");
     expect(items.map((i) => i.id)).toEqual(snapshot);
   });
 
