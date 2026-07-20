@@ -55,7 +55,7 @@ export type FixedEffectiveItem = {
 };
 
 /** One transaction inside a category, for the inline drill-down list. */
-type VariableBreakdownItem = {
+export type VariableBreakdownItem = {
   id: string;
   amount: number;
   spentAt: string;
@@ -184,6 +184,30 @@ export function aggregateVariableByCategory(
       };
     })
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+}
+
+/** Sort mode for the drill-down transaction list on /stats. */
+export type VariableItemSortMode = "date" | "amount";
+
+/**
+ * Re-sort a category's drill-down items for the /stats section-level toggle.
+ * "amount" reproduces the aggregate's default order (amount desc, newest-first
+ * tie-break); "date" is newest-first with amount-desc tie-break. ISO-string
+ * comparison keeps this layer TZ-agnostic; input is never mutated.
+ */
+export function sortVariableItems(
+  items: VariableBreakdownItem[],
+  mode: VariableItemSortMode,
+): VariableBreakdownItem[] {
+  const sorted = [...items];
+  if (mode === "date") {
+    return sorted.sort(
+      (a, b) => b.spentAt.localeCompare(a.spentAt) || b.amount - a.amount,
+    );
+  }
+  return sorted.sort(
+    (a, b) => b.amount - a.amount || b.spentAt.localeCompare(a.spentAt),
+  );
 }
 
 /** Σ of effective amounts over ALL items (amount ?? 0). Matches the dashboard's

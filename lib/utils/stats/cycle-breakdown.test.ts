@@ -5,8 +5,10 @@ import {
   fixedDelta,
   fixedTotal,
   mapFixedItems,
+  sortVariableItems,
   variableTotal,
   type FixedEffectiveItem,
+  type VariableBreakdownItem,
   type VariableTxInput,
 } from "@/lib/utils/stats/cycle-breakdown";
 
@@ -302,5 +304,53 @@ describe("fixedDelta — 전월比 헤드라인 고정분 (matched-only)", () =>
 
   it("is 0 when there is no previous data", () => {
     expect(fixedDelta([fixed("loan", 180_820)], [])).toBe(0);
+  });
+});
+
+describe("sortVariableItems", () => {
+  const item = (
+    id: string,
+    amount: number,
+    spentAt: string,
+  ): VariableBreakdownItem => ({ id, amount, spentAt, memo: null });
+
+  it("amount mode: amount desc, tie-break newest first (matches aggregate order)", () => {
+    const items = [
+      item("a", 100, "2026-06-01T00:00:00.000Z"),
+      item("b", 300, "2026-06-02T00:00:00.000Z"),
+      item("c", 100, "2026-06-03T00:00:00.000Z"),
+    ];
+    expect(sortVariableItems(items, "amount").map((i) => i.id)).toEqual([
+      "b",
+      "c",
+      "a",
+    ]);
+  });
+
+  it("date mode: newest first, tie-break amount desc", () => {
+    const items = [
+      item("a", 500, "2026-06-01T00:00:00.000Z"),
+      item("b", 100, "2026-06-03T00:00:00.000Z"),
+      item("c", 900, "2026-06-03T00:00:00.000Z"),
+    ];
+    expect(sortVariableItems(items, "date").map((i) => i.id)).toEqual([
+      "c",
+      "b",
+      "a",
+    ]);
+  });
+
+  it("does not mutate the input array", () => {
+    const items = [
+      item("a", 100, "2026-06-01T00:00:00.000Z"),
+      item("b", 300, "2026-06-02T00:00:00.000Z"),
+    ];
+    const snapshot = items.map((i) => i.id);
+    sortVariableItems(items, "date");
+    expect(items.map((i) => i.id)).toEqual(snapshot);
+  });
+
+  it("returns [] for empty input", () => {
+    expect(sortVariableItems([], "amount")).toEqual([]);
   });
 });
