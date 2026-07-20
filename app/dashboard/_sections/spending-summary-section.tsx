@@ -39,19 +39,6 @@ type SpendingSummarySectionProps = {
    */
   ownExtraIncome?: number;
   /**
-   * Own-mode per-cycle income adjustment rows, used by the summary to power
-   * the tappable "추가 수입" line that opens the edit/delete sheet.
-   */
-  ownExtraIncomeItems?: {
-    id: string;
-    amount: number;
-    occurredOn: string;
-    memo: string | null;
-  }[];
-  /** YYYY-MM-DD bounds (start inclusive, end exclusive) for the income editor's calendar. */
-  cycleStartDate?: string;
-  cycleEndDate?: string;
-  /**
    * Friend-mode visibility flags. Ignored in own mode (where the data owner
    * always has full visibility of their own data).
    */
@@ -108,9 +95,6 @@ export async function SpendingSummarySection({
   ownSettings,
   ownFixedExpense,
   ownExtraIncome,
-  ownExtraIncomeItems,
-  cycleStartDate,
-  cycleEndDate,
   showSpendingTotal = true,
   showSpendingItems = true,
   showFixed = false,
@@ -376,9 +360,6 @@ export async function SpendingSummarySection({
       monthlyExpense={monthlyResult.monthlyTotal}
       savings={savings}
       extraIncome={ownExtraIncome ?? 0}
-      extraIncomeItems={ownExtraIncomeItems}
-      cycleStartDate={cycleStartDate}
-      cycleEndDate={cycleEndDate}
       hasSettings={ownSettings?.hasSettings ?? false}
       friendView={false}
       cycleLabel={cycleLabel}

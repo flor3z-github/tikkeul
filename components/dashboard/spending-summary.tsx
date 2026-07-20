@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, PieChart, TrendingDown, TrendingUp } from "lucide-react";
 
-import { IncomeLine, type IncomeLineItem } from "@/components/income/income-line";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatKRW, formatNumber } from "@/lib/utils/money";
@@ -36,16 +35,6 @@ type SpendingSummaryProps = {
    * when > 0. Defaults to 0 so existing callers keep working.
    */
   extraIncome?: number;
-  /**
-   * Per-cycle income adjustment rows. When provided alongside cycle bounds,
-   * the summary line becomes tappable and opens the list/edit sheet. When
-   * omitted (e.g. friend view, or callers that haven't migrated yet), the
-   * line stays static.
-   */
-  extraIncomeItems?: IncomeLineItem[];
-  /** YYYY-MM-DD bounds used by the income editor's calendar (inclusive start, exclusive end). */
-  cycleStartDate?: string;
-  cycleEndDate?: string;
   hasSettings: boolean;
   /**
    * When true, render only the spending total(s). Income, available budget,
@@ -132,9 +121,6 @@ export function SpendingSummary({
   monthlyExpense,
   savings = 0,
   extraIncome = 0,
-  extraIncomeItems,
-  cycleStartDate,
-  cycleEndDate,
   hasSettings,
   friendView = false,
   showFixedBreakdown = false,
@@ -215,7 +201,6 @@ export function SpendingSummary({
   });
   const status = getSpendingStatus(summary.spendingRate);
   const rateRounded = Math.round(summary.spendingRate);
-  const hasExtraIncome = summary.extraIncome > 0;
   // Savings present → 3-split mode. The hero number is the total outflow and
   // the label says "나간 돈" (not "쓴 돈") because savings ≠ spending.
   const hasSavings = summary.savings > 0;
@@ -447,26 +432,6 @@ export function SpendingSummary({
                   </span>
                 </div>
               )}
-              {hasExtraIncome ? (
-                <div className="relative z-20">
-                  {extraIncomeItems && cycleStartDate && cycleEndDate ? (
-                    <IncomeLine
-                      items={extraIncomeItems}
-                      totalAmount={summary.extraIncome}
-                      cycleStartDate={cycleStartDate}
-                      cycleEndDate={cycleEndDate}
-                      cycleMode={cycleMode}
-                    />
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">
-                      이번 {cycleMode === "income_day" ? "주기" : "달"} 추가 수입{" "}
-                      <span className="font-semibold tabular-nums text-foreground">
-                        +{formatNumber(summary.extraIncome)}원
-                      </span>
-                    </p>
-                  )}
-                </div>
-              ) : null}
             </div>
 
             {/* 점선 구분선 (인셋, 앱 기본 divider: border-dashed border-border) */}

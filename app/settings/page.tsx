@@ -6,7 +6,6 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/header";
 import { NotificationToggle } from "@/components/settings/notification-toggle";
 import { SettingsForm } from "@/components/settings/settings-form";
-import { GuideResetButton } from "@/components/settings/extras-section";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
@@ -111,12 +110,6 @@ export default async function SettingsPage() {
             vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
           />
         </div>
-      </section>
-
-      {/* 기타 */}
-      <section className="mt-10 space-y-3 border-t border-border pt-6">
-        <h2 className={SECTION_HEADING}>기타</h2>
-        <GuideResetButton />
       </section>
 
       {/* 계정 — 헤더 없이 로그아웃 버튼만 */}

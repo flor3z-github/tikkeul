@@ -30,7 +30,6 @@ import { SpendingSummarySkeleton } from "./_sections/spending-summary-skeleton";
 import { SpendingCalendarSection } from "./_sections/spending-calendar-section";
 import { SpendingCalendarSkeleton } from "./_sections/spending-calendar-skeleton";
 import { SearchSheet } from "@/components/dashboard/search-sheet";
-import { LongPressGuide } from "@/components/onboarding/long-press-guide";
 import { toISODate, nowInSeoul } from "@/lib/utils/date";
 
 // PPR is enabled globally via `cacheComponents: true` in next.config.ts; no
@@ -175,10 +174,10 @@ export default async function DashboardPage({
     isOwn
       ? supabase.rpc("get_my_dm_index")
       : Promise.resolve({ data: null }),
-    // Lifetime transaction count: drives the long-press onboarding overlay.
-    // We only show the guide once the user has at least one transaction, so
-    // first-time users learn the primary tap action before discovering the
-    // secondary long-press action. `head: true` skips row payload.
+    // Lifetime transaction count: gates the release-notes popup. We only
+    // show it once the user has at least one transaction, so brand-new
+    // accounts aren't greeted with changelog noise before they've used the
+    // app. `head: true` skips row payload.
     isOwn
       ? supabase
           .from("transactions")
@@ -241,28 +240,15 @@ export default async function DashboardPage({
   const ownExtraIncomeRes = isOwn
     ? await supabase
         .from("income_adjustments")
-        .select("id, amount, occurred_on, memo")
+        .select("amount")
         .eq("user_id", viewerId)
         .gte("occurred_on", cycleStartDate)
         .lt("occurred_on", cycleEndDate)
-        .order("occurred_on", { ascending: false })
-        .order("id", { ascending: false })
     : {
-        data: [] as {
-          id: string;
-          amount: number;
-          occurred_on: string;
-          memo: string | null;
-        }[],
+        data: [] as { amount: number }[],
       };
-  const ownExtraIncomeItems = (ownExtraIncomeRes.data ?? []).map((row) => ({
-    id: row.id,
-    amount: Number(row.amount ?? 0),
-    occurredOn: row.occurred_on,
-    memo: row.memo,
-  }));
-  const ownExtraIncome = ownExtraIncomeItems.reduce(
-    (sum, row) => sum + row.amount,
+  const ownExtraIncome = (ownExtraIncomeRes.data ?? []).reduce(
+    (sum, row) => sum + Number(row.amount ?? 0),
     0,
   );
 
@@ -473,9 +459,6 @@ export default async function DashboardPage({
               ownFixedExpense={ownFixedExpense}
               ownFixedEffectiveItems={ownFixedEffectiveItems}
               ownExtraIncome={ownExtraIncome}
-              ownExtraIncomeItems={ownExtraIncomeItems}
-              cycleStartDate={cycleStartDate}
-              cycleEndDate={cycleEndDate}
               showSpendingTotal={perms.spendingTotal}
               showSpendingItems={perms.spendingItems}
               ym={ym}
@@ -522,7 +505,6 @@ export default async function DashboardPage({
             />
           </Suspense>
 
-          {lifetimeTxCount > 0 ? <LongPressGuide /> : null}
           {lifetimeTxCount > 0 ? <ReleaseNotesPopup /> : null}
         </>
       ) : (
