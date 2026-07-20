@@ -4,7 +4,6 @@ import { CalendarSync, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { saveCycleAction, saveNicknameAction } from "@/app/settings/actions";
-import { saveIncomeAction } from "@/app/income/actions";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -19,15 +18,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { formatCycleLabelLong } from "@/lib/utils/calendar";
 import { cn } from "@/lib/utils";
 import { getCurrentCycleB, type PayrollRule } from "@/lib/utils/payday-cycle";
-import {
-  formatAmountInput,
-  formatNumber,
-  parseAmountInput,
-} from "@/lib/utils/money";
 import { NICKNAME_MAX_LENGTH } from "@/lib/utils/nickname";
 
 type SettingsFormProps = {
-  initialIncome: number;
   initialNickname: string;
   initialPayday: number;
   initialPayrollRule: PayrollRule;
@@ -142,15 +135,11 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
 }
 
 export function SettingsForm({
-  initialIncome,
   initialNickname,
   initialPayday,
   initialPayrollRule,
   holidays,
 }: SettingsFormProps) {
-  const [income, setIncome] = useState(
-    initialIncome ? formatNumber(initialIncome) : "",
-  );
   const [nickname, setNickname] = useState(initialNickname);
   const [group, setGroup] = useState<PaydayGroup>(
     groupForPayday(initialPayday),
@@ -175,12 +164,10 @@ export function SettingsForm({
   // at mount only; no prop→state sync effect, which would clobber editing when
   // a save's revalidatePath refreshes this RSC.)
   const [savedNickname, setSavedNickname] = useState(initialNickname.trim());
-  const [savedIncome, setSavedIncome] = useState(initialIncome);
   const [savedPayday, setSavedPayday] = useState(initialPayday);
   const [savedRule, setSavedRule] = useState<PayrollRule>(initialPayrollRule);
 
   const nicknameSave = useAutoSave();
-  const incomeSave = useAutoSave();
   const cycleSave = useAutoSave();
 
   // Rebuild the holiday Set once (it crosses the RSC boundary as string[]).
@@ -206,13 +193,6 @@ export function SettingsForm({
     if (trimmed === savedNickname) return;
     const ok = await nicknameSave.save(() => saveNicknameAction(trimmed));
     if (ok) setSavedNickname(trimmed);
-  }
-
-  async function handleIncomeBlur() {
-    const parsed = parseAmountInput(income);
-    if (parsed === savedIncome) return;
-    const ok = await incomeSave.save(() => saveIncomeAction(parsed));
-    if (ok) setSavedIncome(parsed);
   }
 
   // The cycle commits ONLY when "저장" is tapped. A backdrop tap / swipe-down /
@@ -291,36 +271,9 @@ export function SettingsForm({
 
         <section className="mt-10 space-y-4 border-t border-border pt-6">
           <h2 className={SECTION_HEADING}>예산</h2>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="monthly_income">월 수입</Label>
-              <SaveIndicator status={incomeSave.status} />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              매달 들어오는 실수령 금액을 입력해주세요.
-            </p>
-            <div className="relative">
-              <Input
-                id="monthly_income"
-                name="monthly_income"
-                inputMode="numeric"
-                autoComplete="off"
-                value={income}
-                onChange={(event) =>
-                  setIncome(formatAmountInput(event.target.value))
-                }
-                onBlur={handleIncomeBlur}
-                placeholder="예: 3,000,000"
-                className="h-12 rounded-2xl bg-card pr-10 text-[16px]"
-              />
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-muted-foreground"
-              >
-                원
-              </span>
-            </div>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            월 수입은 하단 수입 탭에서 관리해요.
+          </p>
 
           {/* 돈 들어오는 날 — 라벨 위 / 값 박스 아래. 닉네임·월 수입과 같은
               label-above 그리드라 헤더 없는 박스가 떠 보이지 않는다. 박스는

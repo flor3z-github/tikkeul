@@ -28,7 +28,7 @@ export default async function SettingsPage() {
     supabase
       .from("user_settings")
       .select(
-        "monthly_income, payday, payroll_rule, friend_spending_notifications, transaction_interaction_notifications",
+        "payday, payroll_rule, friend_spending_notifications, transaction_interaction_notifications",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -82,7 +82,6 @@ export default async function SettingsPage() {
       />
 
       <SettingsForm
-        initialIncome={Number(settingsResult.data?.monthly_income ?? 0)}
         initialNickname={profileResult.data?.display_name ?? ""}
         initialPayday={Number(settingsResult.data?.payday ?? 1)}
         initialPayrollRule={
