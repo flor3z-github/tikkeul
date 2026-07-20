@@ -10,9 +10,16 @@ import { addMonths } from "@/lib/utils/calendar";
 type MonthSwitcherProps = {
   ym: string;
   cycleLabel: string;
+  /** Route the prev/next links target. The income tab reuses this switcher
+   *  with its own path; dashboard callers keep the default. */
+  basePath?: string;
 };
 
-export function MonthSwitcher({ ym, cycleLabel }: MonthSwitcherProps) {
+export function MonthSwitcher({
+  ym,
+  cycleLabel,
+  basePath = "/dashboard",
+}: MonthSwitcherProps) {
   const prev = addMonths(ym, -1);
   const next = addMonths(ym, +1);
   const searchParams = useSearchParams();
@@ -22,7 +29,7 @@ export function MonthSwitcher({ ym, cycleLabel }: MonthSwitcherProps) {
     const params = new URLSearchParams();
     params.set("ym", targetYm);
     if (viewing) params.set("viewing", viewing);
-    return `/dashboard?${params.toString()}`;
+    return `${basePath}?${params.toString()}`;
   };
 
   return (
