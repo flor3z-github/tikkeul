@@ -7,6 +7,7 @@ import {
   NavProgressProvider,
 } from "@/components/layout/nav-progress";
 import { Toaster } from "@/components/ui/sonner";
+import { KeyboardViewportRestore } from "@/components/pwa/keyboard-viewport-restore";
 import { SwDeepLinkListener } from "@/components/pwa/sw-deep-link-listener";
 import { SerwistProvider } from "./serwist";
 
@@ -100,6 +101,7 @@ export default function RootLayout({
           <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
         </NavProgressProvider>
         <SwDeepLinkListener />
+        <KeyboardViewportRestore />
         <Toaster richColors position="top-center" />
         <Analytics />
         <SpeedInsights />
