@@ -31,6 +31,14 @@ const COLLAPSED_H = 52;
 // Icon drops to the collapsed pill's vertical center once the label fades.
 const COLLAPSED_TY = 8;
 
+// Active-tab highlight pill. Fixed per state, NOT per-label-length — width/
+// height are identical across all 4 tabs regardless of "소비" (2 chars) vs
+// "고정지출" (4 chars). Values are POC-tuned starting points (Pretendard
+// 11px label + 20px icon), not exact hugs.
+const HIGHLIGHT_COLLAPSED_SIZE = 36; // circle, collapsed pill (icon only)
+const HIGHLIGHT_EXPANDED_W = 64; // pill width, expanded (icon+label stack)
+const HIGHLIGHT_EXPANDED_H = 48; // pill height, expanded
+
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const DURATION = "260ms";
 
@@ -121,7 +129,8 @@ export function BottomTabNav() {
                 className={cn(
                   // Fixed 48px hit-box in BOTH states (≥44px, spec §8):
                   // full-slot-width links would overlap once translated.
-                  "flex w-12 flex-col items-center justify-center gap-1 text-[11px] font-medium",
+                  // relative: anchors the active-highlight span below.
+                  "relative flex w-12 flex-col items-center justify-center gap-1 text-[11px] font-medium",
                   "transition-transform motion-reduce:transition-none",
                   active
                     ? "text-foreground"
@@ -135,6 +144,29 @@ export function BottomTabNav() {
                   transitionTimingFunction: EASE,
                 }}
               >
+                {/* Active-tab background pill. Rendered before Icon/label so
+                    it paints behind them (DOM order = stacking order, no
+                    z-index needed). Centered on the Link's own box — width/
+                    height are fixed per collapsed state (spec §3.3), never
+                    per-label, so no content measurement is required. Only
+                    opacity is transitioned; width/height snap instantly with
+                    the collapse morph (box-size transition ban, spec §3-1).
+                    pointer-events-none so it never steals taps even where it
+                    visually overflows the 48px hit-box into slot padding. */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10",
+                    "transition-opacity motion-reduce:transition-none",
+                  )}
+                  style={{
+                    width: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : HIGHLIGHT_EXPANDED_W,
+                    height: collapsed ? HIGHLIGHT_COLLAPSED_SIZE : HIGHLIGHT_EXPANDED_H,
+                    opacity: active ? 1 : 0,
+                    transitionDuration: DURATION,
+                    transitionTimingFunction: EASE,
+                  }}
+                />
                 <Icon
                   className={cn(
                     "size-5 shrink-0",
