@@ -400,7 +400,7 @@ glass surface는 다음에만 제한적으로 사용한다.
 - floating sheet
 - 향후 calendar 월 이동 header
 
-bottom navigation은 backdrop-blur + 반투명 background로 단순하게 처리한다. iOS Safari 류의 글래스모피즘은 사용하지 않는다 (§19).
+bottom navigation은 floating glass pill이다: `--surface-glass` 배경 + backdrop-blur-xl + 1px 화이트 하이라이트 보더 + soft shadow, 화면 바닥에서 12px 떠 있다. backdrop-filter 미지원 환경(구형 Samsung Internet)은 `@supports` 분기로 불투명도를 높인 배경으로 폴백한다. glass 표면은 nav와 §7 기존 허용 표면 외로 확장하지 않는다.
 
 ### 7.2 Radius
 
@@ -441,6 +441,7 @@ className="transition-all duration-200 ease-out active:scale-[0.98]"
 - dialog open/close
 - category chip 선택
 - 저장 후 리스트 갱신
+- 하단 nav 확장↔축소 morph (260ms cubic-bezier(0.32,0.72,0,1), transform/opacity만 — box-size transition 금지, reduced-motion 시 즉시 스냅)
 
 bouncy하거나 과한 애니메이션은 사용하지 않는다.
 
@@ -603,6 +604,8 @@ body {
 ### 11.2 Bottom Tab Navigation (4탭)
 
 소비·고정지출·돈모으기·수입은 동급의 메인 화면이다. 넷 사이를 빠르게 오갈 수 있도록 화면 하단에 4탭 네비게이션을 둔다. 돈모으기는 "다시 내 자산이 되는 돈"(적금·투자)을, 고정지출은 "쓰고 사라지는 돈"을 다룬다 — 둘은 의미가 달라 분리한다(§12.10). 수입은 "들어오는 돈"을 다룬다(§12.11).
+
+nav는 docked bar가 아니라 floating pill이다. 확장 상태(아이콘+라벨, rail 폭)가 기본이며, 아래로 스크롤하면 라벨이 사라지고 아이콘 4개만 남은 컴팩트 pill(208×52px)로 morph한다. 위로 스크롤하거나 최상단(24px 미만)이면 다시 확장된다. bottom sheet(DrawerContent)가 열려 있는 동안 morph는 동결된다(iOS 키보드의 layout viewport 스크롤 오작동 방지). 콘텐츠 하단 패딩과 FAB 위치는 확장 상태 기준 상수(`--bottom-nav-clearance`)로 고정한다 — 축소가 레이아웃을 reflow시키지 않는다.
 
 ```txt
 [ 소비 ]      [ 고정지출 ]      [ 돈모으기 ]   [ 수입 ]
@@ -1480,7 +1483,7 @@ Service Worker는 다음만 캐싱한다.
 - 합계 토글만 켜져 있는 경우 row 단위 SELECT를 노출하지 않는다 — RLS는 `items` 토글로만 게이트하고 합계는 SECURITY DEFINER RPC를 통해서만 얻는다 (§12.8.3).
 - 친구의 친구에게 작성자 신상을 노출하지 않는다 — 모든 인터랙션(반응·답장)은 친구 쌍 단위 1:1 DM(`dm_messages`)으로 흐른다. 거래에 직접 반응이나 댓글을 매다는 surface(예전 `transaction_reactions` / `transaction_comments`)는 폐기되었으며 재도입하지 않는다 (§12.8.8).
 - 거래 row UI에 반응 카운트 / 댓글 프리뷰를 노출하지 않는다 — 모든 인터랙션은 DM 스레드에서 확인한다. 거래 row는 카테고리 + 금액 + 메모만 표시한다 (§12.8.8).
-- Apple 브랜드나 고유 UI(글래스모피즘 탭 스위처 등)를 복제하지 않는다.
+- Apple 브랜드·아이콘·고유 UI를 복제하지 않는다. (glass 표면 자체는 §7의 nav 명세 범위에서 허용)
 - 카드 안에 카드를 중첩하지 않는다 — surface는 한 단계까지.
 - 소비 삭제를 hard delete로 처리하지 않는다 — `transactions.deleted_at` 컬럼을 사용한 soft delete만 사용한다.
 - 통계 화면을 하단 탭으로 만들지 않는다 — `/stats` 진입은 대시보드 합계 카드 탭 하나이며 탭은 4개(소비/고정지출/돈모으기/수입)를 유지한다 (§11.2, §12.9).
