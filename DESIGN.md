@@ -70,7 +70,7 @@ brand:
 1,328,040원    │ 110,670원  [primary]
 ```
 
-대시보드 `PageHeader`의 title은 모드 무관하게 브랜드명 "티끌"로 고정한다. 사이클 정보는 합계 카드 아래 MonthSwitcher 라벨(`5월` 또는 `5/20 – 6/19`)이 전담한다. 사용자가 설정에서 돈 들어오는 날을 달 중간(2~28일)으로 고르거나 급여 규정 보정으로 주기 경계가 달력 월에서 벗어나면(§12.5a, 파생 `income_day` 모드) MonthSwitcher 라벨과 캘린더 그리드가 사이클 기준으로 바뀐다. 합계 카드의 "총 소비 / N원"이 핵심 숫자 자리를 유지한다.
+대시보드 `PageHeader`의 title은 모드 무관하게 브랜드명 "티끌"로 고정한다. 사이클 정보는 합계 카드 아래 MonthSwitcher 라벨(`5월` 또는 `5/20 – 6/19`)이 전담한다. 사용자가 `/income`에서 돈 들어오는 날을 달 중간(2~28일)으로 고르거나 급여 규정 보정으로 주기 경계가 달력 월에서 벗어나면(§12.5a, 파생 `income_day` 모드) MonthSwitcher 라벨과 캘린더 그리드가 사이클 기준으로 바뀐다. 합계 카드의 "총 소비 / N원"이 핵심 숫자 자리를 유지한다.
 
 ### 3.2 기능보다 명료함 우선
 
@@ -94,8 +94,8 @@ MVP에서는 다음 기능을 과하게 강조하지 않는다.
 /savings         매달 모으는 돈(적금·투자) 관리 (모으기) (§12.10)
 /fixed-expenses  매달 빠지는 돈 구성 관리 (구성)
 /friends         친구 코드 발급/입력, 친구 목록 (§12.8)
-/income          이번 주기 수입 현황·월 수입 수정·추가 수입 기록 (§12.11)
-/settings        예산 주기·닉네임·로그아웃 (보조)
+/income          이번 주기 수입 현황·월 수입 수정·추가 수입 기록·예산 주기(돈 들어오는 날) (§12.11)
+/settings        닉네임·알림·로그아웃 (보조)
 /login           로그인
 /signup          회원가입
 ```
@@ -890,15 +890,14 @@ drawer**가 열리고(공개범위 「부분」의 `GroupPickerDrawer`와 동일
 Settings는 주제별 섹션으로 묶는다. **저장 버튼이 없다 — 필드별 자동저장**(알림 토글과 같은 즉시-저장 패턴). 위→아래 순서:
 
 - **내 정보** — 닉네임(친구가 보는 이름. 가입 시 한국어 자동 닉네임이 시드되며, 최대 20자, 공백/탭/줄바꿈 금지. 빈값이면 친구 화면에서 "이름 없음"으로 폴백 §12.8.7). blur 시 자동저장.
-- **예산** — 예산 주기(§12.5a). 「돈 들어오는 날」 picker(§12.5a의 큰 radio 카드)는 랜딩에 펼치지 않고 **값 요약 row→drawer(1 depth)**로 접어, 자주 안 바꾸는 설정이 화면을 길게 만들지 않도록 한다. picker는 부모 state를 갱신하고 **drawer가 닫힐 때 자동저장**한다("확인"도 닫기일 뿐, 별도 저장 버튼 없음 — 카테고리 picker drawer 패턴 §12.3).
 - **알림** — 친구 소비 알림 · 반응/댓글 알림. 둘 다 푸시이며 `user_settings`의 독립 플래그 2개다(§14, migration 0035). 토글 즉시 저장.
 - **계정** — 로그아웃 · 앱 버전 표기.
 
-**자동저장 모델**: 필드별 서버 액션(`saveNicknameAction`/`saveCycleAction`)이 각자 자기 필드만 검증·upsert한다 — 한 필드 blur가 다른 필드를 재검증하지 않으므로, 닉네임을 비운 채 주기를 고쳐도 막히지 않는다. 성공은 해당 필드 옆 "저장됨 ✓" 마이크로 표시(약 1.5s 후 소멸), 실패는 toast. **에러 시 동작은 비대칭이다**: 텍스트 필드(닉네임)는 입력값을 **유지**해 사용자가 고쳐 재-blur하게 하고(재타이핑 강요 금지), 주기 picker는 편집 텍스트가 아니라 값 요약 row라서 직전-저장값으로 **복원**한다(저장 안 된 상태를 거짓 표시하지 않게).
+**자동저장 모델**: 닉네임 필드는 `saveNicknameAction`이 blur 시 자동 upsert한다(알림 토글과 같은 즉시-저장 패턴). 성공은 필드 옆 "저장됨 ✓" 마이크로 표시(약 1.5s 후 소멸), 실패는 입력값을 **유지**한 채 toast로 알려 사용자가 고쳐 재-blur하게 한다(재타이핑 강요 금지). (예산 주기 picker는 더 이상 이 화면 소관이 아니다 — `/income`으로 이관됐고 저장 방식도 다르다, §12.5a.)
 
 친구 진입점은 설정이 아니라 대시보드 헤더의 친구 칩/omnibox 시트다(§12.8). 설정 닉네임 섹션에는 친구 수·친구 링크를 두지 않는다 — 진입점 중복을 피한다. 레거시 `/friends` 라우트는 `/dashboard`로 리다이렉트되는 북마크 호환 스텁이다.
 
-월 수입 수정과 추가 수입 등록은 설정에 두지 않는다(진입점 중복 제거) — 둘 다 하단 탭 nav → `/income`에서 처리한다(§12.11). 월 고정지출은 하단 탭 nav → `/fixed-expenses`에서 항목별로 관리한다(§12.7).
+월 수입 수정과 추가 수입 등록은 설정에 두지 않는다(진입점 중복 제거) — 둘 다 하단 탭 nav → `/income`에서 처리한다(§12.11). **돈 들어오는 날(예산 주기)도 설정이 아닌 `/income`에서 관리한다** — 「월 수입」 row 바로 아래에 값 요약 row→drawer로 노출된다(§12.5a, §12.11). 월 고정지출은 하단 탭 nav → `/fixed-expenses`에서 항목별로 관리한다(§12.7).
 
 카테고리 관리는 Settings가 아니라 **소비 폼의 카테고리 picker drawer**에서 한다(§12.3). 별도 Settings 항목이나 `/settings/categories` 라우트는 두지 않는다.
 
@@ -929,7 +928,7 @@ MVP에서는 노출하지 않는다.
 
 2026 검증 (규정 = `prev`): `payday=1` 1월 → 2/1(일)이 명목 다음달 앵커라 prev로 1/30 → 주기 `[2025-12-31, 2026-01-30)` 라벨 "1월"(1/1 신정·목 → prev → 12/31). `payday=20` 1월 → 1/20(화) 영업일 → `[1/20, 2/20)`. `payday=말일` 1월 → 1/31(토) → prev 1/30, +1일 = 1/31 → `[1/31, 2/28)` 라벨 "2월".
 
-UI 구성 (예산 섹션):
+UI 구성 (`/income`의 「돈 들어오는 날」 drawer — `components/income/payday-cycle-drawer.tsx`):
 
 - 라벨 "돈 들어오는 날" + 보조 설명 "월급·용돈처럼 돈이 들어오는 날에 맞춰 소비를 집계해요."
 - 단일 Select 하나 (옵션: "1일"~"28일" + "말일 (매월 마지막 날)"). 29/30/31은 노출하지 않는다 — 진짜 말일 급여자는 "말일"을 고른다.
@@ -937,11 +936,11 @@ UI 구성 (예산 섹션):
 - **계층 표현(상위/하위)**: 같은 카드 안에서 "언제 들어와?"(radio 3개)는 `bg-card`로 떠 있는 **상위**, "주말·공휴일 겹칠 때" 보정 + 주기 프리뷰는 `bg-muted/60`로 면을 낮춘 **하위(종속) zone**이다. 카드를 2장으로 쪼개지 않는다 — 분리는 "동등한 두 설정"으로 읽히지만, 보정은 위 선택에 딸린 종속 컨트롤이므로 면 깊이(plane recession)로 위상차를 표현한다. 하위 행은 좌측에 `CalendarSync` 아이콘(muted, radio 동그라미와 구분되는 "선택지 아닌 보정 컨트롤" 신호) + 라벨 톤다운으로 한 단계 가라앉힌다. 프리뷰는 zone 맨 아래 tier-3로 가장 흐리게.
 - 그 아래 상시 안내 한 줄(이번 주기 프리뷰): 주기가 정확히 달력 월(1일~말일)과 일치하면 평서문 "이번 달 소비를 1일부터 말일까지 모아서 보여드려요.", 그 외(이동·말일 케이스)는 "이번 주기: 5월 25일 – 6월 24일" 형태의 실제 입금앵커 기간 프리뷰(휴일 반영). 말일은 자연히 다음달 라벨로 표시된다.
 
-`cycleMode`(`calendar`/`income_day`)는 더 이상 저장값이 아니라 **파생값**이다 — `getCycleRangeB`가 주기가 정확히 `[1일, 다음달 1일)`일 때만 `calendar`, 그 외 모든 이동·말일 주기는 `income_day`로 도출한다. 덕분에 하위 소비자(`spending-month-grid.tsx`의 가변행 그리드, 페이스 라인 카피 등)는 무변경으로 동작한다. 매핑은 `lib/utils/calendar.ts`의 순수 함수 `paydayCodeToDb`/`dbToPaydayCode`/`PAYDAY_OPTIONS`가 단일 출처이며(picker `PaydayCode` ↔ `payday` smallint), `components/settings/settings-form.tsx`는 picker 선택을 `payday` smallint + `payroll_rule`로 변환해 drawer가 닫힐 때 `saveCycleAction(payday, payrollRule)`로 자동저장한다(폼 제출 없음, §12.5).
+`cycleMode`(`calendar`/`income_day`)는 더 이상 저장값이 아니라 **파생값**이다 — `getCycleRangeB`가 주기가 정확히 `[1일, 다음달 1일)`일 때만 `calendar`, 그 외 모든 이동·말일 주기는 `income_day`로 도출한다. 덕분에 하위 소비자(`spending-month-grid.tsx`의 가변행 그리드, 페이스 라인 카피 등)는 무변경으로 동작한다. picker 값(`PaydayGroup` — `first`/`mid`/`last`) ↔ `payday` smallint 매핑은 `lib/utils/payday-cycle.ts`의 순수 함수 `paydayGroupToDb`/`groupForPayday`가 단일 출처이며, 온보딩(`app/onboarding/_components/onboarding-flow.tsx`)과 `/income`의 `PaydayCycleDrawer`(`components/income/payday-cycle-drawer.tsx`)가 함께 공유한다 — 신규·기존 유저 모두 같은 매핑을 탄다. `components/settings/settings-form.tsx`는 더 이상 이 값을 다루지 않는다(닉네임 전용, §12.5). `PaydayCycleDrawer`는 picker 선택을 부모 state에 draft로만 반영하고, **명시적 "저장" 버튼을 탭해야** `saveCycleAction(payday, payrollRule)`로 커밋한다 — backdrop 탭·스와이프 다운·ESC로 drawer를 닫으면 미저장 선택을 폐기하고 직전-저장값으로 되돌린다(저장 실패 시에도 동일하게 되돌림). 값 요약 row→drawer 패턴 자체는 카테고리 picker drawer(§12.3)와 같지만, 커밋 시점은 "drawer 닫힘"이 아니라 "저장 버튼"이다.
 
 휴일은 **Supabase `holidays` 테이블**(컬럼 `d date` PK + `name text`)에 저장한다. 인증 유저 전체 읽기 가능(공휴일=비민감), 쓰기는 SQL editor/service role 전용(SELECT 정책만 존재). 주기가 연 경계를 넘으므로(1월 주기가 전년 12월 시작, 12월 말일 주기가 다음해 1월 종료) `getHolidays`는 앵커 연도 ±1년을 로드한다(`holidayRangeForAnchor`). 휴일 테이블은 **매년 직접 갱신**해야 한다(공휴일 INSERT). 조회 실패 시 빈 Set으로 graceful degrade하여 모든 날을 영업일로 취급한다.
 
-마이그레이션 백필은 **lossy·의도적**이다: 기존 `calendar` 모드 행(과거에 1일·말일 둘 다 흡수)은 일괄 `payday=1`이 되므로, 실제 말일 급여자는 설정에서 "말일"을 다시 골라야 한다(1일 급여자와 구분 불가). 레거시 `income_day` 2~28 → `payday=N`, 29~31 → `payday=0`(말일).
+마이그레이션 백필은 **lossy·의도적**이다: 기존 `calendar` 모드 행(과거에 1일·말일 둘 다 흡수)은 일괄 `payday=1`이 되므로, 실제 말일 급여자는 `/income`에서 "말일"을 다시 골라야 한다(1일 급여자와 구분 불가). 레거시 `income_day` 2~28 → `payday=N`, 29~31 → `payday=0`(말일).
 
 친구 대시보드는 친구 본인의 사이클을 그대로 사용한다. 친구의 `monthly_income`은 노출하지 않으며, `get_user_cycle` RPC가 주는 `(payday, payroll_rule)` 2개 + 공개 `holidays`만으로 **JS(`payday-cycle.ts` 엔진)가 친구 주기를 직접 계산**한다(SQL 영업일 함수 불필요). RPC는 friendship 관계가 있는 viewer에게만 row를 반환하며 income은 영원히 비노출이다. 친구 모드 대시보드의 화면 동작 전체는 §12.8.5 참조.
 
@@ -1301,6 +1300,7 @@ PageHeader  eyebrow="이번 주기 들어온 돈"  title="수입"
 │ 월 수입 300만원 · 추가 25만원  │  ← 보조 breakdown 한 줄
 └──────────────────────────────┘
 [월 수입]  "매달 들어오는 실수령 금액"  ₩3,000,000  ›   ← 현재 주기에서만 노출
+[돈 들어오는 날]  1일 · 이전 영업일  ›               ← 예산 주기, 모든 주기에서 노출 (§12.5a)
 [추가 수입 N · 최신순]
    항목 없음: "이번 주기엔 추가 수입이 없어요."
    있으면: +금액 / 날짜·메모, 탭 → 수정·삭제
@@ -1312,6 +1312,7 @@ PageHeader  eyebrow="이번 주기 들어온 돈"  title="수입"
 - 히어로 총 수입 = `monthly_income + Σ추가수입`(이번 주기 범위). 대시보드 「쓴 돈」 계산과 마찬가지로 화면에서 가장 큰 숫자다(§3).
 - 주기 이동은 대시보드와 같은 주기 해석 엔진(`resolveDashboardParamsB`) + `MonthSwitcher`를 재사용한다(`basePath="/income"`) — 사이클 정의·라벨 규칙은 §12.5a와 동일.
 - **월 수입 행은 현재 주기에서만** 탭 가능하다. 탭하면 월 수입 저장 로직(`saveIncomeAction`)을 재사용하는 BottomSheet(`DrawerContent`)가 열려 금액을 수정한다. 과거 주기에서는 이 행 자체가 렌더되지 않고, 히어로 breakdown에만 **현재 monthly_income 스냅샷**이 근사치로 표시된다 — 월 수입은 이력을 저장하지 않으므로 과거 주기의 "그때 수입"과 다를 수 있다(의도된 한계).
+- **「돈 들어오는 날」(예산 주기) 행은 「월 수입」 행 바로 아래에, 월 수입 행과 달리 모든 주기(과거·현재·미래)에서 항상 노출**된다 — 주기 자체는 과거 데이터가 아니라 현재 설정이라 "그때 값"이 따로 없으므로 현재/과거 구분이 필요 없다. UI·저장 동작은 §12.5a 참조(`PaydayCycleDrawer`, 명시적 "저장" 버튼 커밋).
 - **추가 수입 리스트**는 주기 범위(`occurred_on` between 주기 시작·끝) 쿼리라 과거 주기에서도 정확하다. 최신순(날짜 desc) 정렬, 항목 탭 → 생성/수정 공용 다이얼로그(`initial` 키 패턴, 소비 폼과 동일 철학 §12.3)로 수정·삭제. 빈 상태 카피는 "이번 주기엔 추가 수입이 없어요."
 - 추가 진입은 **우하단 FAB**이다 — 대시보드/돈모으기와 동일 위치·크기·primary 스타일. `<AppShell withBottomNav withFab>`을 넘긴다. 미래 주기에서는 FAB을 숨긴다(서버가 미래 날짜를 거부하므로 성공할 수 없는 진입점을 노출하지 않는다).
 - 수입은 여전히 transaction이 아니다 — `monthly_income` 단일 숫자 + 추가 수입 기록 모델을 그대로 쓴다. income-as-transactions 제외 원칙은 유지된다(§19).
