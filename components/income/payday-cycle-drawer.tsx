@@ -249,8 +249,8 @@ export function PaydayCycleDrawer({
                         payment-day-select.tsx): hands the picker to the OS wheel
                         (iOS) / dropdown (Android) — zero JS popup, so no base-ui
                         press-drag-release latency and no vaul modal-portal
-                        conflict. Lives on /settings (navbar-less) so it can't
-                        touch the dashboard bottom nav. */}
+                        conflict. Safe here even with /income's bottom nav: the
+                        vaul drawer's overlay covers it while open. */}
                     <div className="relative w-28 shrink-0">
                       <select
                         id="payday-day"

@@ -9,8 +9,6 @@ import { SettingsForm } from "@/components/settings/settings-form";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
-import { getHolidays, holidayRangeForAnchor } from "@/lib/queries/holidays";
-import { type PayrollRule } from "@/lib/utils/payday-cycle";
 import { AppVersionFooter } from "@/components/settings/app-version-footer";
 
 const SECTION_HEADING = "px-1 text-[15px] font-semibold tracking-[-0.01em]";
@@ -21,14 +19,11 @@ export default async function SettingsPage() {
   const userId = claimsData?.claims?.sub ?? null;
   if (!userId) redirect("/login");
 
-  // Cycles cross year boundaries, so load ±1 year of holidays around now.
-  const { yearStart, yearEnd } = holidayRangeForAnchor(new Date().getFullYear());
-
-  const [settingsResult, profileResult, holidays] = await Promise.all([
+  const [settingsResult, profileResult] = await Promise.all([
     supabase
       .from("user_settings")
       .select(
-        "payday, payroll_rule, friend_spending_notifications, transaction_interaction_notifications",
+        "friend_spending_notifications, transaction_interaction_notifications",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -37,7 +32,6 @@ export default async function SettingsPage() {
       .select("display_name")
       .eq("id", userId)
       .maybeSingle(),
-    getHolidays(yearStart, yearEnd, supabase),
   ]);
 
   if (settingsResult.error) {
@@ -81,14 +75,7 @@ export default async function SettingsPage() {
         title="설정"
       />
 
-      <SettingsForm
-        initialNickname={profileResult.data?.display_name ?? ""}
-        initialPayday={Number(settingsResult.data?.payday ?? 1)}
-        initialPayrollRule={
-          (settingsResult.data?.payroll_rule ?? "prev") as PayrollRule
-        }
-        holidays={Array.from(holidays)}
-      />
+      <SettingsForm initialNickname={profileResult.data?.display_name ?? ""} />
 
       {/* 알림 */}
       <section className="mt-10 space-y-4 border-t border-border pt-6">
