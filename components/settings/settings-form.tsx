@@ -1,7 +1,6 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarSync, Check, ChevronDown, ChevronRight } from "lucide-react";
-import { toast } from "sonner";
+import { useMemo, useRef, useState } from "react";
+import { CalendarSync, ChevronDown, ChevronRight } from "lucide-react";
 
 import { saveCycleAction, saveNicknameAction } from "@/app/settings/actions";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { SaveIndicator, useAutoSave } from "@/components/settings/auto-save";
 import { formatCycleLabelLong } from "@/lib/utils/calendar";
 import { cn } from "@/lib/utils";
 import { getCurrentCycleB, type PayrollRule } from "@/lib/utils/payday-cycle";
@@ -26,8 +26,6 @@ type SettingsFormProps = {
   initialPayrollRule: PayrollRule;
   holidays: string[];
 };
-
-type ActionResult = { ok: true } | { ok: false; error: string };
 
 const PAYROLL_RULE_OPTIONS: {
   value: PayrollRule;
@@ -64,74 +62,6 @@ function payrollRuleLabel(value: string | null): string {
 // a failed cycle save can revert the UI to the last-saved selection.
 function groupForPayday(payday: number): PaydayGroup {
   return payday === 0 ? "last" : payday >= 2 ? "mid" : "first";
-}
-
-type SaveStatus = "idle" | "saving" | "saved";
-
-// Per-field auto-save: drives a transient "저장 중…/저장됨 ✓" indicator and
-// surfaces failures as a toast. The caller decides what to do with the field
-// value on failure (text fields keep it, the cycle row reverts) via the
-// returned boolean / onError.
-function useAutoSave() {
-  const [status, setStatus] = useState<SaveStatus>("idle");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  const save = useCallback(
-    async (
-      action: () => Promise<ActionResult>,
-      onError?: () => void,
-    ): Promise<boolean> => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-        timer.current = null;
-      }
-      setStatus("saving");
-      let res: ActionResult;
-      try {
-        res = await action();
-      } catch {
-        res = { ok: false, error: "저장에 실패했어요." };
-      }
-      if (res.ok) {
-        setStatus("saved");
-        timer.current = setTimeout(() => setStatus("idle"), 1500);
-        return true;
-      }
-      setStatus("idle");
-      toast.error(res.error);
-      onError?.();
-      return false;
-    },
-    [],
-  );
-
-  return { status, save };
-}
-
-function SaveIndicator({ status }: { status: SaveStatus }) {
-  if (status === "idle") return null;
-  return (
-    <span
-      aria-live="polite"
-      className="flex items-center gap-1 text-xs text-muted-foreground"
-    >
-      {status === "saving" ? (
-        "저장 중…"
-      ) : (
-        <>
-          <Check className="size-3.5 text-emerald-600" aria-hidden />
-          저장됨
-        </>
-      )}
-    </span>
-  );
 }
 
 export function SettingsForm({
