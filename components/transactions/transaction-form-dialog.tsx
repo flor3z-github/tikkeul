@@ -48,6 +48,7 @@ import {
   CategoryPickerDrawer,
   type CategoryMutation,
 } from "@/components/transactions/category-picker-drawer";
+import { SplitChips } from "@/components/fixed-expenses/split-chips";
 import { toISODate } from "@/lib/utils/date";
 import {
   formatAmountInput,
@@ -304,6 +305,7 @@ function TransactionFormBody({
     deriveInitialSelectedGroupIds(initial, groups),
   );
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
+  const [splitPickerOpen, setSplitPickerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
@@ -646,17 +648,21 @@ function TransactionFormBody({
             </button>
           ))}
         </div>
-        {/* N명 나눠내기(정산). 금액 카드 안 인라인 native select로 즉시 적용한다(nested
-            drawer·확정 버튼 없이 — 할부 개월 select와 동일 패턴 [[select-in-drawer-portal-fix]]).
-            select onChange → handlePickSplit → 히어로 숫자가 바로 내 몫으로 바뀐다. 나눈
-            총액은 splitBaseAmount가 보관하므로 인원을 다시 골라도 원래 총액 기준으로 재분할.
-            할부와 상호배타 — 할부 켜지면 숨긴다. stopPropagation: 카드 전체가
-            focusAmountInput이라 탭이 select로 새어들어와도 금액 입력에 포커스가 안 튀게. */}
+        {/* N명 나눠내기(정산). 값 요약 트리거 row → SplitPickerDrawer(nested)로
+            연다. 칩 탭 = 즉시 적용 + 닫기. 나눈 총액은 splitBaseAmount가 보관하므로
+            인원을 다시 골라도 원래 총액 기준으로 재분할. 할부와 상호배타 — 할부
+            켜지면 숨긴다. stopPropagation: 카드 전체가 focusAmountInput이라 탭이
+            금액 입력으로 안 새게. 기준 총액 0원이면 비활성 — 이때는
+            pointer-events-none으로 탭을 카드에 흘려보내 금액 입력에 포커스를 준다. */}
         {!installmentActive ? (
-          <div
-            role="presentation"
-            onClick={(event) => event.stopPropagation()}
-            className="flex w-full items-center gap-2 rounded-xl bg-card px-3 py-2 text-[13px]"
+          <button
+            type="button"
+            disabled={splitBaseAmount <= 0}
+            onClick={(event) => {
+              event.stopPropagation();
+              setSplitPickerOpen(true);
+            }}
+            className="flex w-full items-center gap-2 rounded-xl bg-card px-3 py-2.5 text-left text-[13px] transition-all duration-150 ease-out active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50"
           >
             <Users
               className="size-3.5 shrink-0 text-muted-foreground"
@@ -668,36 +674,14 @@ function TransactionFormBody({
               </span>
             ) : (
               <span className="min-w-0 flex-1 truncate font-medium text-muted-foreground">
-                나눠내기
+                여러 명이 나눠 냈어요
               </span>
             )}
-            {/* caret로 "열리는 컨트롤"임을 명시(appearance-none이라 native 화살표가
-                사라지므로 ChevronDown을 얹는다). 할부 select와 동일 처리. */}
-            <div className="relative shrink-0">
-              <select
-                aria-label="나눈 인원"
-                value={splitCount >= 2 ? splitCount : 1}
-                onChange={(event) => {
-                  const people = Number(event.target.value);
-                  handlePickSplit(computeShare(splitBaseAmount, people), people);
-                }}
-                className="appearance-none rounded-full bg-muted py-1.5 pl-3 pr-7 text-[13px] font-medium outline-none [-webkit-appearance:none]"
-              >
-                <option value={1}>안 나눔</option>
-                {Array.from({ length: SPLIT_MAX_PEOPLE - 1 }, (_, i) => i + 2).map(
-                  (n) => (
-                    <option key={n} value={n}>
-                      {n}명
-                    </option>
-                  ),
-                )}
-              </select>
-              <ChevronDown
-                className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-            </div>
-          </div>
+            <ChevronRight
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+          </button>
         ) : null}
         </div>
       </div>
@@ -896,6 +880,16 @@ function TransactionFormBody({
         groups={groups}
         selectedIds={selectedGroupIds}
         onChange={setSelectedGroupIds}
+      />
+
+      <SplitPickerDrawer
+        open={splitPickerOpen}
+        onOpenChange={setSplitPickerOpen}
+        baseAmount={splitBaseAmount}
+        currentValue={amountValue}
+        onPick={(people) =>
+          handlePickSplit(computeShare(splitBaseAmount, people), people)
+        }
       />
 
       <CategoryPickerDrawer
@@ -1286,6 +1280,56 @@ function GroupPickerDrawer({
             닫기
           </Button>
         )}
+      </DrawerContent>
+    </DrawerNestedRoot>
+  );
+}
+
+// 나눠내기 인원 picker. 단일 선택이라 버퍼 없이 칩 탭 = 즉시 적용 + 닫기
+// (GroupPickerDrawer의 버퍼/커밋 모델과 다른 이유). 인원 옵션은 DB CHECK(2~10)와
+// 같은 SPLIT_MAX_PEOPLE을 단일 소스로 쓴다(1 = 혼자 다 = 분할 해제).
+const TRANSACTION_SPLIT_SHARES: readonly number[] = Array.from(
+  { length: SPLIT_MAX_PEOPLE },
+  (_, i) => i + 1,
+);
+
+type SplitPickerDrawerProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** 나눌 기준 총액 — 분할 중이면 저장된 총액(splitTotal), 아니면 현재 입력값. */
+  baseAmount: number;
+  /** 현재 금액칸 값 — 일치하는 칩 하이라이트용. */
+  currentValue: number;
+  onPick: (people: number) => void;
+};
+
+function SplitPickerDrawer({
+  open,
+  onOpenChange,
+  baseAmount,
+  currentValue,
+  onPick,
+}: SplitPickerDrawerProps) {
+  return (
+    <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
+        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
+          <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
+            나눠내기
+          </DrawerTitle>
+          <DrawerDescription className="text-[13px] text-muted-foreground">
+            결제한 총액 기준으로 내 몫만 기록해요.
+          </DrawerDescription>
+        </DrawerHeader>
+        <SplitChips
+          baseAmount={baseAmount}
+          currentValue={currentValue}
+          shares={TRANSACTION_SPLIT_SHARES}
+          onPick={(_next, people) => {
+            onPick(people);
+            onOpenChange(false);
+          }}
+        />
       </DrawerContent>
     </DrawerNestedRoot>
   );
