@@ -16,11 +16,15 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { formatAmountInput, parseAmountInput } from "@/lib/utils/money";
 import { isValidNickname, NICKNAME_MAX_LENGTH } from "@/lib/utils/nickname";
-import type { PayrollRule } from "@/lib/utils/payday-cycle";
+import {
+  paydayGroupToDb,
+  type PaydayGroup,
+  type PayrollRule,
+} from "@/lib/utils/payday-cycle";
 
-// Mirrors settings-form's 돈 들어오는 날 picker: 3 buckets that map to
-// user_settings.payday (first->1, last->0, mid->the chosen day 2..28).
-type PaydayGroup = "first" | "mid" | "last";
+// The 돈 들어오는 날 picker's 3 buckets map to user_settings.payday via the
+// shared paydayGroupToDb (see lib/utils/payday-cycle.ts); the /income payday
+// drawer uses the same mapper so new and existing users stay in lock-step.
 const MID_DAY_OPTIONS = Array.from({ length: 27 }, (_, i) => i + 2); // 2..28
 
 const PAYROLL_RULE_OPTIONS: {
@@ -94,7 +98,7 @@ export function OnboardingFlow({
 
   const nicknameValid = isValidNickname(nickname);
   const incomeValid = parseAmountInput(income) > 0;
-  const paydayDb = group === "first" ? 1 : group === "last" ? 0 : midDay;
+  const paydayDb = paydayGroupToDb(group, midDay);
 
   const canAdvance =
     (step === 1 && nicknameValid) || (step === 2 && incomeValid);

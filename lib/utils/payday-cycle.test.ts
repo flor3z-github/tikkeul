@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   getPreviousCycleB,
+  groupForPayday,
+  paydayGroupToDb,
   resolveDashboardParamsB,
+  type PaydayGroup,
 } from "@/lib/utils/payday-cycle";
 import { nowInSeoul, toISODate } from "@/lib/utils/date";
 
@@ -181,5 +184,29 @@ describe("getPreviousCycleB — 전월比 anchor (/stats)", () => {
     expect(toISODate(prev.start)).toBe("2025-12-01");
     expect(toISODate(prev.end)).toBe("2026-01-01");
     expect(prev.anchorYm).toBe("2025-12");
+  });
+});
+
+describe("paydayGroupToDb / groupForPayday — picker↔db mapping", () => {
+  it("maps groups to db payday", () => {
+    expect(paydayGroupToDb("first", 25)).toBe(1);
+    expect(paydayGroupToDb("last", 25)).toBe(0);
+    expect(paydayGroupToDb("mid", 25)).toBe(25);
+    expect(paydayGroupToDb("mid", 2)).toBe(2);
+  });
+
+  it("maps db payday back to group (inverse for 1/0/mid)", () => {
+    expect(groupForPayday(1)).toBe("first");
+    expect(groupForPayday(0)).toBe("last");
+    expect(groupForPayday(25)).toBe("mid");
+    expect(groupForPayday(2)).toBe("mid");
+  });
+
+  it("round-trips every offered selection", () => {
+    expect(groupForPayday(paydayGroupToDb("first", 25))).toBe("first");
+    expect(groupForPayday(paydayGroupToDb("last", 25))).toBe("last");
+    for (let d = 2; d <= 28; d++) {
+      expect(groupForPayday(paydayGroupToDb("mid", d))).toBe("mid");
+    }
   });
 });

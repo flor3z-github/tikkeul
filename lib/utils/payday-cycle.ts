@@ -28,6 +28,20 @@ export type PayrollRule = "prev" | "same" | "next";
 // user_settings.payday value, the Model B deposit anchor.
 export const PAYDAY_END_OF_MONTH = 0;
 
+// Picker bucket ↔ DB payday mapping. The 돈 들어오는 날 picker offers 3 buckets
+// that mirror the 3 distinct label/cycle behaviors: 1일 (first), 특정일 2..28
+// (mid), 말일 (last). Single source shared by the /income payday drawer and the
+// onboarding flow (CLAUDE.md: no inline duplication of this mapping).
+export type PaydayGroup = "first" | "mid" | "last";
+
+export function paydayGroupToDb(group: PaydayGroup, midDay: number): number {
+  return group === "first" ? 1 : group === "last" ? PAYDAY_END_OF_MONTH : midDay;
+}
+
+export function groupForPayday(payday: number): PaydayGroup {
+  return payday === PAYDAY_END_OF_MONTH ? "last" : payday >= 2 ? "mid" : "first";
+}
+
 // Defensive cap on the business-day walk. A month fully blocked by weekends +
 // holidays is impossible with real data, but never risk an infinite loop.
 const MAX_BUSINESS_DAY_STEPS = 31;
