@@ -119,6 +119,9 @@ export default async function IncomePage({
         isCurrentCycle={isCurrentCycle}
         isFutureCycle={isFutureCycle}
         addDefaultDate={addDefaultDate}
+        payday={payday}
+        payrollRule={rule}
+        holidays={Array.from(holidays)}
       />
     </AppShell>
   );

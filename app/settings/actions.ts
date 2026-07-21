@@ -87,6 +87,7 @@ export async function saveCycleAction(
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/income");
   revalidatePath("/settings");
   revalidatePath("/friends");
   return { ok: true };

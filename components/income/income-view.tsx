@@ -8,9 +8,11 @@ import {
   type IncomeAdjustmentInitial,
 } from "@/components/income/income-form-dialog";
 import { MonthlyIncomeSheet } from "@/components/income/monthly-income-sheet";
+import { PaydayCycleDrawer } from "@/components/income/payday-cycle-drawer";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKoreanShortDate } from "@/lib/utils/date";
 import { formatNumber } from "@/lib/utils/money";
+import type { PayrollRule } from "@/lib/utils/payday-cycle";
 
 export type IncomeAdjustmentItem = {
   id: string;
@@ -31,6 +33,11 @@ type IncomeViewProps = {
   isFutureCycle: boolean;
   /** YYYY-MM-DD pre-fill for the add form (today, or past cycle's last day). */
   addDefaultDate: string;
+  /** DB payday: 0=말일, 1..28. Global cycle setting, editable on every cycle. */
+  payday: number;
+  payrollRule: PayrollRule;
+  /** YYYY-MM-DD holiday strings for cycle-preview computation. */
+  holidays: string[];
 };
 
 // Parse YYYY-MM-DD into a local-midnight Date — matches IncomeFormDialog's
@@ -48,6 +55,9 @@ export function IncomeView({
   isCurrentCycle,
   isFutureCycle,
   addDefaultDate,
+  payday,
+  payrollRule,
+  holidays,
 }: IncomeViewProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<IncomeAdjustmentInitial | null>(null);
@@ -111,6 +121,12 @@ export function IncomeView({
           </CardContent>
         </Card>
       ) : null}
+
+      <PaydayCycleDrawer
+        initialPayday={payday}
+        initialPayrollRule={payrollRule}
+        holidays={holidays}
+      />
 
       {/* 추가 수입 list. */}
       <section className="mt-6 space-y-3">
