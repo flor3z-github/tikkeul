@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { CalendarIcon, ChevronRight, Pencil, Trash2, X } from "lucide-react";
+import { CalendarIcon, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -20,12 +20,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Drawer,
   DrawerContent,
@@ -34,7 +28,7 @@ import {
   DrawerNestedRoot,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { formatKoreanFullDate, toISODate } from "@/lib/utils/date";
+import { toISODate } from "@/lib/utils/date";
 import {
   formatAmountInput,
   formatNumber,
@@ -62,9 +56,9 @@ export type IncomeAdjustmentInitial = {
 type IncomeFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Inclusive cycle start. Calendar disallows dates before this. */
+  /** Inclusive cycle start. The date input's `min` disallows earlier dates. */
   cycleStart: Date;
-  /** Exclusive cycle end (one past the last day). */
+  /** Exclusive cycle end (one past the last day). Bounds the input's `max`. */
   cycleEnd: Date;
   /** YYYY-MM-DD. Pre-fills the date field; clamped to today if future. */
   defaultDate: string;
@@ -156,6 +150,34 @@ function parseStoredDate(value: string): Date {
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
 }
 
+// Lenient YYYY-MM-DD → local-midnight Date, or null on malformed/invalid
+// input. Used by the native date input's onChange (mirrors the transaction
+// form). The `min`/`max` attributes fence the picker UI; this just rejects
+// garbage before committing to state.
+function parseISODate(value: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) {
+    return null;
+  }
+  return dt;
+}
+
+// Open the OS-native date picker on tap. iOS/Samsung open it on tap already;
+// since we hide the engine's own picker indicator, this also covers desktop
+// (showPicker() must run inside a user gesture — onClick qualifies).
+function openNativePicker(event: React.MouseEvent<HTMLInputElement>) {
+  try {
+    event.currentTarget.showPicker?.();
+  } catch {
+    // Unsupported / blocked — native tap-to-open still works on mobile.
+  }
+}
+
 function IncomeFormBody({
   cycleStart,
   cycleEnd,
@@ -171,7 +193,6 @@ function IncomeFormBody({
     initial ? parseStoredDate(initial.occurredOn) : parseDefaultDate(defaultDate),
   );
   const [memoText, setMemoText] = useState(() => initial?.memo ?? "");
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [deletePending, setDeletePending] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -182,36 +203,28 @@ function IncomeFormBody({
 
   const amountInputRef = useRef<HTMLInputElement>(null);
 
-  // Calendar disables dates outside the visible cycle AND future dates.
-  // `cycleEnd` is exclusive (one past the last day) so the range check
-  // uses `< cycleEnd`. Comparisons all happen at local-midnight to avoid
-  // hour-of-day drift confusing the boundary.
-  function isDateDisabled(date: Date): boolean {
-    const startTs = new Date(
-      cycleStart.getFullYear(),
-      cycleStart.getMonth(),
-      cycleStart.getDate(),
-    ).getTime();
-    const endTs = new Date(
+  // Native date input constrains selection to the current cycle AND blocks
+  // future dates — the same limits the old Calendar's `disabled` enforced,
+  // now expressed as `min`/`max` so the OS-native picker honors them.
+  // `cycleEnd` is exclusive, so the last selectable day is one before it;
+  // `max` is the earlier of that day and today.
+  const dateMin = toISODate(cycleStart);
+  const dateMax = useMemo(() => {
+    const lastCycleDay = new Date(
       cycleEnd.getFullYear(),
       cycleEnd.getMonth(),
-      cycleEnd.getDate(),
-    ).getTime();
-    const target = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-    ).getTime();
-    if (target < startTs || target >= endTs) return true;
+      cycleEnd.getDate() - 1,
+    );
     const today = new Date();
     const todayMid = new Date(
       today.getFullYear(),
       today.getMonth(),
       today.getDate(),
-    ).getTime();
-    if (target > todayMid) return true;
-    return false;
-  }
+    );
+    return toISODate(
+      lastCycleDay.getTime() < todayMid.getTime() ? lastCycleDay : todayMid,
+    );
+  }, [cycleEnd]);
 
   function focusAmountInput() {
     const el = amountInputRef.current;
@@ -387,41 +400,30 @@ function IncomeFormBody({
             </span>
           </div>
 
-          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-            <PopoverTrigger
-              type="button"
-              className="flex h-12 w-full items-center gap-3 px-4 text-left outline-none transition-colors hover:bg-muted/60"
-            >
-              <CalendarIcon
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
-              <span className="flex-1 text-[15px] font-medium">
-                {formatKoreanFullDate(occurredDate)}
-              </span>
-              <ChevronRight
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-auto p-0 [&_button]:pointer-events-auto [&_input]:pointer-events-auto"
-              align="start"
-            >
-              <Calendar
-                mode="single"
-                selected={occurredDate}
-                onSelect={(date) => {
-                  if (date) {
-                    setOccurredDate(new Date(date));
-                    setDatePickerOpen(false);
-                  }
-                }}
-                disabled={isDateDisabled}
-                autoFocus
-              />
-            </PopoverContent>
-          </Popover>
+          {/* Native date input (matches the transaction form). Tap opens the
+              OS picker; `appearance-none` + hidden indicator keep the row
+              width honest on iOS Safari. `min`/`max` fence the cycle range
+              and block future dates the way the old Calendar's `disabled`
+              did; parseISODate re-rejects malformed values on change. */}
+          <div className="flex items-center gap-3 px-4">
+            <CalendarIcon
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <input
+              type="date"
+              aria-label="날짜"
+              value={toISODate(occurredDate)}
+              min={dateMin}
+              max={dateMax}
+              onChange={(event) => {
+                const next = parseISODate(event.target.value);
+                if (next) setOccurredDate(next);
+              }}
+              onClick={openNativePicker}
+              className="h-12 min-w-0 flex-1 appearance-none bg-transparent text-[15px] font-medium outline-none [-webkit-appearance:none] [&::-webkit-calendar-picker-indicator]:hidden"
+            />
+          </div>
         </div>
       </div>
 
