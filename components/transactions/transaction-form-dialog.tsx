@@ -6,7 +6,6 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import {
   CalendarIcon,
   Check,
-  ChevronDown,
   ChevronRight,
   CreditCard,
   Layers,
@@ -306,6 +305,7 @@ function TransactionFormBody({
   );
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
+  const [installmentPickerOpen, setInstallmentPickerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
@@ -320,6 +320,12 @@ function TransactionFormBody({
   // 할부와 나눠내기는 상호배타(v1). 할부는 create+신용일 때만.
   const installmentActive =
     mode === "create" && paymentMethod === "credit" && installmentMonths >= 2;
+  // 할부 row 요약용 월 부담(무이자·floor — 우수리는 첫 회차). 기존
+  // PaymentMethodSelector 내부 산식을 그대로 옮겨온 것.
+  const installmentPerMonth =
+    installmentMonths >= 2 && amountValue >= installmentMonths
+      ? Math.floor(amountValue / installmentMonths)
+      : 0;
   const busy = pending || deletePending;
   // The 'groups' choice requires at least one selected group — submitting
   // an empty list would silently make the row no-one-visible. Block it here
@@ -738,13 +744,39 @@ function TransactionFormBody({
             // 체크는 할부 불가 — 일시불로 리셋.
             if (next !== "credit") setInstallmentMonths(1);
           }}
-          showInstallment={
-            mode === "create" && paymentMethod === "credit" && splitCount === 1
-          }
-          installmentMonths={installmentMonths}
-          onInstallmentChange={setInstallmentMonths}
-          principal={amountValue}
         />
+
+        {/* 할부 값 요약 row → InstallmentPickerDrawer. create + 신용 + 비분할일
+            때만(§12.3 상호배타 — 조건은 제거 전 showInstallment와 동일). 원금 0이고
+            일시불이면 비활성(월 부담 계산 불가); 이미 할부가 걸려 있으면 되돌릴 수
+            있게 활성 유지. */}
+        {mode === "create" && paymentMethod === "credit" && splitCount === 1 ? (
+          <button
+            type="button"
+            disabled={amountValue <= 0 && installmentMonths < 2}
+            onClick={() => setInstallmentPickerOpen(true)}
+            className="flex h-12 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-50"
+          >
+            <Layers
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+              할부
+            </span>
+            <span className="ml-auto min-w-0 truncate text-[13px] font-medium">
+              {installmentMonths >= 2
+                ? installmentPerMonth > 0
+                  ? `${installmentMonths}개월 · 월 약 ${formatNumber(installmentPerMonth)}원`
+                  : `${installmentMonths}개월`
+                : "일시불"}
+            </span>
+            <ChevronRight
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+          </button>
+        ) : null}
 
         <div className="flex items-center gap-3 px-4">
           <Pencil className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -892,6 +924,14 @@ function TransactionFormBody({
         }
       />
 
+      <InstallmentPickerDrawer
+        open={installmentPickerOpen}
+        onOpenChange={setInstallmentPickerOpen}
+        principal={amountValue}
+        value={installmentMonths}
+        onPick={setInstallmentMonths}
+      />
+
       <CategoryPickerDrawer
         open={categoryPickerOpen}
         onOpenChange={setCategoryPickerOpen}
@@ -909,113 +949,52 @@ const INSTALLMENT_OPTIONS = [1, 2, 3, 4, 5, 6, 9, 12, 18, 24, 36];
 type PaymentMethodSelectorProps = {
   value: PaymentMethod;
   onChange: (next: PaymentMethod) => void;
-  /** create + 신용 + 비분할일 때만 할부 select를 이 행에 노출. */
-  showInstallment: boolean;
-  installmentMonths: number;
-  onInstallmentChange: (months: number) => void;
-  /** 원금 총액 — 월 부담 힌트 계산용. */
-  principal: number;
 };
 
 // 토글 표시 순서(체크→신용). cold-start 기본값이 체크라 좌측에 둔다. 집계용
 // PAYMENT_METHODS(credit→debit)와 분리 — /stats 버킷 순서는 건드리지 않는다.
 const PAYMENT_METHOD_TOGGLE_ORDER: readonly PaymentMethod[] = ["debit", "credit"];
 
-// 결제수단 2-세그먼트 토글 + (신용일 때) 할부 select를 한 행에 합쳐 세로를 아낀다
-// (할부를 별도 행으로 두지 않는다). 결제수단은 2지선다라 버튼 토글이 빠르고, 할부는
-// 옵션이 많아 네이티브 <select>(drawer 안 base-ui Select 금지 — [[select-in-drawer-portal-fix]]).
-// 월 부담 힌트는 금액이 총 원금임을 알리려고 행 아래 조건부로 붙인다.
-function PaymentMethodSelector({
-  value,
-  onChange,
-  showInstallment,
-  installmentMonths,
-  onInstallmentChange,
-  principal,
-}: PaymentMethodSelectorProps) {
-  const perMonth =
-    installmentMonths >= 2 && principal >= installmentMonths
-      ? Math.floor(principal / installmentMonths)
-      : 0;
+// 결제수단 2-세그먼트 토글 행. 2지선다라 버튼 토글이 가장 빠르다. 할부는 별도
+// 값 요약 row → InstallmentPickerDrawer로 분리됐다(§12.3) — 이 컴포넌트는 이제
+// 결제수단만 담당한다.
+function PaymentMethodSelector({ value, onChange }: PaymentMethodSelectorProps) {
   return (
-    <div className="space-y-2 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <CreditCard
-          className="size-4 shrink-0 text-muted-foreground"
-          aria-hidden
-        />
-        <span className="shrink-0 text-xs font-medium text-muted-foreground">
-          결제수단
-        </span>
-        <div
-          role="radiogroup"
-          aria-label="결제수단"
-          className="ml-auto inline-flex gap-1 rounded-full bg-muted p-1"
-        >
-          {/* 토글 표시 순서만 체크→신용 (기본값 debit이 좌측). 집계용 전역
-              PAYMENT_METHODS 순서(credit→debit, /stats도 씀)는 그대로 둔다. */}
-          {PAYMENT_METHOD_TOGGLE_ORDER.map((method) => {
-            const selected = method === value;
-            return (
-              <button
-                key={method}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => onChange(method)}
-                className={cn(
-                  "h-8 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
-                  "active:scale-[0.98]",
-                  selected
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-background",
-                )}
-              >
-                {PAYMENT_METHOD_LABELS[method]}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      {/* 할부는 신용일 때만. 결제수단 토글과 같은 셀 안 둘째 줄에 둔다 — 좁은 폭
-          (360px, iPhone SE 375px)에서 라벨+토글+select 3요소를 한 줄에 넣으면
-          줄바꿈되기 때문. 체크(기본·대다수)는 이 줄이 없어 여전히 1줄이다. pl-7은
-          아이콘(16)+gap(12)=28px라 「결제수단」 라벨과 세로 정렬을 맞춘다. */}
-      {showInstallment ? (
-        <div className="flex items-center gap-3">
-          <span className="shrink-0 pl-7 text-xs font-medium text-muted-foreground">
-            할부
-          </span>
-          {/* caret로 열리는 컨트롤임을 명시(appearance-none이 native 화살표를 지우므로).
-              나눈 인원 select와 동일 처리. */}
-          <div className="relative ml-auto">
-            <select
-              aria-label="할부 개월"
-              value={installmentMonths}
-              onChange={(event) =>
-                onInstallmentChange(Number(event.target.value))
-              }
-              className="appearance-none rounded-full bg-muted py-1.5 pl-3 pr-7 text-[13px] font-medium outline-none [-webkit-appearance:none]"
+    <div className="flex items-center gap-3 px-4 py-3">
+      <CreditCard
+        className="size-4 shrink-0 text-muted-foreground"
+        aria-hidden
+      />
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">
+        결제수단
+      </span>
+      <div
+        role="radiogroup"
+        aria-label="결제수단"
+        className="ml-auto inline-flex gap-1 rounded-full bg-muted p-1"
+      >
+        {PAYMENT_METHOD_TOGGLE_ORDER.map((method) => {
+          const selected = method === value;
+          return (
+            <button
+              key={method}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(method)}
+              className={cn(
+                "h-8 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-all duration-150 ease-out",
+                "active:scale-[0.98]",
+                selected
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-background",
+              )}
             >
-              {INSTALLMENT_OPTIONS.map((m) => (
-                <option key={m} value={m}>
-                  {m === 1 ? "일시불" : `${m}개월`}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-          </div>
-        </div>
-      ) : null}
-      {showInstallment && installmentMonths >= 2 && perMonth > 0 ? (
-        <p className="pl-7 text-[12px] leading-snug text-muted-foreground">
-          월 약 {formatNumber(perMonth)}원 × {installmentMonths}개월 (첫 회차에
-          우수리 포함)
-        </p>
-      ) : null}
+              {PAYMENT_METHOD_LABELS[method]}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1330,6 +1309,79 @@ function SplitPickerDrawer({
             onOpenChange(false);
           }}
         />
+      </DrawerContent>
+    </DrawerNestedRoot>
+  );
+}
+
+type InstallmentPickerDrawerProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** 원금 총액 — 칩별 월 부담 서브라벨 계산용. */
+  principal: number;
+  value: number;
+  onPick: (months: number) => void;
+};
+
+// 할부 개월 picker. 칩마다 월 부담을 함께 보여줘 개월 간 비교가 한눈에 된다
+// (native select로는 불가능한 표면 — drawer로 바꾼 이유). 단일 선택이라 버퍼 없이
+// 칩 탭 = 즉시 적용 + 닫기. 산식은 폼의 installmentPerMonth와 동일(floor, 우수리는
+// 첫 회차 — lib/utils/installment.ts와 일치).
+function InstallmentPickerDrawer({
+  open,
+  onOpenChange,
+  principal,
+  value,
+  onPick,
+}: InstallmentPickerDrawerProps) {
+  return (
+    <DrawerNestedRoot open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="border-white/10 bg-background px-5 pb-8 pt-2">
+        <DrawerHeader className="px-0 pb-3 pt-2 text-left">
+          <DrawerTitle className="text-[20px] font-bold tracking-[-0.025em]">
+            할부
+          </DrawerTitle>
+          <DrawerDescription className="text-[13px] text-muted-foreground">
+            무이자 기준이에요. 우수리는 첫 회차에 포함돼요.
+          </DrawerDescription>
+        </DrawerHeader>
+        <div className="flex flex-wrap gap-1.5">
+          {INSTALLMENT_OPTIONS.map((m) => {
+            const perMonth =
+              m >= 2 && principal >= m ? Math.floor(principal / m) : 0;
+            const active = m === value;
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => {
+                  onPick(m);
+                  onOpenChange(false);
+                }}
+                aria-pressed={active}
+                className={cn(
+                  "h-9 rounded-full border px-3 text-xs font-medium tabular-nums transition-all duration-150 ease-out",
+                  "active:scale-[0.98]",
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card text-foreground hover:bg-muted",
+                )}
+              >
+                <span>{m === 1 ? "일시불" : `${m}개월`}</span>
+                {m >= 2 && perMonth > 0 ? (
+                  <span
+                    className={cn(
+                      "ml-1.5 text-[11px]",
+                      active ? "text-primary/80" : "text-muted-foreground",
+                    )}
+                  >
+                    월 {formatNumber(perMonth)}원
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
       </DrawerContent>
     </DrawerNestedRoot>
   );
