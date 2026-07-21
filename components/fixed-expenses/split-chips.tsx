@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/utils/money";
 
-const DEFAULT_SHARES: readonly number[] = [1, 2, 3, 4];
+const SHARES = [1, 2, 3, 4] as const;
 
 type SplitChipsProps = {
   /**
@@ -14,10 +14,6 @@ type SplitChipsProps = {
   baseAmount: number;
   /** Current value in the amount input. Used to highlight matching chip. */
   currentValue: number;
-  /** People options to render (1 = 혼자 다). Fixed-expense callers omit this
-   *  and get [1,2,3,4]; the transaction split drawer passes 1..SPLIT_MAX_PEOPLE
-   *  so the chips match the 2~10 DB CHECK range. */
-  shares?: readonly number[];
   /** `next` = baseAmount/n (rounded). `people` = the chosen N (1 = 혼자 다). The
    *  transaction split flow needs N to persist split_count; the fixed-expense
    *  callers pass a 1-arg handler and ignore it (safe param-count widening). */
@@ -32,14 +28,13 @@ type SplitChipsProps = {
 export function SplitChips({
   baseAmount,
   currentValue,
-  shares = DEFAULT_SHARES,
   onPick,
 }: SplitChipsProps) {
   if (!Number.isFinite(baseAmount) || baseAmount <= 0) return null;
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {shares.map((n) => {
+      {SHARES.map((n) => {
         const computed = Math.round(baseAmount / n);
         const active = currentValue === computed;
         const label = n === 1 ? "혼자 다" : `${n}명`;
